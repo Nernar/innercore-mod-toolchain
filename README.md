@@ -9,8 +9,8 @@
 
 To work correctly, this toolchain requires:
 
-- [Python](https://www.python.org/) 3.7 or higher (recommended 3.8 or higher)
-- [node.js](https://nodejs.org/en/) 10.15.1 or higher (for TypeScript modding), `tsc` version 3 or higher must also be installed (to do this, run `npm install -g tsc`)
+- [Python](https://www.python.org/downloads/) 3.7 or higher (recommended 3.8 or higher)
+- [node.js](https://nodejs.org/en/download) 10.15.1 or higher (for TypeScript modding), `tsc` version 3 or higher must also be installed (to do this, run `npm install -g tsc`)
 - [Android NDK](https://github.com/android/ndk/wiki/Unsupported-Downloads#r16b) version r16b (for C++ modding), otherwise it can be installed by toolchain when needed
 - [Java Development Kit 1.8](https://adoptium.net/temurin/releases/?version=8) (for Java modding)
 
@@ -35,3 +35,19 @@ There are three types of configurations for managing projects, builds, and the t
 - template.json — template for subsequent generation *make.json*
 
 Path selections can contain /\*\*/ to select folders and all subfolders, as well as /\* to select all files, /\*.js or /\*.jar to select all files with the desired extension.
+
+## Contributing
+
+Repository requires [Python 3.9 or higher](https://www.python.org/downloads/) installed for successful building, as it uses [package and dependency manager (PDM)](https://pdm-project.org/en/latest/#installation). After downloading repository, open it in your favorite IDE or terminal. You can install package manager using built-in tools:
+
+```sh
+python -m pip install pdm
+```
+
+Restart terminal and/or IDE to update system variables, then finally install necessary dependencies for project:
+
+```sh
+pdm install
+```
+
+Before publishing changes, make sure that project builds successfully using `pdm build`, otherwise your pull request will be automatically rejected.
