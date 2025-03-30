@@ -1,0 +1,46 @@
+[project]
+name = "innercore-mod-toolchain"
+version = "0.1.0-dev3"
+description = "Inner Core Mod Toolchain for Horizon is a toolchain that allows you to efficiently develop and build modifications for mobile Minecraft: Bedrock Edition directly from your PC."
+authors = [
+    { name = "MaXFeeD", email = "maksfeed.mf@gmail.com" },
+    { name = "Eugene Smirnov", email = "zheka2304@gmail.com" },
+    { name = "IchZerowan", email = "Ih01@i.ua" },
+    { name = "SDesya74", email = "sdesya74@gmail.com" },
+    { name = "80LK", email = "80lkru@gmail.com" },
+    { name = "vsdum", email = "danmarkhunter13072006@gmail.com" },
+    { name = "ToxesFoxes", email = "toxes_foxes@outlook.com" },
+    { name = "DDShadowRU", email = "ddcompanychanel@gmail.com" },
+    { name = "DaniGoodwin", email = "danmarkhunter13072006@gmail.com" },
+    { name = "Nikolay Savenko", email = "savenkons@yandex.ru" },
+]
+maintainers = [
+    { name = "Horizon Team", email = "innercore2018@gmail.com" },
+]
+dependencies = ["colorama>=0.4.6"]
+requires-python = ">=3.7"
+readme = "README.md"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Software Development :: Compilers",
+    "Topic :: Utilities",
+    "Environment :: Console",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: Unix",
+]
+
+[project.scripts]
+icmtoolchain = "icmtoolchain.cli:run"
+
+[project.urls]
+"Homepage" = "https://github.com/Nernar/innercore-mod-toolchain"
+"Bug Tracker" = "https://github.com/Nernar/innercore-mod-toolchain/issues"
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm]
+distribution = true
