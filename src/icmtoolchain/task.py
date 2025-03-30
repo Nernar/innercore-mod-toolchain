@@ -82,7 +82,7 @@ def assure_task(name: str) -> Task:
 				return TASKS[task]
 
 def lock_task(name: str, silent: bool = True) -> None:
-	path = GLOBALS.TOOLCHAIN_CONFIG.get_path(f"toolchain/temp/lock/{name}.lock")
+	path = GLOBALS.TOOLCHAIN_CONFIG.get_path(f"temp/lock/{name}.lock")
 	ensure_file_directory(path)
 	await_message = False
 
@@ -112,7 +112,7 @@ def unlock_task(name: str) -> None:
 		except IOError:
 			pass
 		del LOCKS[name]
-	path = GLOBALS.TOOLCHAIN_CONFIG.get_path(f"toolchain/temp/lock/{name}.lock")
+	path = GLOBALS.TOOLCHAIN_CONFIG.get_path(f"temp/lock/{name}.lock")
 	if isfile(path):
 		os.remove(path)
 
@@ -270,7 +270,7 @@ def task_clear_output(force: bool = False) -> int:
 		remove_tree(GLOBALS.MOD_STRUCTURE.directory)
 	if PROPERTIES.get_value("release"):
 		from .package import cleanup_relative_directory
-		cleanup_relative_directory("toolchain/build/" + GLOBALS.MAKE_CONFIG.project_unique_name)
+		cleanup_relative_directory("build/" + GLOBALS.MAKE_CONFIG.project_unique_name)
 	return 0
 
 @task(
@@ -425,7 +425,7 @@ def task_remove_project() -> int:
 		GLOBALS.PROJECT_MANAGER.remove_project(folder=who)
 		from .make_config import MakeConfig
 		from .package import cleanup_relative_directory
-		cleanup_relative_directory("toolchain/build/" + MakeConfig.unique_folder_name(location))
+		cleanup_relative_directory("build/" + MakeConfig.unique_folder_name(location))
 	except ValueError:
 		abort(f"Folder {who!r} not found!")
 
@@ -494,40 +494,40 @@ def task_configure_ide() -> int:
 	from .workspace import (flush_compound_tasks, flush_shell_tasks,
 	                        flush_vscode_compound_task, flush_vscode_shell_task)
 
-	flush_shell_tasks("Select Project", "folder-opened", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/select-project"), focus=True)
-	flush_vscode_shell_task("Select Project by Active File", "repo-force-push", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/select-project"), hidden=True, globbing="**/*", options=("${fileWorkspaceFolder}", ))
-	flush_shell_tasks("Push", "rocket", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/push"))
-	flush_shell_tasks("Assemble Mod for Release", "archive", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/assemble-release"))
+	flush_shell_tasks("Select Project", "folder-opened", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/select-project"), focus=True)
+	flush_vscode_shell_task("Select Project by Active File", "repo-force-push", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/select-project"), hidden=True, globbing="**/*", options=("${fileWorkspaceFolder}", ))
+	flush_shell_tasks("Push", "rocket", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/push"))
+	flush_shell_tasks("Assemble Mod for Release", "archive", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/assemble-release"))
 
-	flush_shell_tasks("Build (No push)", "debug-all", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/build-all"), hidden=True)
+	flush_shell_tasks("Build (No push)", "debug-all", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/build-all"), hidden=True)
 	flush_compound_tasks("Build", "debug-all", ("Build (No push)", "Push"))
 	flush_vscode_compound_task("Build by Active File", "debug-all", ("Select Project by Active File", "Build"), hidden=True, globbing="**/*")
 
-	flush_shell_tasks("Build Scripts and Resources (No push)", "debug-alt", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/build-scripts-and-resources"), hidden=True)
+	flush_shell_tasks("Build Scripts and Resources (No push)", "debug-alt", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/build-scripts-and-resources"), hidden=True)
 	flush_compound_tasks("Build Scripts and Resources", "debug-alt", ("Build Scripts and Resources (No push)", "Push"))
 	flush_vscode_compound_task("Build Scripts and Resources by Active File", "debug-alt", ("Select Project by Active File", "Build Scripts and Resources"), hidden=True, globbing="**/*")
 
-	flush_shell_tasks("Build Java (No push)", "run-above", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/compile-java"), hidden=True)
+	flush_shell_tasks("Build Java (No push)", "run-above", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/compile-java"), hidden=True)
 	flush_compound_tasks("Build Java", "run-above", ("Build Java (No push)", "Push"))
 	flush_vscode_compound_task("Build Java by Active File", "run-above", ("Select Project by Active File", "Build Java"), hidden=True, globbing="**/*")
 
-	flush_shell_tasks("Build Native (No push)", "run", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/compile-native"), hidden=True)
+	flush_shell_tasks("Build Native (No push)", "run", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/compile-native"), hidden=True)
 	flush_compound_tasks("Build Native", "run", ("Build Native (No push)", "Push"))
 	flush_vscode_compound_task("Build Native by Active File", "run", ("Select Project by Active File", "Build Native"), hidden=True, globbing="**/*")
 
-	flush_shell_tasks("Watch Scripts (No push)", "debug-coverage", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/watch-scripts"), hidden=True)
+	flush_shell_tasks("Watch Scripts (No push)", "debug-coverage", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/watch-scripts"), hidden=True)
 	flush_compound_tasks("Watch Scripts", "debug-coverage", ("Watch Scripts (No push)", "Push"))
 	flush_vscode_compound_task("Watch Scripts by Active File", "debug-coverage", ("Select Project by Active File", "Watch Scripts"), hidden=True, globbing="**/*")
 
-	flush_shell_tasks("Configure ADB", "device-mobile", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/configure-adb"), focus=True)
-	flush_shell_tasks("New Project", "new-folder", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/new-project"), focus=True)
-	flush_shell_tasks("Import Project", "repo-pull", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/import-project"), focus=True)
-	flush_shell_tasks("Remove Project", "root-folder-opened", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/remove-project"), focus=True)
-	flush_shell_tasks("Rebuild Declarations", "milestone", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/rebuild-declarations"), hidden=True)
+	flush_shell_tasks("Configure ADB", "device-mobile", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/configure-adb"), focus=True)
+	flush_shell_tasks("New Project", "new-folder", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/new-project"), focus=True)
+	flush_shell_tasks("Import Project", "repo-pull", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/import-project"), focus=True)
+	flush_shell_tasks("Remove Project", "root-folder-opened", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/remove-project"), focus=True)
+	flush_shell_tasks("Rebuild Declarations", "milestone", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/rebuild-declarations"), hidden=True)
 	flush_vscode_compound_task("Rebuild Declarations by Active File", "milestone", ("Select Project by Active File", "Rebuild Declarations"), hidden=True, globbing="**/*")
-	flush_shell_tasks("Check for Updates", "cloud", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/update-toolchain"), focus=True)
-	flush_shell_tasks("Reinstall Components", "package", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/component-integrity"), focus=True)
-	flush_shell_tasks("Invalidate Caches", "flame", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/python/cleanup"), focus=True)
+	flush_shell_tasks("Check for Updates", "cloud", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/update-toolchain"), focus=True)
+	flush_shell_tasks("Reinstall Components", "package", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/component-integrity"), focus=True)
+	flush_shell_tasks("Invalidate Caches", "flame", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/cleanup"), focus=True)
 
 	return 0
 
@@ -566,10 +566,10 @@ def task_cleanup() -> int:
 	from .package import cleanup_relative_directory
 	if isinstance(GLOBALS.PREFERRED_CONFIG, MakeConfig):
 		if confirm("Do you want to clear selected project cache?", True):
-			cleanup_relative_directory("toolchain/build/" + GLOBALS.MAKE_CONFIG.project_unique_name)
+			cleanup_relative_directory("build/" + GLOBALS.MAKE_CONFIG.project_unique_name)
 			cleanup_relative_directory(GLOBALS.MOD_STRUCTURE.directory, True)
 		return 0
 	if not confirm("Do you want to clear all projects cache?", True):
 		return 0
-	cleanup_relative_directory("toolchain/build")
+	cleanup_relative_directory("build")
 	return 0

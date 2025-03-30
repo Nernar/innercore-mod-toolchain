@@ -35,7 +35,7 @@ def collect_classpath_files(directories: Collection[str]) -> List[str]:
 		classpath.extend(libraries)
 	global TOOLCHAIN_CLASSPATH
 	if not TOOLCHAIN_CLASSPATH:
-		classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/classpath")
+		classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path("classpath")
 		if isdir(classpath_directory):
 			requires_manifest = GLOBALS.MAKE_CONFIG.has_value("manifest")
 			TOOLCHAIN_CLASSPATH = get_all_files(classpath_directory, (".jar"))
@@ -151,7 +151,7 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 	debug("Dexing libraries")
 	result = subprocess.run([
 		java_executable,
-		"-classpath", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/bin/r8/r8.jar"),
+		"-classpath", GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/r8/r8.jar"),
 		"com.android.tools.r8.D8",
 		f"@{modified_libraries}"
 	] + classpath_targets + libraries + [
@@ -167,7 +167,7 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 	debug("Dexing classes")
 	result = subprocess.run([
 		java_executable,
-		"-classpath", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/bin/r8/r8.jar"),
+		"-classpath", GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/r8/r8.jar"),
 		"com.android.tools.r8.D8",
 		f"@{modified_classes}"
 	] + classpath_targets + libraries + [
@@ -200,7 +200,7 @@ def merge_compressed_dexes(target: BuildTarget, target_directory: str) -> int:
 	debug("Merging dex")
 	result = subprocess.run([
 		java_executable,
-		"-classpath", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/bin/r8/r8.jar"),
+		"-classpath", GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/r8/r8.jar"),
 		"com.android.tools.r8.D8",
 		compressed_target,
 		"--min-api", "19",
@@ -331,7 +331,7 @@ def build_java_with_ecj(targets: Collection[BuildTarget], target_directory: str)
 			if not java_executable:
 				abort("Executable 'java' is required for compilation, nothing to do.")
 			ecj_pattern = re.compile(r"ecj-(\d+\.)*jar")
-			ecj_executables = GLOBALS.TOOLCHAIN_CONFIG.get_paths("toolchain/bin/*", lambda filename: isfile(filename) and re.fullmatch(ecj_pattern, basename(filename)) is not None)
+			ecj_executables = GLOBALS.TOOLCHAIN_CONFIG.get_paths("bin/*", lambda filename: isfile(filename) and re.fullmatch(ecj_pattern, basename(filename)) is not None)
 			if len(ecj_executables) == 0:
 				abort("Executable 'ecj-*.jar' is required for compilation, nothing to do.")
 			ecj_executable = list()
@@ -376,7 +376,7 @@ def build_java_with_ecj(targets: Collection[BuildTarget], target_directory: str)
 def build_java_with_gradle(targets: Collection[BuildTarget], target_directory: str) -> int:
 	setup_gradle_project(targets, target_directory, flatten_classpath_files(targets))
 	if len(targets) != 0:
-		gradle_executable = GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/bin/gradlew")
+		gradle_executable = GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/gradlew")
 		if platform.system() == "Windows":
 			gradle_executable += ".bat"
 
@@ -554,15 +554,15 @@ def compile_java(tool: str = "gradle") -> int:
 	ensure_directory(target_directory)
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("java")
 
-	if not exists(GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/bin/r8")):
+	if not exists(GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/r8")):
 		install_components("java")
-		if not exists(GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/bin/r8")):
+		if not exists(GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/r8")):
 			abort("Component 'java' is required for compilation, nothing to do.")
 
 	classpath_directories = list()
-	classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/classpath")
+	classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path("classpath")
 	if not isdir(classpath_directory):
-		warn("Not found 'toolchain/classpath', in most cases build will be failed, please install it via tasks.")
+		warn("Not found 'classpath', in most cases build will be failed, please install it via tasks.")
 	project_classpath_directory = GLOBALS.MAKE_CONFIG.get_path("classpath")
 	if exists(project_classpath_directory):
 		classpath_directories.append(project_classpath_directory)

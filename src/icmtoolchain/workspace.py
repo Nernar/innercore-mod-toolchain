@@ -245,9 +245,9 @@ class WorkspaceComposite:
 				if isdir(filepath):
 					filepath = f"{filepath}/**/*.d.ts"
 				declarations.extend(glob(filepath, recursive=True))
-		if exists(GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/declarations")):
+		if exists(GLOBALS.TOOLCHAIN_CONFIG.get_path("declarations")):
 			declarations.extend(glob(
-				GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/declarations/**/*.d.ts"),
+				GLOBALS.TOOLCHAIN_CONFIG.get_path("declarations/**/*.d.ts"),
 				recursive=True
 			))
 		if not PROPERTIES.get_value("release"):

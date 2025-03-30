@@ -62,7 +62,7 @@ def search_in_directory(parent: str, name: str) -> Optional[str]:
 				return path
 
 def get_fake_so_directory(abi: str) -> str:
-	fake_so_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path(join("toolchain", "ndk", "fakeso", abi))
+	fake_so_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path(join("ndk", "fakeso", abi))
 	ensure_directory(fake_so_directory)
 	return fake_so_directory
 
@@ -71,7 +71,7 @@ def add_fake_so(executable: str, abi: str, name: str) -> None:
 	if not isfile(file):
 		result = subprocess.call([
 			executable, "-std=c++11",
-			GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/bin/fakeso.cpp"),
+			GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/fakeso.cpp"),
 			"-shared", "-o", file
 		])
 		if result == 0:
@@ -392,10 +392,8 @@ def compile_native(abis: Collection[str]) -> int:
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("native")
 
 	stdincludes_directories = list()
-	stdincludes_toolchain = GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/stdincludes")
-	if not isdir(stdincludes_toolchain):
-		warn("Not found 'toolchain/stdincludes', in most cases build will be failed, please install it via tasks.")
-	else:
+	stdincludes_toolchain = GLOBALS.TOOLCHAIN_CONFIG.get_path("stdincludes")
+	if isdir(stdincludes_toolchain):
 		stdincludes_directories.append(stdincludes_toolchain)
 	stdincludes_custom = GLOBALS.MAKE_CONFIG.get_path("stdincludes")
 	if exists(stdincludes_custom):
@@ -420,6 +418,8 @@ def compile_native(abis: Collection[str]) -> int:
 		GLOBALS.MOD_STRUCTURE.update_build_config_list("nativeDirs")
 		return 0
 
+	if not isdir(stdincludes_toolchain):
+		warn("Not found 'stdincludes', in most cases build will be failed, please install it via tasks.")
 	overall_result = build_native_directories(abis, directories, target_directory)
 
 	GLOBALS.MOD_STRUCTURE.update_build_config_list("nativeDirs")

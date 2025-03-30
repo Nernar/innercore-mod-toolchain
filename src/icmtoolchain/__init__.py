@@ -68,9 +68,9 @@ class Globals:
 				self.toolchain_config = ToolchainConfig(toolchain_config)
 			elif hasattr(self, "make_config"):
 				self.toolchain_config = self.MAKE_CONFIG.prototype
-		if not self.toolchain_config:
+		if not hasattr(self, "toolchain_config") or not self.toolchain_config:
 			from .make_config import ToolchainConfig
-			self.toolchain_config = ToolchainConfig(realpath(join(__file__, "..", "..")))
+			self.toolchain_config = ToolchainConfig(join(realpath(join(__file__, "..")), "toolchain.json"))
 		return self.toolchain_config
 
 	@property

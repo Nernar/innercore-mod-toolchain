@@ -15,8 +15,8 @@ def build_all_scripts(watch: bool = False) -> int:
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("script_source")
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("script_library")
 
-	if request_typescript(only_check=True) and not exists(GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/declarations")):
-		warn("Not found 'toolchain/declarations', in most cases build will be failed, please install it via tasks.")
+	if request_typescript(only_check=True) and not exists(GLOBALS.TOOLCHAIN_CONFIG.get_path("declarations")):
+		warn("Not found 'declarations', in most cases build will be failed, please install it via tasks.")
 
 	overall_result = 0
 	for source in GLOBALS.MAKE_CONFIG.get_value("sources", list()):

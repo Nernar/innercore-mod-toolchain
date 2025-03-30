@@ -33,12 +33,12 @@ class Component():
 			self.commiturl = commiturl
 
 COMPONENTS = {
-	"adb": Component("adb", "Android Debug Bridge", "toolchain/adb", branch="adb"),
-	"declarations": Component("declarations", "TypeScript Declarations", "toolchain/declarations", branch="includes"),
-	"java": Component("java", "Java R8/D8 Compiler", "toolchain/bin/r8", branch="r8"),
-	"classpath": Component("classpath", "Java Classpath", "toolchain/classpath", branch="classpath"),
-	"cpp": Component("cpp", "C++ GCC Compiler (NDK)", "toolchain/ndk"), # native/native_setup.py
-	"stdincludes": Component("stdincludes", "C++ Headers", "toolchain/stdincludes", branch="stdincludes")
+	"adb": Component("adb", "Android Debug Bridge", "adb", branch="adb"),
+	"declarations": Component("declarations", "TypeScript Declarations", "declarations", branch="includes"),
+	"java": Component("java", "Java R8/D8 Compiler", "bin/r8", branch="r8"),
+	"classpath": Component("classpath", "Java Classpath", "classpath", branch="classpath"),
+	"cpp": Component("cpp", "C++ GCC Compiler (NDK)", "ndk"), # native_setup.py
+	"stdincludes": Component("stdincludes", "C++ Headers", "stdincludes", branch="stdincludes")
 }
 
 def resolve_selected_components(interactables: List[Shell.Interactable]) -> List[str]:

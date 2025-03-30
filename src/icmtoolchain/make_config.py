@@ -111,8 +111,8 @@ class ToolchainConfig(BaseConfig):
 		except:
 			pass
 		if platform.system() == "Windows":
-			return self.get_path("toolchain/adb/adb.exe")
-		return self.get_path("toolchain/adb/adb")
+			return self.get_path("adb/adb.exe")
+		return self.get_path("adb/adb")
 
 class MakeConfig(ToolchainConfig):
 	prototype: ToolchainConfig; current_project: Final[str]; project_unique_name: Final[str]
@@ -125,9 +125,7 @@ class MakeConfig(ToolchainConfig):
 		self.project_unique_name = self.unique_folder_name(self.directory)
 
 	def get_build_path(self, relative_path: str) -> str:
-		return self.prototype.get_path(join(
-			"toolchain", "build", self.project_unique_name, relative_path
-		))
+		return self.prototype.get_path(join("build", self.project_unique_name, relative_path))
 
 	@staticmethod
 	def unique_folder_name(path: str) -> str:

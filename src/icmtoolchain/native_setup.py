@@ -134,7 +134,7 @@ def search_for_gcc_executable(ndk_directory: str) -> Optional[str]:
 		print(f"Searching GCC in {search_directory} with {len(files)} files...")
 
 def require_compiler_executable(arch: str, install_if_required: bool = False) -> Optional[str]:
-	ndk_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/ndk/" + str(arch))
+	ndk_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path("ndk/" + str(arch))
 	file = search_for_gcc_executable(ndk_directory)
 	if install_if_required:
 		install_gcc(arches=arch, reinstall=False)
@@ -164,7 +164,7 @@ def check_installation(arches: Union[str, List[str]]) -> bool:
 	if not isinstance(arches, list):
 		arches = [arches]
 	return len(list(filter(
-		lambda arch: not isfile(GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/ndk/.installed-" + str(arch))),
+		lambda arch: not isfile(GLOBALS.TOOLCHAIN_CONFIG.get_path("ndk/.installed-" + str(arch))),
 		arches
 	))) == 0
 
@@ -196,7 +196,7 @@ def get_download_ndk_url(revision: str) -> str:
 def download_gcc(shell: Optional[Shell] = None, ndk_version: Optional[str] = None) -> Optional[str]:
 	from urllib import request
 	revision = ndk_version_to_revision(ndk_version) if ndk_version else "r16b"
-	archive_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(f"toolchain/temp/ndk-{revision}.zip")
+	archive_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(f"temp/ndk-{revision}.zip")
 	makedirs(dirname(archive_path), exist_ok=True)
 
 	if not isfile(archive_path):
@@ -231,21 +231,21 @@ def download_gcc(shell: Optional[Shell] = None, ndk_version: Optional[str] = Non
 		progress = Progress(text="Extracting NDK/GCC")
 		shell.interactables.append(progress)
 		shell.render()
-	extract_path = GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/temp")
+	extract_path = GLOBALS.TOOLCHAIN_CONFIG.get_path("temp")
 	makedirs(extract_path, exist_ok=True)
 	try:
 		with AttributeZipFile(archive_path, "r") as archive:
 			archive.extractall(extract_path)
-		Progress.notify(shell, progress, 1, "Extracted into toolchain/temp")
+		Progress.notify(shell, progress, 1, "Extracted into temp")
 	except OSError as exc:
 		Progress.notify(shell, progress, 0, f"#{exc.errno}: {basename(exc.filename)}")
 		try:
-			remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/temp"))
+			remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path("temp"))
 		except OSError:
 			Progress.notify(shell, progress, 0, f"#{exc.errno}: {basename(exc.filename)} (security fail)")
 	except zipfile.BadZipFile as exc:
 		try:
-			remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/temp"))
+			remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path("temp"))
 			return download_gcc(shell, revision)
 		except OSError as exc:
 			Progress.notify(shell, progress, 0, f"#{exc.errno}: {basename(exc.filename)} (security fail)")
@@ -299,7 +299,7 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False, s
 	if not ndk_path:
 		if shell:
 			shell.leave()
-		error("Installation interrupted by raised cause above, you are must extract 'toolchain/temp/ndk-r**.zip' manually into toolchain/temp and retry task.")
+		error("Installation interrupted by raised cause above, you are must extract 'temp/ndk-r**.zip' manually into temp and retry task.")
 		return 1
 
 	progress = None
@@ -312,7 +312,7 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False, s
 		join(ndk_path, "build", "tools", "make_standalone_toolchain.py"),
 		"--arch", arch,
 		"--api", "21" if "64" in arch else "19",
-		"--install-dir", GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/ndk/" + arch),
+		"--install-dir", GLOBALS.TOOLCHAIN_CONFIG.get_path("ndk/" + arch),
 		"--force"
 	], capture_output=True, text=True)
 	if output.returncode != 0:
@@ -321,7 +321,7 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False, s
 			shell.leave()
 		error(output.stderr.strip())
 	else:
-		open(GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/ndk/.installed-" + arch), "tw").close()
+		open(GLOBALS.TOOLCHAIN_CONFIG.get_path("ndk/.installed-" + arch), "tw").close()
 		Progress.notify(shell, progress, 1, f"Successfully installed {abi}")
 	return output.returncode
 
@@ -348,7 +348,7 @@ def install_gcc(arches: Union[str, List[str]] = "arm", reinstall: bool = False) 
 			shell.interactables.append(progress)
 			shell.render()
 		try:
-			remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/temp"))
+			remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path("temp"))
 			if progress:
 				progress.seek(1, "C++ GCC Compiler (NDK)")
 		except OSError as exc:
