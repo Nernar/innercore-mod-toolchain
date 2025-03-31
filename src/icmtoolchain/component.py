@@ -1,18 +1,13 @@
 import colorama
-import os
-import shutil
 import sys
-from os.path import exists, isdir, isfile, join
+from os.path import isdir, isfile, join
 from typing import Final, List, Optional
-from urllib import request
-from urllib.error import URLError
 
 from . import GLOBALS
 from .shell import (PLATFORM_STYLE_DIM, Input, InteractiveShell, Interrupt,
                     Notice, Progress, SelectiveShell, Separator, Shell, Switch,
-                    abort, stringify, warn)
-from .utils import (AttributeZipFile, ensure_file_directory,
-                    ensure_not_whitespace, move_to_backup, request_typescript)
+                    abort, stringify)
+from .utils import (ensure_not_whitespace, request_typescript)
 
 
 class Component():
@@ -65,58 +60,6 @@ def which_installed() -> List[str]:
 def to_megabytes(bytes_count: int) -> str:
 	return f"{(bytes_count / 1048576):.1f}MiB"
 
-def download_component(component: Component, shell: Optional[Shell], progress: Optional[Progress]) -> int:
-	if not hasattr(component, "packurl") or not component.packurl:
-		Progress.notify(shell, progress, 0, f"Component {component.keyword!r} property 'packurl' must be defined!")
-		return 1
-	path = GLOBALS.TOOLCHAIN_CONFIG.get_path(f"toolchain/temp/{component.keyword}.zip")
-	ensure_file_directory(path)
-	if isfile(path):
-		# TODO: Checking checksum of already downloaded file...
-		return 0
-	with request.urlopen(component.packurl) as response:
-		with open(path, "wb") as archive:
-			downloaded = 0
-			while True:
-				buffer = response.read(8192)
-				if not buffer:
-					break
-				downloaded += len(buffer)
-				if shell and progress:
-					progress.seek(0.5, f"Downloading ({to_megabytes(downloaded)})")
-					shell.render()
-				archive.write(buffer)
-	Progress.notify(shell, progress, 1, f"Downloaded {to_megabytes(downloaded)}")
-	return 0
-
-def extract_component(component: Component, shell: Optional[Shell], progress: Optional[Progress]) -> int:
-	temporary = GLOBALS.TOOLCHAIN_CONFIG.get_path("toolchain/temp")
-	archive_path = join(temporary, component.keyword + ".zip")
-	if not isfile(archive_path):
-		Progress.notify(shell, progress, 0, f"Component {component.keyword!r} is not found!")
-		return 1
-	if shell and progress:
-		progress.seek(0.33, f"Extracting to {component.location}")
-	extract_to = temporary if hasattr(component, "branch") else join(temporary, component.keyword)
-	with AttributeZipFile(archive_path, "r") as archive:
-		archive.extractall(extract_to)
-	if hasattr(component, "branch") and component.branch:
-		extract_to = join(extract_to, "innercore-mod-toolchain-" + component.branch)
-	if not isdir(extract_to):
-		Progress.notify(shell, progress, 0, f"Component {component.keyword!r} does not contain any content!")
-		return 2
-	output = GLOBALS.TOOLCHAIN_CONFIG.get_path(component.location)
-	if isdir(output):
-		shutil.rmtree(output, ignore_errors=True)
-	elif exists(output):
-		move_to_backup(output)
-	os.makedirs(output, exist_ok=True)
-	shutil.copytree(extract_to, output, dirs_exist_ok=True)
-	Progress.notify(shell, progress, 0.66, "Cleaning up")
-	shutil.rmtree(extract_to, ignore_errors=True)
-	os.remove(archive_path)
-	return 0
-
 def install_components(*keywords: str) -> None:
 	if len(keywords) == 0:
 		return
@@ -131,19 +74,6 @@ def install_components(*keywords: str) -> None:
 			component = COMPONENTS[keyword]
 			progress = Progress(text=component.name)
 			shell.interactables.append(progress)
-			shell.render()
-			if fetch_component(component):
-				progress.seek(1)
-				shell.render()
-				continue
-			try:
-				if download_component(component, shell, progress) == 0:
-					if extract_component(component, shell, progress) == 0:
-						progress.seek(1, component.name)
-			except URLError:
-				continue
-			except BaseException as err:
-				progress.seek(0, f"{component.keyword}: {err}")
 			shell.render()
 		if "cpp" in keywords:
 			abis = GLOBALS.TOOLCHAIN_CONFIG.get_list("native.abis")
@@ -166,41 +96,6 @@ def install_components(*keywords: str) -> None:
 					abi_to_arch(abi) for abi in abis
 				], reinstall=True)
 		shell.interactables.append(Interrupt())
-
-def fetch_component(component: Component) -> bool:
-	output = GLOBALS.TOOLCHAIN_CONFIG.get_path(component.location)
-	if component.keyword == "cpp":
-		return isdir(output)
-	if isdir(output):
-		if GLOBALS.TOOLCHAIN_CONFIG.get_value("componentInstallationWithoutCommit", False):
-			return True
-		if not isfile(join(output, ".commit")):
-			return False
-	else:
-		return False
-	if not hasattr(component, "commiturl"):
-		return True
-	try:
-		if hasattr(component, "commiturl") and component.commiturl:
-			with open(join(output, ".commit")) as commit_file:
-				response = request.urlopen(component.commiturl)
-				return perform_diff(response.read().decode("utf-8"), commit_file.read())
-	except URLError:
-		return True
-	return False
-
-def perform_diff(a: object, b: object) -> bool:
-	return str(a).strip() == str(b).strip()
-
-def fetch_components() -> List[str]:
-	upgradable = list()
-	for keyword in which_installed():
-		if not keyword in COMPONENTS:
-			warn(f"* Not found component {keyword!r}!")
-			continue
-		if not fetch_component(COMPONENTS[keyword]):
-			upgradable.append(keyword)
-	return upgradable
 
 def get_username() -> Optional[str]:
 	username = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.author")

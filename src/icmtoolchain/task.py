@@ -538,13 +538,6 @@ def task_configure_ide() -> int:
 def task_update_toolchain() -> int:
 	from .update import update_toolchain
 	update_toolchain()
-	from .component import fetch_components, install_components
-	upgradable = fetch_components()
-	if len(upgradable) > 0:
-		info("Found new updates for components: ", ", ".join(upgradable), ".", sep="")
-		if not confirm("Do you want to upgrade them?", True):
-			return 0
-		install_components(*upgradable)
 	return 0
 
 @task(
