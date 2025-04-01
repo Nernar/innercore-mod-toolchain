@@ -1,0 +1,12 @@
+{
+	"[python]": {
+		"editor.defaultFormatter": "ms-python.autopep8",
+		"editor.codeActionsOnSave": {
+			"source.fixAll": "explicit",
+			"source.organizeImports": "explicit"
+		}
+	},
+	"python.analysis.typeCheckingMode": "basic",
+	"python.analysis.diagnosticMode": "workspace",
+	"python.analysis.importFormat": "relative"
+}
