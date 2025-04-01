@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:99b755bad68b768fce4200331a1a1ed384632a19909d0dc2cd2f204ad911e071"
+content_hash = "sha256:6ef16c281e87f1488df45dee99d510989a2d19322340b27d5321a50c653c055e"
 
 [[metadata.targets]]
 requires_python = ">=3.7"
@@ -19,4 +19,31 @@ groups = ["default"]
 files = [
     {file = "colorama-0.4.6-py2.py3-none-any.whl", hash = "sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"},
     {file = "colorama-0.4.6.tar.gz", hash = "sha256:08695f5cb7ed6e0531a20572697297273c47b8cae5a63ffc6d6ed5c201be6e44"},
+]
+
+[[package]]
+name = "prompt-toolkit"
+version = "3.0.48"
+requires_python = ">=3.7.0"
+summary = "Library for building powerful interactive command lines in Python"
+groups = ["default"]
+dependencies = [
+    "wcwidth",
+]
+files = [
+    {file = "prompt_toolkit-3.0.48-py3-none-any.whl", hash = "sha256:f49a827f90062e411f1ce1f854f2aedb3c23353244f8108b89283587397ac10e"},
+    {file = "prompt_toolkit-3.0.48.tar.gz", hash = "sha256:d6623ab0477a80df74e646bdbc93621143f5caf104206aa29294d53de1a03d90"},
+]
+
+[[package]]
+name = "wcwidth"
+version = "0.2.13"
+summary = "Measures the displayed width of unicode strings in a terminal"
+groups = ["default"]
+dependencies = [
+    "backports-functools-lru-cache>=1.2.1; python_version < \"3.2\"",
+]
+files = [
+    {file = "wcwidth-0.2.13-py2.py3-none-any.whl", hash = "sha256:3da69048e4540d84af32131829ff948f1e022c1c6bdb8d6102117aac784f6859"},
+    {file = "wcwidth-0.2.13.tar.gz", hash = "sha256:72ea0c06399eb286d978fdedb6923a9eb47e1c486ce63e9b4e64fc18303972b5"},
 ]
