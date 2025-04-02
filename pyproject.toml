@@ -3,8 +3,9 @@ name = "innercore-mod-toolchain"
 version = "0.1.0-dev10"
 description = "Inner Core Mod Toolchain for Horizon is a toolchain that allows you to efficiently develop and build modifications for mobile Minecraft: Bedrock Edition directly from your PC."
 authors = [
-    { name = "MaXFeeD", email = "maksfeed.mf@gmail.com" },
+    { name = "Horizon Team", email = "innercore2018@gmail.com" },
     { name = "Eugene Smirnov", email = "zheka2304@gmail.com" },
+    { name = "MaXFeeD", email = "maksfeed.mf@gmail.com" },
     { name = "IchZerowan", email = "Ih01@i.ua" },
     { name = "SDesya74", email = "sdesya74@gmail.com" },
     { name = "80LK", email = "80lkru@gmail.com" },
@@ -15,7 +16,7 @@ authors = [
     { name = "Nikolay Savenko", email = "savenkons@yandex.ru" },
 ]
 maintainers = [
-    { name = "Horizon Team", email = "innercore2018@gmail.com" },
+    { name = "MaXFeeD", email = "maksfeed.mf@gmail.com" },
 ]
 dependencies = ["colorama>=0.4.6", "prompt-toolkit>=3.0.48"]
 requires-python = ">=3.7"
