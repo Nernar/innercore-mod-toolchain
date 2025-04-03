@@ -1,6 +1,7 @@
 import sys
 from typing import Optional
 
+
 def show_help():
 	print("Usage: icmtoolchain [options] ... <task1> [arguments1] ...")
 	print(" " * 2 + "--help: Display this message.")
