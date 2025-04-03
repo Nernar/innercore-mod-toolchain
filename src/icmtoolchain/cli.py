@@ -94,7 +94,8 @@ def simple_async_test():
 	from prompt_toolkit.key_binding.bindings.focus import (focus_next,
 	                                                       focus_previous)
 	from prompt_toolkit.keys import Keys
-	from prompt_toolkit.widgets import Label, TextArea
+	from prompt_toolkit.widgets import (Button, CheckboxList, HorizontalLine,
+	                                    Label, ProgressBar, TextArea)
 
 
 	class AnimatedTask:
@@ -177,13 +178,34 @@ def simple_async_test():
 		) for _ in range(50)
 	]
 
+	checkbox = CheckboxList(values=[("someid", "aboba")])
+	checkbox.show_scrollbar = False
+	kb = KeyBindings()
+	@kb.add("enter")
+	@kb.add(" ")
+	def _(event):
+		checkbox._handle_enter()
+	checkbox.control.key_bindings = kb
+	# Box cannot cover multiple components, containerify them is cringe
+	whitespace = Window(height=1)
+	progress = ProgressBar()
+
 	contents = [
 		task1.content,
 		task1.description,
 		task2.content,
 		task2.description,
+		whitespace,
+		Label("Please confirm that you are lazy:"),
+		checkbox,
+		HorizontalLine(),
+		Button("Confirm", lambda: checkbox._handle_enter()),
+		whitespace,
 		task3.content,
 		task3.description,
+		whitespace,
+		progress,
+		whitespace,
 	]
 	for task in pushing_tasks:
 		contents += [task.content, task.description]
@@ -203,6 +225,13 @@ def simple_async_test():
 	kb.add(Keys.Down)(focus_next)
 	kb.add(Keys.Up)(focus_previous)
 
+	async def update_progress():
+		while True:
+			progress.percentage = progress.percentage + 1
+			if progress.percentage > 100:
+				progress.percentage = 0
+			await asyncio.sleep(0.1)
+
 	async def main():
 		app = Application(
 			layout=layout,
@@ -213,6 +242,7 @@ def simple_async_test():
 		)
 		await asyncio.gather(
 			app.run_async(),
+			update_progress(),
 			task1.run(),
 			task2.run(),
 			task3.run(),
