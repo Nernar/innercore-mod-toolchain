@@ -1,5 +1,5 @@
 import sys
-from typing import Optional
+from typing import Callable, Optional
 
 
 def show_help():
@@ -95,7 +95,7 @@ def simple_async_test():
 	                                                       focus_previous)
 	from prompt_toolkit.keys import Keys
 	from prompt_toolkit.widgets import (Button, CheckboxList, HorizontalLine,
-	                                    Label, ProgressBar, TextArea)
+	                                    ProgressBar, TextArea)
 
 
 	class AnimatedTask:
@@ -109,7 +109,7 @@ def simple_async_test():
 			# self.content.window.always_hide_cursor = to_filter(True)
 			self.metadata = ""
 			self.metadatas = metadatas if isinstance(metadatas, list) else [metadatas if metadatas else ""]
-			self.description = Label(text=self.metadata)
+			self.description = AbstractInteractable(text=self.metadata)
 			self.steps = 0
 			self.offset = 0
 
@@ -196,7 +196,7 @@ def simple_async_test():
 		task2.content,
 		task2.description,
 		whitespace,
-		Label("Please confirm that you are lazy:"),
+		AbstractInteractable("Please confirm that you are lazy:", focusable=True),
 		checkbox,
 		HorizontalLine(),
 		Button("Confirm", lambda: checkbox._handle_enter()),
@@ -260,6 +260,36 @@ def simple_async_test():
 		asyncio.run(main())
 	except KeyboardInterrupt or EOFError:
 		print("Tasks stopped gracefully.")
+
+from prompt_toolkit.filters import FilterOrBool
+from prompt_toolkit.formatted_text import AnyFormattedText
+from prompt_toolkit.layout import Dimension
+
+
+class AbstractInteractable(FormattedTextControl):
+	def __init__(
+		self,
+		text: AnyFormattedText = "",
+		focusable: FilterOrBool = False,
+		dont_extend_height: bool = True,
+		dont_extend_width: bool = False,
+		align: WindowAlign | Callable[[], WindowAlign] = WindowAlign.LEFT,
+		wrap_lines: FilterOrBool = True,
+		show_cursor: bool = True,
+	) -> None:
+		FormattedTextControl.__init__(self, text=text, focusable=focusable, show_cursor=show_cursor)
+
+		self.window = Window(
+			content=self,
+			height=Dimension(min=1),
+			dont_extend_height=dont_extend_height,
+			dont_extend_width=dont_extend_width,
+			align=align,
+			wrap_lines=wrap_lines,
+		)
+
+	def __pt_container__(self) -> Container:
+		return self.window
 
 if __name__ == "__main__":
 	simple_async_test()
