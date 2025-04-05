@@ -1,5 +1,10 @@
+import platform
 import sys
-from typing import Callable, Optional
+from typing import Callable, List, Optional, Union
+
+from prompt_toolkit.key_binding.key_bindings import KeyBindingsBase
+from prompt_toolkit.layout.containers import WindowRenderInfo
+from prompt_toolkit.layout.controls import UIContent
 
 
 def show_help():
@@ -77,8 +82,8 @@ def run(argv: Optional[list[str]] = None):
 
 # TESTS
 
-from prompt_toolkit.layout import (BufferControl, ConditionalContainer,
-                                   Container, DummyControl, DynamicContainer,
+from prompt_toolkit import ANSI
+from prompt_toolkit.layout import (BufferControl, Container,
                                    FormattedTextControl, HSplit, Layout,
                                    ScrollablePane, ScrollOffsets, UIControl,
                                    Window, WindowAlign)
@@ -109,7 +114,7 @@ def simple_async_test():
 			# self.content.window.always_hide_cursor = to_filter(True)
 			self.metadata = ""
 			self.metadatas = metadatas if isinstance(metadatas, list) else [metadatas if metadatas else ""]
-			self.description = AbstractInteractable(text=self.metadata)
+			self.description = Interactable(text=self.metadata)
 			self.steps = 0
 			self.offset = 0
 
@@ -178,17 +183,10 @@ def simple_async_test():
 		) for _ in range(50)
 	]
 
-	checkbox = CheckboxList(values=[("someid", "aboba")])
-	checkbox.show_scrollbar = False
-	kb = KeyBindings()
-	@kb.add("enter")
-	@kb.add(" ")
-	def _(event):
-		checkbox._handle_enter()
-	checkbox.control.key_bindings = kb
+	checkbox = Selectable("Subscribe to our newsletter")
 	# Box cannot cover multiple components, containerify them is cringe
 	whitespace = Window(height=1)
-	progress = ProgressBar()
+	progress = Progress()
 
 	contents = [
 		task1.content,
@@ -196,10 +194,14 @@ def simple_async_test():
 		task2.content,
 		task2.description,
 		whitespace,
-		AbstractInteractable("Please confirm that you are lazy:", focusable=True),
+		Interactable("Please confirm that you are lazy:", focusable=True),
 		checkbox,
 		HorizontalLine(),
-		Button("Confirm", lambda: checkbox._handle_enter()),
+		Editable("What do you want? ", hint="Modding Tools+ Subscription"),
+		Button("Confirm", lambda: checkbox.interact()),
+		whitespace,
+		Interactable("Don't forget to subscribe, leave comment and like our work. Money produced from those events goes to Inner Core development!"),
+		Debugger(),
 		whitespace,
 		task3.content,
 		task3.description,
@@ -210,7 +212,9 @@ def simple_async_test():
 	for task in pushing_tasks:
 		contents += [task.content, task.description]
 	root_container = ScrollablePane(
-		HSplit(contents), scroll_offsets=ScrollOffsets(3, 3), display_arrows=False
+		HSplit(contents),
+		scroll_offsets=ScrollOffsets(3, 3),
+		display_arrows=False,
 	)
 
 	layout = Layout(root_container)
@@ -227,7 +231,7 @@ def simple_async_test():
 
 	async def update_progress():
 		while True:
-			progress.percentage = progress.percentage + 1
+			progress.percentage += random()
 			if progress.percentage > 100:
 				progress.percentage = 0
 			await asyncio.sleep(0.1)
@@ -240,45 +244,94 @@ def simple_async_test():
 			mouse_support=True,
 			erase_when_done=True
 		)
-		await asyncio.gather(
-			app.run_async(),
-			update_progress(),
-			task1.run(),
-			task2.run(),
-			task3.run(),
-			*(task.run() for task in pushing_tasks),
-		)
-		# XXX: alternative way that requires toolkit eventloop
-		# app.create_background_task(task1.run())
-		# app.create_background_task(task2.run())
-		# app.create_background_task(task3.run())
-		# for task in pushing_tasks:
-			# app.create_background_task(task.run())
-		# await app.run_async()
+		app.create_background_task(task1.run())
+		app.create_background_task(task2.run())
+		app.create_background_task(task3.run())
+		for task in pushing_tasks:
+			app.create_background_task(task.run())
+		app.create_background_task(update_progress())
+		await app.run_async()
 
 	try:
 		asyncio.run(main())
 	except KeyboardInterrupt or EOFError:
 		print("Tasks stopped gracefully.")
 
-from prompt_toolkit.filters import FilterOrBool
-from prompt_toolkit.formatted_text import AnyFormattedText
-from prompt_toolkit.layout import Dimension
+# PROMPT TOOLKIT
 
+from datetime import datetime, timedelta
 
-class AbstractInteractable(FormattedTextControl):
+from prompt_toolkit.buffer import Buffer, BufferEventHandler
+from prompt_toolkit.document import Document
+from prompt_toolkit.filters import (Condition, FilterOrBool, has_focus,
+                                    to_filter)
+from prompt_toolkit.formatted_text import (AnyFormattedText,
+                                           StyleAndTextTuples,
+                                           merge_formatted_text,
+                                           to_formatted_text)
+from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
+from prompt_toolkit.keys import Keys
+from prompt_toolkit.layout import (ConditionalMargin, Dimension, Margin,
+                                   SearchBufferControl)
+from prompt_toolkit.layout.processors import (AfterInput, BeforeInput,
+                                              ConditionalProcessor, Processor)
+from prompt_toolkit.lexers import Lexer
+
+# prompt-toolkit doesn't have built-in theme styling support, which can be tracked
+# on pull request https://github.com/prompt-toolkit/python-prompt-toolkit/pull/1630
+PLATFORM_TEXT_DIM = "\x1b[90m" if platform.system() == "Windows" else "\x1b[2m"
+PLATFORM_BACKGROUND_DIM = "\x1b[100m" if platform.system() == "Windows" else "\x1b[2m"
+
+class InteractableMargin(Margin):
+	def __init__(
+		self,
+		has_focus: FilterOrBool = False, 
+		idle_selector_text: AnyFormattedText = "  ",
+		focused_selector_text: AnyFormattedText = "> ",
+	):
+		self.has_focus = to_filter(has_focus)
+		self.idle_selector_text = idle_selector_text
+		self.focused_selector_text = focused_selector_text
+
+	def get_width(self, get_ui_content: Callable[[], UIContent]) -> int:
+		# TODO: Maybe recalculate it... Maybe not...
+		return 2
+
+	def create_margin(self, window_render_info: WindowRenderInfo, width: int, height: int) -> StyleAndTextTuples:
+		return [
+			("", "> " if self.has_focus() else "  "),
+			*[("", "  ") for _ in range(height - 1)]
+		]
+
+class Interactable(FormattedTextControl):
+	"""
+	Pure component abstraction for all toolchain interactions in console.
+	"""
+
 	def __init__(
 		self,
 		text: AnyFormattedText = "",
 		focusable: FilterOrBool = False,
+		on_interact: Optional[Callable[['Interactable'], None]] = None,
+		*,
 		dont_extend_height: bool = True,
 		dont_extend_width: bool = False,
-		align: WindowAlign | Callable[[], WindowAlign] = WindowAlign.LEFT,
+		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
 		wrap_lines: FilterOrBool = True,
 		show_cursor: bool = True,
+		add_interact_key_bindings: bool = False,
+		idle_selector_text: AnyFormattedText = "  ",
+		focused_selector_text: AnyFormattedText = "> ",
 	) -> None:
-		FormattedTextControl.__init__(self, text=text, focusable=focusable, show_cursor=show_cursor)
+		self.interactable_text = text
+		FormattedTextControl.__init__(
+			self,
+			text=self.render_text,
+			focusable=focusable,
+			show_cursor=show_cursor
+		)
 
+		self.has_focus = has_focus(self)
 		self.window = Window(
 			content=self,
 			height=Dimension(min=1),
@@ -286,10 +339,402 @@ class AbstractInteractable(FormattedTextControl):
 			dont_extend_width=dont_extend_width,
 			align=align,
 			wrap_lines=wrap_lines,
+			left_margins=[
+				ConditionalMargin(
+					InteractableMargin(self.has_focus, idle_selector_text, focused_selector_text),
+					self.focusable
+				)
+			],
+			right_margins=[
+				ConditionalMargin(
+					InteractableMargin(False, idle_selector_text, focused_selector_text),
+					self.focusable
+				)
+			],
 		)
+
+		if add_interact_key_bindings:
+			self.add_interact_key_bindings()
+		self.on_interact = on_interact
+
+	def render_text(self) -> AnyFormattedText:
+		return self.interactable_text
+
+	def add_interact_key_bindings(self) -> None:
+		if self.key_bindings is None:
+			self.key_bindings = KeyBindings()
+		kb = self.key_bindings
+
+		@kb.add(Keys.Enter)
+		@kb.add(" ")
+		def _(event: KeyPressEvent) -> None:
+			self.interact(event)
+
+	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
+		if self.on_interact:
+			self.on_interact(self)
 
 	def __pt_container__(self) -> Container:
 		return self.window
+
+class Selectable(Interactable):
+	"""
+	Extendable switch, which have checkable state and interact ability by default.
+	"""
+
+	def __init__(
+		self,
+		text: AnyFormattedText = "",
+		focusable: FilterOrBool = True,
+		on_checked: Optional[Callable[['Selectable', bool], None]] = None,
+		checked: bool = False,
+		*,
+		dont_extend_height: bool = True,
+		dont_extend_width: bool = False,
+		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
+		wrap_lines: FilterOrBool = True,
+		show_cursor: bool = False,
+		add_interact_key_bindings: bool = True,
+		on_interact: Optional[Callable[['Interactable'], None]] = None,
+		idle_selector_text: AnyFormattedText = "  ",
+		focused_selector_text: AnyFormattedText = "> ",
+		unchecked_checkbox_text: AnyFormattedText = ANSI(PLATFORM_TEXT_DIM + "[ ] "),
+		checked_checkbox_text: AnyFormattedText = "[x] ",
+	) -> None:
+		Interactable.__init__(
+			self,
+			text=text,
+			focusable=focusable,
+			on_interact=on_interact,
+			dont_extend_height=dont_extend_height,
+			dont_extend_width=dont_extend_width,
+			align=align,
+			wrap_lines=wrap_lines,
+			show_cursor=show_cursor,
+			add_interact_key_bindings=add_interact_key_bindings,
+			idle_selector_text=idle_selector_text,
+			focused_selector_text=focused_selector_text,
+		)
+
+		self.checked = checked
+		self.on_checked = on_checked
+		self.unchecked_checkbox_text = unchecked_checkbox_text
+		self.checked_checkbox_text = checked_checkbox_text
+
+	def render_checkbox(self) -> AnyFormattedText:
+		return self.checked_checkbox_text if self.checked else self.unchecked_checkbox_text
+
+	def render_text(self) -> AnyFormattedText:
+		text = Interactable.render_text(self)
+		return merge_formatted_text((
+			to_formatted_text(self.render_checkbox(), self.style),
+			to_formatted_text(text, self.style),
+		))
+
+	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
+		self.checked = not self.checked
+		Interactable.interact(self, event)
+
+class Editable(BufferControl):
+	"""
+	Editable area, text can be written when input become focused, supports prompt, placeholder, etc.
+	"""
+
+	def __init__(
+		self,
+		prompt: AnyFormattedText = None,
+		text: str = "",
+		multiline: FilterOrBool = False,
+		focusable: FilterOrBool = True,
+		*,
+		hint: Optional[str] = None,
+		use_hint_as_fallback: bool = True,
+		read_only: FilterOrBool = False,
+        on_text_changed: Optional[BufferEventHandler] = None,
+		dont_extend_height: bool = True,
+		dont_extend_width: bool = False,
+		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
+		wrap_lines: FilterOrBool = True,
+		input_processors: Optional[List[Processor]] = None,
+		include_default_input_processors: bool = True,
+		lexer: Optional[Lexer] = None,
+		preview_search: FilterOrBool = False,
+		search_buffer_control: Optional[Union[SearchBufferControl, Callable[[], SearchBufferControl]]] = None,
+		menu_position: Optional[Callable[[], Optional[int]]] = None,
+		add_interact_key_bindings: bool = True,
+		on_interact: Optional[Callable[['Editable'], None]] = None,
+		idle_selector_text: AnyFormattedText = "  ",
+		focused_selector_text: AnyFormattedText = "> ",
+		focus_on_click: FilterOrBool = True,
+	) -> None:
+		buffer = Buffer(
+			document=Document(text),
+			read_only=read_only,
+			# TODO: Handle arrows cursor movement for multine
+			multiline=multiline,
+			on_text_changed=on_text_changed,
+		)
+		BufferControl.__init__(
+			self,
+			buffer=buffer,
+			input_processors=input_processors,
+			include_default_input_processors=include_default_input_processors,
+			lexer=lexer,
+			preview_search=preview_search,
+			focusable=focusable,
+			search_buffer_control=search_buffer_control,
+			menu_position=menu_position,
+			focus_on_click=focus_on_click,
+		)
+
+		self.has_focus = has_focus(self)
+		self.window = Window(
+			content=self,
+			height=Dimension(min=1),
+			dont_extend_height=dont_extend_height,
+			dont_extend_width=dont_extend_width,
+			align=align,
+			wrap_lines=wrap_lines,
+			left_margins=[
+				ConditionalMargin(
+					InteractableMargin(self.has_focus, idle_selector_text, focused_selector_text),
+					self.focusable
+				)
+			],
+			right_margins=[
+				ConditionalMargin(
+					InteractableMargin(False, idle_selector_text, focused_selector_text),
+					self.focusable
+				)
+			],
+		)
+
+		self.prompt = prompt
+		self.hint = hint
+		self.use_hint_as_fallback = use_hint_as_fallback
+
+		if not self.input_processors:
+			self.input_processors = []
+		self.input_processors.extend((
+			ConditionalProcessor(
+				BeforeInput(lambda: self.prompt),
+				Condition(self.has_prompt)
+			),
+			ConditionalProcessor(
+				AfterInput(lambda: ANSI(PLATFORM_TEXT_DIM + str(self.hint))),
+				Condition(self.has_hint)
+			),
+		))
+
+		if add_interact_key_bindings:
+			self.add_interact_key_bindings()
+		self.on_interact = on_interact
+
+	def has_prompt(self) -> bool:
+		return self.prompt is not None and len(to_formatted_text(self.prompt)) > 0
+
+	def has_hint(self) -> bool:
+		return self.hint is not None and len(self.buffer.text) == 0 and len(self.hint) > 0
+
+	def is_interactable(self) -> bool:
+		return not self.buffer.multiline() or len(self.buffer.text) == 0
+
+	def add_interact_key_bindings(self) -> None:
+		if self.key_bindings is None:
+			self.key_bindings = KeyBindings()
+		kb = self.key_bindings
+
+		@kb.add(Keys.Enter, filter=Condition(self.is_interactable))
+		def _(event: KeyPressEvent) -> None:
+			self.interact(event)
+
+	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
+		if self.on_interact:
+			self.on_interact(self)
+		if self.use_hint_as_fallback and not self.buffer.read_only() and self.has_hint():
+			self.buffer.document = Document(self.hint or "...")
+
+	def __pt_container__(self) -> Container:
+		return self.window
+
+def format_timedelta(timedelta: timedelta) -> str:
+    result = f"{timedelta}".split(".")[0]
+    if result.startswith("0:"):
+        result = result[2:]
+    return result
+
+class Progress(UIControl):
+	"""
+	Percentage bar with left time and interaction ability.
+	"""
+
+	def __init__(
+		self,
+		focusable: FilterOrBool = False,
+		on_interact: Optional[Callable[['Progress'], None]] = None,
+		*,
+		dont_extend_height: bool = True,
+		dont_extend_width: bool = False,
+		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
+		wrap_lines: FilterOrBool = True,
+		add_interact_key_bindings: bool = False,
+		idle_selector_text: AnyFormattedText = "  ",
+		focused_selector_text: AnyFormattedText = "> ",
+	):
+		self.done = False
+		self.start_time = datetime.now()
+		self.stopped = False
+		self.stop_time = None
+		self.percentage = 0.0
+
+		self.focusable = to_filter(focusable)
+		self.has_focus = has_focus(self)
+		self.window = Window(
+			content=self,
+			height=Dimension(min=1),
+			dont_extend_height=dont_extend_height,
+			dont_extend_width=dont_extend_width,
+			align=align,
+			wrap_lines=wrap_lines,
+			left_margins=[
+				ConditionalMargin(
+					InteractableMargin(self.has_focus, idle_selector_text, focused_selector_text),
+					self.focusable
+				)
+			],
+			right_margins=[
+				ConditionalMargin(
+					InteractableMargin(False, idle_selector_text, focused_selector_text),
+					self.focusable
+				)
+			],
+		)
+
+		self.key_bindings = None
+		if add_interact_key_bindings:
+			self.add_interact_key_bindings()
+		self.on_interact = on_interact
+
+	def is_focusable(self) -> bool:
+		return self.focusable()
+
+	def add_interact_key_bindings(self) -> None:
+		if self.key_bindings is None:
+			self.key_bindings = KeyBindings()
+		kb = self.key_bindings
+
+		@kb.add(Keys.Enter)
+		@kb.add(" ")
+		def _(event: KeyPressEvent) -> None:
+			self.interact(event)
+
+	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
+		if self.on_interact:
+			self.on_interact(self)
+
+	def get_key_bindings(self) -> Optional[KeyBindingsBase]:
+		return self.key_bindings
+
+	def render_progress(self, offset: int, width: int) -> AnyFormattedText:
+		time_left = self.time_left()
+		percentage_text = f"{self.percentage:.1f}% "
+		time_left_text = f" {format_timedelta(time_left) if time_left else 'N/A'}"
+		available_width = width - len(percentage_text) - len(time_left_text)
+		filled_progress_width = int(self.percentage / 100 * available_width)
+		return [
+			("", percentage_text),
+			("reverse", " " * filled_progress_width),
+		] + to_formatted_text(
+			ANSI(PLATFORM_BACKGROUND_DIM + " " * (available_width - filled_progress_width))
+		) + [
+			("", time_left_text),
+		]
+
+	def create_content(self, width: int, height: int) -> UIContent:
+		return UIContent(
+			get_line=lambda offset: to_formatted_text(self.render_progress(offset, width)),
+			line_count=1,
+			show_cursor=False
+		)
+
+	def time_elapsed(self) -> timedelta:
+		if self.stop_time is None:
+			return datetime.now() - self.start_time
+		else:
+			return self.stop_time - self.start_time
+
+	def time_left(self) -> Optional[timedelta]:
+		if not self.percentage:
+			return None
+		elif self.done or self.stopped:
+			return timedelta(0)
+		else:
+			return self.time_elapsed() * (100 - self.percentage) / self.percentage
+
+	def __pt_container__(self) -> Container:
+		return self.window
+
+class Debugger(Interactable):
+	"""
+	Debugging staff considered from content with max available width. 
+	"""
+
+	def __init__(
+		self,
+		*,
+		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
+	) -> None:
+		Interactable.__init__(
+			self,
+			text="N/A",
+			focusable=False,
+			dont_extend_height=True,
+			dont_extend_width=True,
+			align=align,
+			wrap_lines=False,
+		)
+
+	def preferred_width(self, max_available_width: int) -> int:
+		self._max_available_width = max_available_width
+		return super().preferred_width(max_available_width)
+
+	def render_text(self) -> AnyFormattedText:
+		from prompt_toolkit.application import get_app
+		app = get_app()
+		screen = app.renderer.last_rendered_screen
+		max_available_width = 0
+		if hasattr(self, "_max_available_width"):
+			max_available_width = self._max_available_width
+		if max_available_width <= 0 and screen is not None:
+			max_available_width = screen.width
+		if max_available_width <= 0:
+			return super().render_text()
+		buffer = []
+		if screen is not None:
+			buffer.append(f"{screen.width}x{screen.height}{'f' if screen.show_cursor else 'h'}")
+		buffer.append(f"{app.color_depth.value.split('_', 3)[1]}d/")
+		current_buffer = app.layout.current_buffer
+		if current_buffer is not None:
+			buffer.append(f"{len(current_buffer.text)}b")
+		current_control = app.layout.current_control
+		if current_control is not None:
+			buffer.append(current_control.__class__.__name__)
+		current_window = app.layout.current_window
+		if current_window is not None:
+			render_info = current_window.render_info
+			if render_info is not None:
+				buffer.append(f"{render_info.window_width}x{render_info.window_height}{'n' if render_info.wrap_lines else 's'}")
+		if current_buffer is None and current_control is None and current_window is None:
+			buffer.append("inactive")
+		buffer.append(f"/{sum(1 for _ in app.layout.find_all_controls())}c")
+		buffer.append(f"{len(app.layout.visible_windows)}vw")
+		buffer.append(f"{sum(1 for _ in app.layout.find_all_windows())}w")
+		text = " " + "".join(buffer) + " "
+		if len(text) > self._max_available_width:
+			text = text[:self._max_available_width - 2] + "+ "
+		return [
+			("reverse", text.center(self._max_available_width, "▄").replace("▄▄", "▄▀")),
+		]
 
 if __name__ == "__main__":
 	simple_async_test()
