@@ -237,20 +237,7 @@ def simple_async_test():
 	async def main():
 		app = Application(
 			layout=layout,
-			style=Style.from_dict({
-				"checkbox.inactive": "fg:ansibrightblack",
-				"checkbox.active": "",
-				"editable.hint": "fg:ansibrightblack",
-				"progress.percentage": "",
-				"progress.filled": "reverse",
-				"progress.unfilled": "bg:ansibrightblack",
-				"progress.time-left": "",
-				"paused progress.filled": "fg:ansibrightgreen",
-				"interrupted progress.filled": "fg:ansibrightyellow",
-				"raised progress.filled": "fg:ansibrightred",
-				"margin": "",
-				"debugger-overlay": "reverse",
-			}),
+			style=Style.from_dict(TOOLCHAIN_STYLE),
 			include_default_pygments_style=False,
 			key_bindings=kb,
 			full_screen=False,
@@ -296,8 +283,27 @@ from prompt_toolkit.styles import Style
 
 # prompt-toolkit doesn't have built-in theme styling support, which can be tracked
 # on pull request https://github.com/prompt-toolkit/python-prompt-toolkit/pull/1630
-# PLATFORM_TEXT_DIM = "\x1b[2m"
+# TOOLCHAIN_ANSI_DIM = "\x1b[2m"
 
+TOOLCHAIN_STYLE = {
+	# prompt-toolkit overrides
+	"scrollbar.background": "bg:ansibrightblack",
+	"scrollbar.button": "bg:ansiwhite",
+
+	# custom interactable styling
+	"checkbox.inactive": "fg:ansibrightblack",
+	"checkbox.active": "",
+	"editable.hint": "fg:ansibrightblack",
+	"progress.percentage": "",
+	"progress.filled": "reverse",
+	"progress.unfilled": "bg:ansibrightblack",
+	"progress.time-left": "",
+	"paused progress.filled": "fg:ansibrightgreen",
+	"interrupted progress.filled": "fg:ansibrightyellow",
+	"raised progress.filled": "fg:ansibrightred",
+	"margin": "",
+	"debugger-overlay": "reverse",
+}
 
 class InteractableMargin(Margin):
 	def __init__(
