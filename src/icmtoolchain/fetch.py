@@ -122,17 +122,15 @@ def create_download_github_repository_request(repository: str, branch: str = "ma
 		placeholder = f"{repository}#{branch}"
 	return create_download_request(f"https://codeload.github.com/{repository}/zip/{branch}", placeholder=placeholder, timeout=timeout, seconds_between_requests=seconds_between_requests, attempts=attempts)
 
-def queue_download_request(url: str, data: Optional[bytes] = None, output_path: Optional[str] = None, /, shell: Optional[Shell] = None, placeholder: Optional[str] = None, timeout: float = 10, seconds_between_requests: float = 0.5, attempts: int = 2):
+def queue_download_request(url: str, data: Optional[bytes] = None, output_path: Optional[str] = None, /, placeholder: Optional[str] = None, timeout: float = 10, seconds_between_requests: float = 0.5, attempts: int = 2):
 	if not placeholder:
 		placeholder = url.rsplit("/", 1)[-1]
-	if shell:
-		progress = Progress(text=placeholder)
-		shell.interactables.append(progress)
-		shell.render()
+	# progress = Progress(text=placeholder)
 	try:
 		_, fetch = create_download_request(url, data, placeholder=placeholder, timeout=timeout, seconds_between_requests=seconds_between_requests, attempts=attempts)
-		fetch(output_path, lambda received, size: progress.notify(shell, progress, received / size, f"{placeholder} ({received / size / 1048576:.1f}%)") if shell else None)
-		progress.notify(shell, progress, 1, placeholder)
+		fetch(output_path, lambda received, size: None) # progress.notify(shell, progress, received / size, f"{placeholder} ({received / size / 1048576:.1f}%)")
+		# progress.notify(shell, progress, 1, placeholder)
 	except URLError as exc:
-		Shell.notify(shell, f"#{exc.errno}: {exc.strerror}")
-		Progress.notify(shell, progress, 1, "Check your network connection!")
+		# Shell.notify(shell, f"#{exc.errno}: {exc.strerror}")
+		# Progress.notify(shell, progress, 1, "Check your network connection!")
+		pass
