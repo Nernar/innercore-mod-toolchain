@@ -7,7 +7,7 @@ from types import (BuiltinMethodType, ClassMethodDescriptorType,
 from typing import Any, Callable, List, Mapping, Optional, Tuple
 
 from . import GLOBALS, PROPERTIES
-from .shell import printc, stringify
+from .shell import pretty_print, stringify
 from .task import Task
 
 MAGICS = (
@@ -19,14 +19,15 @@ MAGICS = (
 
 try:
 	import pygments  # type: ignore
-	from pygments.formatters.terminal import TerminalFormatter  # type: ignore
+	from prompt_toolkit.formatted_text import PygmentsTokens
 	from pygments.lexers.python import PythonLexer  # type: ignore
 
 	def highlight(*values: object, sep: Optional[str] = " ", file: Optional[Any] = None):
-		printc(pygments.highlight(stringify(*values, sep=sep), PythonLexer(), TerminalFormatter()), file=file)
+		tokens = list(pygments.lex(stringify(*values, sep=sep), lexer=PythonLexer()))
+		pretty_print(PygmentsTokens(tokens), file=file)
 except ImportError:
 	def highlight(*values: object, sep: Optional[str] = " ", file: Optional[Any] = None):
-		printc(*values, file=file)
+		pretty_print(*values, sep=sep, file=file)
 
 Attribute = namedtuple("Attribute", "name kind defining_class object type")
 

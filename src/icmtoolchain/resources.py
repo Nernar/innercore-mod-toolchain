@@ -6,7 +6,7 @@ from shutil import make_archive
 from . import GLOBALS
 from .base_config import BaseConfig
 from .make_config import ToolchainConfig
-from .shell import debug, error, warn
+from .shell import debug, error, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory,
                     ensure_file_directory, remove_tree, shortcodes)
 
@@ -93,7 +93,7 @@ def build_pack_graphics() -> int:
 
 	from shutil import make_archive
 	make_archive(graphics_archive[:-4], "zip", graphics_directory)
-	print(f"Composed a pack with graphics from {len(graphics_groups.keys())} groups!")
+	pretty_print(f"Composed a pack with graphics from {len(graphics_groups.keys())} groups!")
 	return 0
 
 def build_additional_resources() -> int:

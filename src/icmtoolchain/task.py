@@ -1,4 +1,3 @@
-import colorama
 import os
 import time
 from io import TextIOWrapper
@@ -7,7 +6,7 @@ from typing import Any, Callable, Dict, Final, List, Optional
 
 from . import GLOBALS, PROPERTIES
 from .make_config import MakeConfig
-from .shell import abort, confirm, error, info, printc, stringify, warn
+from .shell import abort, confirm, error, pretty_print, warn
 from .utils import DEVNULL, ensure_file_directory, remove_tree
 
 
@@ -36,7 +35,7 @@ class Task:
 			raise ValueError(f"Task {self.name!r} decorator is not assigned to function yet.")
 		self.lock(silent)
 		if not silent:
-			printc(stringify(f"> Executing task: {self.name}", color=colorama.Style.BRIGHT, reset=colorama.Style.NORMAL), color=colorama.Fore.LIGHTGREEN_EX, reset=colorama.Fore.RESET)
+			pretty_print(f"> Executing task: {self.name}", style="class:task.execute")
 		result = self.callable.__call__(*args, **kwargs)
 		self.unlock()
 		return result
@@ -381,8 +380,9 @@ def task_new_project() -> int:
 
 	index = new_project(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
 	if index is None:
-		print(); abort()
-	print("Successfully completed!")
+		pretty_print()
+		abort()
+	pretty_print("Successfully completed!")
 
 	if not confirm("Select this project?", True):
 		return 0
@@ -396,7 +396,7 @@ def task_new_project() -> int:
 def task_import_project(path: str = "", target: str = "") -> int:
 	from .import_project import import_project
 	path = import_project(path if len(path) > 0 else None, target if len(target) > 0 else None)
-	print("Project successfully imported!")
+	pretty_print("Project successfully imported!")
 
 	if not confirm("Select this project?", True):
 		return 0
@@ -411,11 +411,11 @@ def task_import_project(path: str = "", target: str = "") -> int:
 def task_remove_project() -> int:
 	if GLOBALS.PROJECT_MANAGER.how_much() == 0:
 		abort("Not found any project to remove.")
-	print("Selected project will be deleted forever, please think twice before removing anything!")
+	pretty_print("Selected project will be deleted forever, please think twice before removing anything!")
 
 	who = GLOBALS.PROJECT_MANAGER.require_selection("Which project will be deleted?", "Do you really want to delete {}?", "I don't want it anymore")
 	if not who:
-		print("Nothing will happen.")
+		pretty_print("Nothing will happen.")
 		return 0
 	if GLOBALS.PROJECT_MANAGER.how_much() > 1 and not confirm("Do you really want to delete it?", True):
 		return 0
@@ -429,7 +429,7 @@ def task_remove_project() -> int:
 	except ValueError:
 		abort(f"Folder {who!r} not found!")
 
-	print("Project permanently deleted.")
+	pretty_print("Project permanently deleted.")
 	return 0
 
 @task(
@@ -476,7 +476,7 @@ def task_ensure_project_exists() -> int:
 
 	who = GLOBALS.PROJECT_MANAGER.require_selection("Which project do you choice to continue?", "Do you want to select {} to continue?")
 	if not who:
-		print("Nothing will happen.")
+		pretty_print("Nothing will happen.")
 		return 1
 	try:
 		GLOBALS.PROJECT_MANAGER.select_project(folder=who)
@@ -536,9 +536,7 @@ def task_configure_ide() -> int:
 	description="Updates the toolchain using a development branch; additionally verifies updates for installed components."
 )
 def task_update_toolchain() -> int:
-	from .update import update_toolchain
-	update_toolchain()
-	return 0
+	return 1
 
 @task(
 	"componentIntegrity",

@@ -6,7 +6,7 @@ from typing import Any, Dict, Final, List, Optional, Tuple
 
 from . import GLOBALS
 from .make_config import MakeConfig
-from .shell import abort, confirm, warn
+from .shell import abort, confirm, pretty_print, warn
 from .utils import ensure_not_whitespace, remove_tree
 
 
@@ -167,12 +167,12 @@ class ProjectManager:
 			GLOBALS.CODE_SETTINGS.save()
 
 		self.select_project_folder(folder)
-		print(f"Project {folder!r} selected.")
+		pretty_print(f"Project {folder!r} selected.")
 
 	def unselect_project(self, *, silent: bool = False):
 		self.select_project_folder()
 		if not silent:
-			print(f"Project unselected.")
+			pretty_print(f"Project unselected.")
 
 	def resolve_mod_name(self, path: str, make_obj: Optional[Dict[Any, Any]] = None) -> str:
 		if not make_obj:

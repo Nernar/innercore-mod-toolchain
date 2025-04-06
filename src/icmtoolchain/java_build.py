@@ -12,7 +12,7 @@ from . import GLOBALS, PROPERTIES
 from .base_config import BaseConfig
 from .component import install_components
 from .language import get_language_directories
-from .shell import abort, debug, error, info, warn
+from .shell import abort, debug, error, info, pretty_print, warn
 from .utils import (RuntimeCodeError, copy_directory, copy_file,
                     ensure_directory, ensure_file, get_all_files,
                     get_next_filename, remove_tree, request_executable_version,
@@ -398,7 +398,7 @@ def build_java_with_gradle(targets: Collection[BuildTarget], target_directory: s
 			# else:
 				# error(result.stderr.strip())
 			# return result.returncode
-		print()
+		pretty_print()
 
 	cleanup_gradle_scripts(targets)
 	return result.returncode if len(targets) != 0 else 0
@@ -587,7 +587,7 @@ def compile_java(tool: str = "gradle") -> int:
 	if len(directories) != 0:
 		startup_millis = time() - startup_millis
 		if overall_result == 0:
-			print(f"Completed java build in {startup_millis:.2f}s!")
+			pretty_print(f"Completed java build in {startup_millis:.2f}s!")
 		else:
 			error(f"Failed java build in {startup_millis:.2f}s with result {overall_result}.")
 	return overall_result

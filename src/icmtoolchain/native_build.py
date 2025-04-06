@@ -9,7 +9,7 @@ from . import GLOBALS, PROPERTIES
 from .language import get_language_directories
 from .make_config import BaseConfig, ToolchainConfig
 from .native_setup import arch_to_abi, prepare_compiler_executable
-from .shell import abort, debug, error, info, warn
+from .shell import abort, debug, error, info, pretty_print, warn
 from .utils import (RuntimeCodeError, copy_directory, copy_file,
                     ensure_directory, ensure_file_directory, get_all_files,
                     remove_tree)
@@ -332,7 +332,7 @@ def build_native_with_ndk(directory: str, output_directory: str, target_director
 			object_position += 1
 
 		if overall_result != CODE_OK:
-			print()
+			pretty_print()
 			return overall_result
 		debug(f"Recompiled {recompiled_count}/{total_count} files with result {overall_result} ({'OK' if overall_result == 0 else 'ERROR'}){' ' * 48}")
 
@@ -425,7 +425,7 @@ def compile_native(abis: Collection[str]) -> int:
 	GLOBALS.MOD_STRUCTURE.update_build_config_list("nativeDirs")
 	startup_millis = time() - startup_millis
 	if overall_result == CODE_OK:
-		print(f"Completed native build in {startup_millis:.2f}s!")
+		pretty_print(f"Completed native build in {startup_millis:.2f}s!")
 	else:
 		error(f"Failed native build in {startup_millis:.2f}s with result {overall_result}.")
 
@@ -466,7 +466,7 @@ def copy_shared_objects(abis: Collection[str]) -> int:
 		with open(join(output_directory, "order.txt"), "w", encoding="utf-8") as order_file:
 			order_file.write("\n".join(order) + "\n")
 	if overall_result == 0:
-		print(f"Completed shared objects include!")
+		pretty_print(f"Completed shared objects include!")
 	else:
 		error(f"Failed include shared objects with result {overall_result}.")
 	return overall_result

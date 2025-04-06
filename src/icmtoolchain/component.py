@@ -1,13 +1,10 @@
-import colorama
 import sys
 from os.path import isdir, isfile, join
 from typing import Final, List, Optional
 
 from . import GLOBALS
-from .shell import (PLATFORM_STYLE_DIM, Input, InteractiveShell, Interrupt,
-                    Notice, Progress, SelectiveShell, Separator, Shell, Switch,
-                    abort, stringify)
-from .utils import (ensure_not_whitespace, request_typescript)
+from .shell import abort, pretty_print, pretty_print_answer, stringify
+from .utils import ensure_not_whitespace, request_typescript
 
 
 class Component():
@@ -67,7 +64,7 @@ def install_components(*keywords: str) -> None:
 	with shell:
 		for keyword in keywords:
 			if not keyword in COMPONENTS:
-				print(f"Component {keyword!r} not availabled!")
+				pretty_print(f"Component {keyword!r} not available!")
 				continue
 			if keyword == "cpp":
 				continue
@@ -108,7 +105,7 @@ def get_username() -> Optional[str]:
 		return None
 
 def startup() -> None:
-	print("Welcome to Inner Core Mod Toolchain!", end="")
+	pretty_print("Welcome to Inner Core Mod Toolchain!", end="")
 	shell = SelectiveShell()
 	shell.interactables += [
 		Separator(),
@@ -182,18 +179,18 @@ def startup() -> None:
 		shell.loop()
 	except KeyboardInterrupt:
 		shell.leave()
-		print()
-		print("* You have exited installation process, settings will not be saved. Environment is available in folder specified in console.")
+		pretty_print()
+		pretty_print("* You have exited installation process, settings will not be saved. Environment is available in folder specified in console.")
 		return
-	print()
+	pretty_print()
 
 	username = ensure_not_whitespace(shell.get_interactable("user", Input).read())
 	if username:
-		print("What name will be used for publishing mods?", stringify(username, color=PLATFORM_STYLE_DIM, reset=colorama.Style.RESET_ALL))
+		pretty_print_answer("What name will be used for publishing mods?", username)
 		GLOBALS.TOOLCHAIN_CONFIG.set_value("template.author", username)
 
 	typescript = shell.get_interactable("typescript", Switch).checked
-	print("Will all scripts be compiled using Node.js?", stringify("yes" if typescript else "no", color=PLATFORM_STYLE_DIM, reset=colorama.Style.RESET_ALL))
+	pretty_print_answer("Will all scripts be compiled using Node.js?", "Yes" if typescript else "No")
 	if typescript:
 		if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
 			GLOBALS.TOOLCHAIN_CONFIG.remove_value("denyTypeScript")
@@ -207,13 +204,13 @@ def startup() -> None:
 
 	pending = resolve_selected_components(shell.interactables)
 	if len(pending) > 0:
-		print("Which components need to be installed?", stringify(", ".join(pending), color=PLATFORM_STYLE_DIM, reset=colorama.Style.RESET_ALL))
+		pretty_print_answer("Which components need to be installed?", *pending)
 		install_components(*pending)
 
-	print("* Installation process is completed! You can now use environment as usual; simply open `toolchain.code-workspace` file or toolchain folder through your favorite IDE.")
+	pretty_print("* Installation process is completed! You can now use environment as usual; simply open `toolchain.code-workspace` file or toolchain folder through your favorite IDE.")
 
 def upgrade() -> int:
-	print("Which components need to be updated?", end="")
+	pretty_print("Which components need to be updated?", end="")
 	shell = SelectiveShell(lines_per_page=min(len(COMPONENTS), 9))
 	shell.interactables += [
 		Switch("component:" + key, COMPONENTS[key].name, True if key in which_installed() else False) for key in COMPONENTS
@@ -222,21 +219,22 @@ def upgrade() -> int:
 	try:
 		shell.loop()
 	except KeyboardInterrupt:
-		print(); return 1
+		pretty_print()
+		return 1
 	installed = resolve_selected_components(shell.interactables)
 	if len(installed) > 0:
-		print("Which components need to be updated?", stringify(", ".join(installed), color=PLATFORM_STYLE_DIM, reset=colorama.Style.RESET_ALL))
+		pretty_print_answer("Which components need to be updated?", *installed)
 		install_components(*installed)
 	else:
-		print()
-		print("Nothing to perform.")
+		pretty_print()
+		pretty_print("Nothing to perform.")
 	return 0
 
 
 if __name__ == "__main__":
 	if "--help" in sys.argv:
-		print("Usage: python component.py [options] <components>")
-		print(" " * 2 + "--startup: Initial settings instead of a component updates.")
+		pretty_print("Usage: python component.py [options] <components>")
+		pretty_print(" " * 2 + "--startup: Initial settings instead of a component updates.")
 		exit(0)
 	if "--startup" in sys.argv or "-s" in sys.argv:
 		startup()

@@ -8,7 +8,7 @@ from typing import Any, Dict, Final, List
 
 from . import GLOBALS, PROPERTIES
 from .hglob import glob
-from .shell import debug, error, info, warn
+from .shell import debug, error, info, pretty_print, warn
 from .utils import ensure_file_directory, request_typescript
 from .workspace import TSCONFIG
 
@@ -198,7 +198,7 @@ class Includes:
 
 			startup_millis = time() - startup_millis
 			if overall_result == 0:
-				print(f"Completed {basename(target_path)!r} flushing in {startup_millis:.2f}s!")
+				pretty_print(f"Completed {basename(target_path)!r} flushing in {startup_millis:.2f}s!")
 			else:
 				error(f"Failed {basename(target_path)!r} flushing in {startup_millis:.2f}s with result {overall_result}.")
 				return overall_result

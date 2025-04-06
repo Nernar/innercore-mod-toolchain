@@ -8,8 +8,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from . import GLOBALS
 from .hglob import glob
 from .make_config import MakeConfig
-from .shell import (Progress, Shell, abort, confirm, error, link,
-                    select_prompt, warn)
+from .shell import (abort, confirm, error, link, pretty_print, select_prompt,
+                    warn)
 from .utils import DEVNULL
 
 
@@ -31,7 +31,7 @@ def get_modpack_push_directory() -> Optional[str]:
 		return get_modpack_push_directory()
 
 	if "/horizon/packs/" not in directory and not GLOBALS.PREFERRED_CONFIG.get_value("adb.pushAnyLocation", False):
-		print(
+		pretty_print(
 			f"Push directory {directory} looks suspicious, it does not belong to Horizon packs directory. " +
 			"This action may easily corrupt all content inside, allow it only if you know what are you doing."
 		)
@@ -51,9 +51,9 @@ def get_modpack_push_directory() -> Optional[str]:
 		elif which == 2:
 			GLOBALS.TOOLCHAIN_CONFIG.set_value("adb.pushAnyLocation", True)
 			GLOBALS.TOOLCHAIN_CONFIG.save()
-			print("This may be changed in your 'toolchain.json' config.")
+			pretty_print("This may be changed in your 'toolchain.json' config.")
 		elif which == 3:
-			print("Pushing aborted.")
+			pretty_print("Pushing aborted.")
 			return None
 
 	return directory
@@ -173,7 +173,7 @@ def push_everything(push_unchanged: bool = True, cleanup_remote: bool = True) ->
 			elif isdir(project_path):
 				result = push_directory(project_path, remote_path, push_unchanged=remote_push_unchanged, cleanup_remote=remote_cleanup_remote, shell=shell)
 			else:
-				print()
+				pretty_print()
 				abort(f"We cannot push {linked_resource['relative_path']!r} resource because we could not determine its type!")
 			if result != 0:
 				return result
@@ -414,7 +414,7 @@ def get_adb_command() -> List[str]:
 					"connect", target
 				], timeout=3.0, stdout=DEVNULL, stderr=DEVNULL)
 			except subprocess.TimeoutExpired:
-				print(f"Connection to {target} timeout")
+				pretty_print(f"Connection to {target} timeout")
 	pending = device_list()
 	if pending:
 		itwillbe = list()
@@ -481,7 +481,7 @@ def get_adb_command_by_serialno_type(which: str, silent: bool = False) -> Option
 def setup_device_connection() -> Optional[List[str]]:
 	not_connected_any_device = len(GLOBALS.TOOLCHAIN_CONFIG.get_value("devices", list())) == 0
 	if not_connected_any_device:
-		print(
+		pretty_print(
 			"Howdy! " +
 			"Before starting we're must set up your devices, don't you think so? " +
 			"Let's configure some connections."
@@ -501,8 +501,8 @@ def setup_device_connection() -> Optional[List[str]]:
 
 def setup_via_usb() -> Optional[List[str]]:
 	try:
-		print("Listening device via cable...")
-		print(f"* Press Ctrl+{'C' if platform.system() == 'Windows' else 'Z'} to leave")
+		pretty_print("Listening device via cable...")
+		pretty_print(f"* Press Ctrl+{'C' if platform.system() == 'Windows' else 'Z'} to leave")
 		subprocess.run([
 			GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
 			"wait-for-usb-device"
@@ -513,9 +513,9 @@ def setup_via_usb() -> Optional[List[str]]:
 	except subprocess.CalledProcessError as err:
 		error("adb wait-for-usb-device failed with code", err.returncode)
 	except subprocess.TimeoutExpired:
-		print("Timeout")
+		pretty_print("Timeout")
 	except KeyboardInterrupt:
-		print()
+		pretty_print()
 	return setup_device_connection()
 
 def setup_via_network() -> Optional[List[str]]:
@@ -533,7 +533,7 @@ def setup_via_network() -> Optional[List[str]]:
 def setup_via_ping_localhost() -> Optional[List[str]]:
 	ip = get_ip().rpartition(".")
 	if len(ip[2]) == 0:
-		print("Not availabled right now.")
+		pretty_print("Not available right now.")
 		return setup_via_network()
 	shell = Shell()
 	progress = Progress(text="Connecting")
@@ -551,17 +551,17 @@ def setup_via_ping_localhost() -> Optional[List[str]]:
 				if ping_via_shell(next_ip, shell, progress, index):
 					accepted.append(next_ip)
 		except KeyboardInterrupt:
-			print()
+			pretty_print()
 			return setup_via_network()
 		if len(accepted) == 0:
-			print()
-			print("Not found anything, are you sure that network connected?")
+			pretty_print()
+			pretty_print("Not found anything, are you sure that network is connected?")
 			return setup_via_network()
 		subprocess.run([
 			GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
 			"disconnect"
 		], stdout=DEVNULL, stderr=DEVNULL)
-		print("Found connections: " + ", ".join(accepted))
+		pretty_print("Found connections: " + ", ".join(accepted))
 		latest = None
 		for next in accepted:
 			try:
@@ -574,16 +574,16 @@ def setup_via_ping_localhost() -> Optional[List[str]]:
 					latest = command
 					break
 				else:
-					print()
+					pretty_print()
 			except subprocess.CalledProcessError as err:
 				error("adb connect failed with code", err.returncode)
 			except subprocess.TimeoutExpired:
-				print("Timeout")
+				pretty_print("Timeout")
 			except KeyboardInterrupt:
 				break
 		if latest:
 			return latest
-		print("Pinging every port, interrupt operation if you already know it.")
+		pretty_print("Pinging every port, interrupt operation if you already know it.")
 		for next in accepted:
 			try:
 				ports = list()
@@ -598,11 +598,11 @@ def setup_via_ping_localhost() -> Optional[List[str]]:
 						latest = command
 						break
 					else:
-						print()
+						pretty_print()
 			except KeyboardInterrupt:
 				break
-			print()
-		print()
+			pretty_print()
+		pretty_print()
 	return latest or setup_via_network()
 
 def ping_via_shell(ip: str, shell: Optional[Shell], progress: Optional[Progress], index: int) -> int:
@@ -662,13 +662,13 @@ async def connect_async(ip: str, shell: Optional[Shell], progress: Optional[Prog
 
 def setup_via_tcp_network(ip: Optional[str] = None, port: Optional[str] = None, pairing_code: Optional[str] = None, with_pairing_code: bool = False) -> Optional[List[str]]:
 	if not ip:
-		print("You are connected via", get_ip())
+		pretty_print("You are connected via", get_ip())
 		try:
 			tcp = input("Specify address: IP[:PORT] ")
 			if len(tcp) == 0:
 				return setup_via_network()
 		except KeyboardInterrupt:
-			print()
+			pretty_print()
 			return setup_via_network()
 		tcp = tcp.split(":")
 		ip = tcp[0]
@@ -678,7 +678,7 @@ def setup_via_tcp_network(ip: Optional[str] = None, port: Optional[str] = None, 
 			try:
 				pairing_code = input("Specify pairing code: ")
 			except KeyboardInterrupt:
-				print()
+				pretty_print()
 				return setup_via_network()
 		try:
 			subprocess.run([
@@ -690,7 +690,7 @@ def setup_via_tcp_network(ip: Optional[str] = None, port: Optional[str] = None, 
 		except subprocess.CalledProcessError as err:
 			error("adb pair failed with code", err.returncode)
 		except KeyboardInterrupt:
-			print()
+			pretty_print()
 	subprocess.run([
 		GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
 		"disconnect"
@@ -706,9 +706,9 @@ def setup_via_tcp_network(ip: Optional[str] = None, port: Optional[str] = None, 
 	except subprocess.CalledProcessError as err:
 		error("adb connect failed with code", err.returncode)
 	except subprocess.TimeoutExpired:
-		print("Timeout")
+		pretty_print("Timeout")
 	except KeyboardInterrupt:
-		print()
+		pretty_print()
 	return setup_via_network()
 
 def setup_externally(skip_input: bool = False) -> Optional[List[str]]:
@@ -719,32 +719,32 @@ def setup_externally(skip_input: bool = False) -> Optional[List[str]]:
 			if not serial in GLOBALS.TOOLCHAIN_CONFIG.get_value("devices", list()):
 				return get_adb_command_by_serial(serial)
 			else:
-				print("Connected device already saved, maybe another available too.")
+				pretty_print("Connected device already saved, maybe another available too.")
 	else:
-		print("Not found connected devices, resolving everything...")
+		pretty_print("Not found connected devices, resolving everything...")
 	devices = device_list()
 	if not devices:
 		return setup_device_connection()
 	device = which_device_will_be_connected(*devices, state_not_matter=True)
 	if not device:
-		print("Nope, nothing to perform here.")
+		pretty_print("Nope, nothing to perform here.")
 		if not skip_input:
 			try:
 				input()
 			except KeyboardInterrupt:
-				print()
+				pretty_print()
 		return setup_device_connection()
 	return get_adb_command_by_serial(device["serial"])
 
 def setup_how_to_use() -> Optional[List[str]]:
-	print(
+	pretty_print(
 		"Android Debug Bridge (adb) is a versatile command-line tool that lets you communicate with a device. " +
 		"The adb command facilitates a variety of device actions, such as installing and debugging apps, " +
 		"and it provides access to a Unix shell that you can use to run a variety of commands on a device."
 	)
-	print(link("https://developer.android.com/studio/command-line/adb"))
+	pretty_print("https://developer.android.com/studio/command-line/adb")
 	try:
 		input()
 	except KeyboardInterrupt:
-		print()
+		pretty_print()
 	return setup_device_connection()

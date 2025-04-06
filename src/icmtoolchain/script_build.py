@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Tuple
 
 from . import GLOBALS, PROPERTIES
 from .includes import Includes
-from .shell import debug, error, info, warn
+from .shell import debug, error, info, pretty_print, warn
 from .utils import (RuntimeCodeError, copy_file, request_typescript,
                     walk_all_files)
 
@@ -177,7 +177,7 @@ def copy_build_targets(composite: List[Tuple[str, str, str]], includes: List[Tup
 			temporary_script = included[0]
 
 		if temporary_script == included[0] and isfile(temporary_script) and GLOBALS.BUILD_STORAGE.is_path_changed(temporary_script):
-			print(f"Flushing {basename(included[1])!r} from {basename(included[0])!r}")
+			pretty_print(f"Flushing {basename(included[1])!r} from {basename(included[0])!r}")
 
 		if not isfile(temporary_script) or GLOBALS.BUILD_STORAGE.is_path_changed(temporary_script) or not isfile(included[1]):
 			if isfile(temporary_script):
@@ -238,7 +238,7 @@ def build_composite_project() -> int:
 
 			startup_millis = time() - startup_millis
 			if overall_result == 0:
-				print(f"Completed composite script rebuild in {startup_millis:.2f}s!")
+				pretty_print(f"Completed composite script rebuild in {startup_millis:.2f}s!")
 			else:
 				error(f"Failed composite script rebuild in {startup_millis:.2f}s with result {overall_result}.")
 

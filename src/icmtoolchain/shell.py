@@ -1,764 +1,650 @@
-import colorama
-import platform
-import sys
-from typing import (IO, Any, Dict, List, Literal, NoReturn, Optional, Tuple,
-                    Type, TypeVar, Union, overload)
+from datetime import datetime, timedelta
+from io import StringIO
+from typing import (Any, Callable, Dict, List, Literal, NoReturn, Optional,
+                    Sequence, Tuple, Union, cast, overload)
 
-try:
-	import termios
-	import tty
-except ImportError:
-	import msvcrt
+from prompt_toolkit import Application, print_formatted_text
+from prompt_toolkit.buffer import Buffer, BufferEventHandler
+from prompt_toolkit.document import Document
+from prompt_toolkit.filters import (Condition, FilterOrBool, has_focus,
+                                    to_filter)
+from prompt_toolkit.formatted_text import (AnyFormattedText, FormattedText,
+                                           StyleAndTextTuples,
+                                           merge_formatted_text,
+                                           to_formatted_text)
+from prompt_toolkit.key_binding import (KeyBindings, KeyBindingsBase,
+                                        KeyPressEvent)
+from prompt_toolkit.key_binding.bindings.focus import (focus_next,
+                                                       focus_previous)
+from prompt_toolkit.keys import Keys
+from prompt_toolkit.layout import (AnyContainer, BufferControl,
+                                   ConditionalMargin, Container, Dimension,
+                                   FormattedTextControl, HSplit, Layout,
+                                   Margin, ScrollablePane, ScrollOffsets,
+                                   SearchBufferControl, UIContent, UIControl,
+                                   VerticalAlign, Window, WindowAlign,
+                                   WindowRenderInfo)
+from prompt_toolkit.layout.processors import (AfterInput, BeforeInput,
+                                              ConditionalProcessor, Processor)
+from prompt_toolkit.lexers import Lexer
+from prompt_toolkit.styles import SetDefaultColorStyleTransformation, Style
 
-PLATFORM_STYLE_DIM = colorama.Style.DIM
+# prompt-toolkit doesn't have built-in theme styling support, which can be tracked
+# on pull request https://github.com/prompt-toolkit/python-prompt-toolkit/pull/1630
+# TOOLCHAIN_ANSI_DIM = "\x1b[2m"
 
-if platform.system() == "Windows":
-	colorama.just_fix_windows_console()
-	PLATFORM_STYLE_DIM = colorama.Fore.LIGHTBLACK_EX
+TOOLCHAIN_STYLE = {
+	# prompt-toolkit overrides
+	"scrollbar.background": "bg:ansibrightblack",
+	"scrollbar.button": "bg:ansiwhite",
 
+	# logging and tty styling
+	"selection": "reverse",
+	"task.execute": "fg:ansibrightgreen bold",
+	"print.answer": "fg:ansibrightblack",
+	"print.debug": "fg:ansibrightblack",
+	"print.info": "fg:ansibrightgreen",
+	"print.warn": "fg:ansibrightyellow",
+	"print.error": "fg:ansibrightred",
+	"print.abort-message": "fg:ansibrightred bold",
 
-class Shell():
-	offset: int = 0; line: int = 0
-	stdin: IO[str]; stdout: IO[str]; eof_when_enter: bool = False
-	interactables: List['Interactable']
-	inline_flushing: bool = False
+	# interactables styling
+	"checkbox.inactive": "fg:ansibrightblack",
+	"checkbox.active": "",
+	"editable.hint": "fg:ansibrightblack",
+	"progress.percentage": "",
+	"progress.filled": "reverse",
+	"progress.unfilled": "bg:ansibrightblack",
+	"progress.time-left": "",
+	"paused progress.filled": "fg:ansibrightgreen",
+	"interrupted progress.filled": "fg:ansibrightyellow",
+	"raised progress.filled": "fg:ansibrightred",
+	"margin": "",
+	"debugger-overlay": "reverse",
+}
 
-	def __init__(self, stdin: Optional[IO[str]] = None, stdout: Optional[IO[str]] = None) -> None:
-		self.stdin = stdin if stdin else sys.stdin
-		self.stdout = stdout if stdout else sys.stdout
-		self.interactables = list()
+def get_toolchain_style() -> Style:
+	return Style.from_dict(TOOLCHAIN_STYLE)
 
-	def read(self, count: int = 1) -> str:
-		return self.stdin.read(count)
+class InteractableMargin(Margin):
+	def __init__(
+		self,
+		has_focus: FilterOrBool = False, 
+		idle_selector_text: Optional[str] = "  ",
+		focused_selector_text: Optional[str] = "> ",
+	):
+		self.has_focus = to_filter(has_focus)
+		self.idle_selector_text = idle_selector_text or "  "
+		self.focused_selector_text = focused_selector_text or "> "
 
-	def readline(self, count: int = 1) -> str:
-		return self.stdin.readline(count)
+	def get_width(self, get_ui_content: Callable[[], UIContent]) -> int:
+		return max(len(self.idle_selector_text), len(self.focused_selector_text))
 
-	def inputraw(self, count: int = 1) -> str:
-		try:
-			fd = self.stdin.fileno()
-			term_attrs = termios.tcgetattr(fd) # type: ignore
-		except NameError:
-			pass
-		try:
-			try:
-				tty.setraw(fd) # type: ignore
-				key = self.stdin.read(count)
-			except NameError:
-				key = msvcrt.getwch() # type: ignore
-				count -= 1
-				while count > 0:
-					key += msvcrt.getwch() # type: ignore
-					count -= 1
-		finally:
-			try:
-				termios.tcsetattr(fd, termios.TCSADRAIN, term_attrs) # type: ignore
-			except NameError:
-				pass
-		return key
+	def create_margin(self, window_render_info: WindowRenderInfo, width: int, height: int) -> StyleAndTextTuples:
+		focused = self.has_focus()
+		return [
+			(f"class:margin", self.focused_selector_text if focused else self.idle_selector_text),
+			*[(f"class:margin", self.idle_selector_text) for _ in range(height - 1)]
+		]
 
-	def input(self, count: int = 1) -> str:
-		key = self.inputraw(count)
-		if key == "\x03" or key == "\x1a": # Ctrl+C or Ctrl+Z
-			raise KeyboardInterrupt()
-		return key
+class Interactable(FormattedTextControl):
+	"""
+	Pure component abstraction for all toolchain interactions in console.
+	"""
 
-	def inputline(self, count: int = 1) -> str:
-		buffer = ""
-		while count > 0:
-			key = self.input()
-			if ord(key) in {10, 13}: # Enter
-				if count > 1:
-					buffer += "\n"
-				count -= 1
-			else:
-				buffer += key
-		return buffer
-
-	def write(self, value: str) -> None:
-		self.stdout.write(value)
-		value = str(value)
-		self.line += value.count("\n")
-		try:
-			where = value.rindex("\n") + 1
-			self.offset = len(value[where:])
-		except ValueError:
-			self.offset += len(value)
-
-	def up(self, count: int = 1) -> None:
-		self.write(colorama.Cursor.UP(count))
-
-	def down(self, count: int = 1) -> None:
-		self.write(colorama.Cursor.DOWN(count))
-
-	def forward(self, count: int = 1) -> None:
-		self.write(colorama.Cursor.FORWARD(count))
-
-	def backward(self, count: int = 1) -> None:
-		self.write(colorama.Cursor.BACK(count))
-
-	def clear(self) -> None:
-		if self.line > 0:
-			buffer = ""
-			for offset in range(self.line):
-				buffer += colorama.ansi.clear_line()
-				if offset < self.line:
-					buffer += colorama.ansi.CSI + "F"
-			buffer += colorama.ansi.CSI + "G"
-			self.write(buffer)
-			self.line = 0
-		self.offset = 0
-
-	IT = TypeVar("IT", bound="Interactable")
-	@overload
-	def get_interactable(self, criteria: Optional[Union[int, str]], type: Type[IT]) -> IT: ...
-	@overload
-	def get_interactable(self, criteria: Optional[Union[int, str]], type: None = None) -> 'Interactable': ...
-
-	def get_interactable(self, criteria: Optional[Union[int, str]], type: Optional[Type[IT]] = None) -> 'Interactable':
-		try:
-			if isinstance(criteria, int):
-				interactable = self.interactables[criteria]
-				if not type or isinstance(interactable, type):
-					return interactable
-				raise ValueError(f"Criteria {criteria} does not match any interactable!")
-		except IndexError:
-			pass
-		except TypeError:
-			pass
-		for interactable in self.interactables:
-			if interactable.key == criteria and (not type or isinstance(interactable, type)):
-				return interactable
-		raise ValueError(f"Criteria {criteria} does not match any interactable!")
-
-	def observe(self, key: str) -> bool:
-		if self.eof_when_enter and ord(key) in {10, 13}: # Enter
-			raise EOFError()
-		return False
-
-	def draw(self, interactable: 'Interactable') -> Any:
-		return interactable.render(self, self.offset, self.line)
-
-	def touch(self, interactable: 'Interactable', key: str) -> bool:
-		return interactable.observe_key(key)
-
-	def render(self) -> None:
-		self.clear()
-		if not self.inline_flushing:
-			self.write("\n")
-		for interactable in self.interactables:
-			self.draw(interactable)
-
-	def enter(self) -> None:
-		self.hide_cursor()
-		self.render()
-
-	def loop(self) -> None:
-		with self:
-			while True:
-				try:
-					key = self.input(1)
-					observed = False
-					for interactable in self.interactables:
-						observed = self.touch(interactable, key) or observed
-					if not observed:
-						observed = self.observe(key)
-					if observed:
-						self.render()
-				except EOFError:
-					break
-				except KeyboardInterrupt as err:
-					self.leave()
-					raise err
-
-	def leave(self) -> None:
-		self.show_cursor()
-
-	def hide_cursor(self) -> None:
-		self.write(colorama.ansi.CSI + "?25l")
-
-	def show_cursor(self) -> None:
-		self.write(colorama.ansi.CSI + "?25h")
-
-	def scroll_up(self) -> None:
-		self.write(colorama.ansi.CSI + "S")
-
-	def scroll_down(self) -> None:
-		self.write(colorama.ansi.CSI + "T")
-
-	def __enter__(self) -> 'Shell':
-		self.enter()
-		return self
-
-	def __exit__(self, type, value, traceback) -> None:
-		self.leave()
-
-	@staticmethod
-	def notify(shell: Optional['Shell'], message: str) -> None:
-		if not shell:
-			printc(message); return
-		shell.interactables.append(
-			Notice(f"print{len(shell.interactables)}", message)
+	def __init__(
+		self,
+		text: AnyFormattedText = "",
+		focusable: FilterOrBool = False,
+		on_interact: Optional[Callable[['Interactable'], None]] = None,
+		*,
+		style: str = "",
+		dont_extend_height: bool = True,
+		dont_extend_width: bool = False,
+		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
+		wrap_lines: FilterOrBool = True,
+		show_cursor: bool = True,
+		add_interact_key_bindings: bool = False,
+		idle_selector_text: Optional[str] = "  ",
+		focused_selector_text: Optional[str] = "> ",
+		tag: object = None,
+	) -> None:
+		self.interactable_text = text
+		FormattedTextControl.__init__(
+			self,
+			text=self.render_text,
+			style=style,
+			focusable=focusable,
+			show_cursor=show_cursor
 		)
-		shell.render()
 
-	class Interactable:
-		key: Optional[str]
+		self.has_focus = has_focus(self)
+		self.window = Window(
+			content=self,
+			height=Dimension(min=1),
+			dont_extend_height=dont_extend_height,
+			dont_extend_width=dont_extend_width,
+			align=align,
+			wrap_lines=wrap_lines,
+			left_margins=[
+				ConditionalMargin(
+					InteractableMargin(self.has_focus, idle_selector_text, focused_selector_text),
+					self.focusable
+				)
+			],
+			right_margins=[
+				ConditionalMargin(
+					InteractableMargin(False, idle_selector_text, focused_selector_text),
+					self.focusable
+				)
+			],
+		)
+
+		if add_interact_key_bindings:
+			self.add_interact_key_bindings()
+		self.on_interact = on_interact
+		self.tag = tag
+
+	def render_text(self) -> AnyFormattedText:
+		return self.interactable_text
+
+	def add_interact_key_bindings(self) -> None:
+		if self.key_bindings is None:
+			self.key_bindings = KeyBindings()
+		kb = self.key_bindings
+
+		@kb.add(Keys.Enter)
+		@kb.add(" ")
+		def _(event: KeyPressEvent) -> None:
+			self.interact(event)
+
+	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
+		if self.on_interact:
+			self.on_interact(self)
+
+	def __pt_container__(self) -> Container:
+		return self.window
+
+class Selectable(Interactable):
+	"""
+	Extendable switch, which have checkable state and interact ability by default.
+	"""
+
+	def __init__(
+		self,
+		text: AnyFormattedText = "",
+		focusable: FilterOrBool = True,
+		on_checked: Optional[Callable[['Selectable', bool], None]] = None,
+		checked: bool = False,
+		*,
+		style: str = "",
+		dont_extend_height: bool = True,
+		dont_extend_width: bool = False,
+		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
+		wrap_lines: FilterOrBool = True,
+		show_cursor: bool = False,
+		add_interact_key_bindings: bool = True,
+		on_interact: Optional[Callable[['Interactable'], None]] = None,
+		idle_selector_text: Optional[str] = "  ",
+		focused_selector_text: Optional[str] = "> ",
+		unchecked_checkbox_text: Optional[str] = "[ ] ",
+		checked_checkbox_text: Optional[str] = "[x] ",
+		tag: object = None,
+	) -> None:
+		Interactable.__init__(
+			self,
+			text=text,
+			focusable=focusable,
+			on_interact=on_interact,
+			style=style,
+			dont_extend_height=dont_extend_height,
+			dont_extend_width=dont_extend_width,
+			align=align,
+			wrap_lines=wrap_lines,
+			show_cursor=show_cursor,
+			add_interact_key_bindings=add_interact_key_bindings,
+			idle_selector_text=idle_selector_text,
+			focused_selector_text=focused_selector_text,
+			tag=tag,
+		)
 
-		def __init__(self, key: Optional[str] = None) -> None:
-			self.key = key
-
-		def observe_key(self, what: str) -> bool:
-			return False
-
-		def render(self, shell: 'Shell', offset: int, line: int) -> None:
-			pass
-
-		def lines(self, shell: 'Shell') -> int:
-			return 0
-
-class InteractiveShell(Shell):
-	page_buffer_offset: int = 0; global_buffer_offset: int = 0
-	infinite_scroll: bool; lines_per_page: int; implicit_page_indicator: bool
-	page: int = 1
-
-	def __init__(self, stdin: Optional[IO[str]] = None, stdout: Optional[IO[str]] = None, infinite_scroll: bool = False, lines_per_page: int = 6, implicit_page_indicator: bool = False) -> None:
-		Shell.__init__(self, stdin, stdout)
-		self.infinite_scroll = infinite_scroll
-		self.lines_per_page = lines_per_page
-		self.implicit_page_indicator = implicit_page_indicator
-
-	def observe(self, raw: str) -> bool:
-		observed = Shell.observe(self, raw)
-		if raw != "\x1b" and raw != "\xe0" and raw != "\x00":
-			return observed
-		key = self.inputraw(1)
-		if raw == "\xe0" or raw == "\x00": # Windows
-			if key == "M": # Forward
-				self.turn_forward()
-			elif key == "K": # Backward
-				self.turn_backward()
-			else:
-				return observed
-			return True
-		if key != "[": # Unix
-			return observed
-		joy = self.inputraw(1)
-		if joy == "C": # Forward
-			self.turn_forward()
-		elif joy == "D": # Backward
-			self.turn_backward()
-		else:
-			return observed
-		return True
-
-	def turn_forward(self) -> None:
-		if self.global_buffer_offset + self.page_buffer_offset >= len(self.interactables):
-			if self.infinite_scroll:
-				self.global_buffer_offset = self.page_buffer_offset = 0
-				self.page = 1
-			return
-
-		self.global_buffer_offset += self.page_buffer_offset
-		self.page_buffer_offset = 0
-		self.page += 1
-
-	def turn_backward(self) -> None:
-		index = self.global_buffer_offset
-		if index == 0:
-			if self.infinite_scroll:
-				page = 1
-				page_occupied_lines = 0
-				page_buffer_offset = 0
-
-				while index < len(self.interactables):
-					lines = self.interactables[index].lines(self)
-					if lines > self.lines_per_page or lines < 0:
-						raise BufferError(f"{lines!r} out of bounds [0, {self.lines_per_page}]")
-
-					if page_occupied_lines + lines > self.lines_per_page:
-						page_occupied_lines = page_buffer_offset = 0
-						page += 1
-						continue
-
-					page_occupied_lines += lines
-					page_buffer_offset += 1
-					index += 1
-
-				self.global_buffer_offset = index - page_buffer_offset
-				self.page_buffer_offset = 0
-				self.page = page
-			return
-
-		page_occupied_lines = 0
-		while index > 0:
-			lines = self.interactables[index - 1].lines(self)
-			if lines > self.lines_per_page or lines < 0:
-				raise BufferError(f"{lines!r} out of bounds [0, {self.lines_per_page}]")
-
-			if page_occupied_lines + lines > self.lines_per_page:
-				break
-
-			page_occupied_lines += lines
-			index -= 1
-
-		self.global_buffer_offset = index
-		self.page_buffer_offset = 0
-		self.page -= 1
-
-	def draw(self, interactable: Shell.Interactable, page: int, page_occupied_lines: int) -> Any:
-		if isinstance(interactable, InteractiveShell.Interactable):
-			return interactable.render(self, self.offset, self.line, page, self.page_buffer_offset, page_occupied_lines)
-		return Shell.draw(self, interactable)
-
-	def write_implicit_indicator(self) -> None:
-		if self.implicit_page_indicator and (self.global_buffer_offset > 0 or self.global_buffer_offset + self.page_buffer_offset < len(self.interactables)):
-			self.write(
-				"\n" * (self.lines_per_page + 1 - self.line) +
-				(".." if self.global_buffer_offset > 0 else " " * 2)
-				+ " " * 45 +
-				(".." if self.global_buffer_offset + self.page_buffer_offset < len(self.interactables) else " " * 2)
-				+ "\n"
-			)
-
-	def render(self) -> None:
-		self.clear()
-		if len(self.interactables) == 0:
-			return
-		if self.global_buffer_offset >= len(self.interactables):
-			raise IndexError("offset >= count")
-		self.write("\n")
-
-		page_occupied_lines = 0
-		self.page_buffer_offset = 0
-
-		while self.global_buffer_offset + self.page_buffer_offset < len(self.interactables):
-			interactable = self.interactables[self.global_buffer_offset + self.page_buffer_offset]
-			lines = interactable.lines(self)
-			if lines > self.lines_per_page or lines < 0:
-				raise BufferError(f"{lines!r} out of bounds [0, {self.lines_per_page}]")
-			if page_occupied_lines + lines > self.lines_per_page:
-				break
-			self.draw(interactable, self.page, page_occupied_lines)
-			page_occupied_lines += lines
-			self.page_buffer_offset += 1
-
-		self.write_implicit_indicator()
-
-	def enter(self) -> None:
-		self.global_buffer_offset = self.page_buffer_offset = 0
-		self.page = 1
-		Shell.enter(self)
-
-	def leave(self) -> None:
-		self.clear()
-		Shell.leave(self)
-
-	class Interactable(Shell.Interactable):
-		def __init__(self, key: Optional[str]) -> None:
-			Shell.Interactable.__init__(self, key)
-
-		def render(self, shell: 'InteractiveShell', offset: int, line: int, page: int = 0, index: int = -1, lines_before: int = -1) -> Any:
-			pass
-
-		def lines(self, shell: 'InteractiveShell') -> int:
-			return 0
-
-class SelectiveShell(InteractiveShell):
-	page_cursor_offset: int = -1; pending_hover_offset: int = 0
-	blocked_in_page: bool = False
-
-	def __init__(self, stdin: Optional[IO[str]] = None, stdout: Optional[IO[str]] = None, infinite_scroll: bool = False, lines_per_page: int = 6, implicit_page_indicator: bool = False) -> None:
-		InteractiveShell.__init__(self, stdin, stdout, infinite_scroll, lines_per_page, implicit_page_indicator)
-		self.eof_when_enter = True
-
-	def turn_backward(self) -> None:
-		if not self.blocked_in_page:
-			InteractiveShell.turn_backward(self)
-		self.page_cursor_offset += 1
-		self.pending_hover_offset = -2
-
-	def turn_forward(self) -> None:
-		if not self.blocked_in_page:
-			InteractiveShell.turn_forward(self)
-		self.page_cursor_offset -= 1
-		self.pending_hover_offset = 2
-
-	def turn_up(self) -> None:
-		if self.page_cursor_offset > 0 or self.infinite_scroll or self.global_buffer_offset > 0:
-			self.pending_hover_offset = -1 if not self.blocked_in_page else -2
-
-	def turn_down(self) -> None:
-		if (self.page_cursor_offset < self.page_buffer_offset and self.which() < len(self.interactables) - 1) or self.infinite_scroll:
-			self.pending_hover_offset = 1 if not self.blocked_in_page else 2
-
-	def hover_previous(self) -> bool:
-		cursor_offset = min(self.page_cursor_offset, self.page_buffer_offset) - 1
-		while cursor_offset >= 0:
-			try:
-				interactable = self.interactables[self.global_buffer_offset + cursor_offset]
-			except IndexError:
-				cursor_offset -= 1
-				continue
-			if isinstance(interactable, SelectiveShell.Selectable) and interactable.hoverable():
-				self.page_cursor_offset = cursor_offset
-				return True
-			cursor_offset -= 1
-		return False
-
-	def hover_next(self) -> bool:
-		cursor_offset = max(self.page_cursor_offset, -1) + 1
-		while cursor_offset < self.page_buffer_offset:
-			try:
-				interactable = self.interactables[self.global_buffer_offset + cursor_offset]
-			except IndexError:
-				cursor_offset += 1
-				continue
-			if isinstance(interactable, SelectiveShell.Selectable) and interactable.hoverable():
-				self.page_cursor_offset = cursor_offset
-				return True
-			cursor_offset += 1
-		return False
-
-	def touch(self, interactable: Shell.Interactable, key: str) -> bool:
-		if isinstance(interactable, SelectiveShell.Selectable):
-			try:
-				return interactable.observe_key(key, self.interactables.index(interactable) == self.which())
-			except ValueError:
-				pass
-		return InteractiveShell.touch(self, interactable, key)
-
-	def render(self) -> None:
-		InteractiveShell.render(self)
-
-		# Changes cursor location to previous one if possible
-		if self.pending_hover_offset != 0:
-			if self.pending_hover_offset <= -1:
-				if not self.hover_previous():
-
-					if self.pending_hover_offset == -1:
-						if self.infinite_scroll or self.global_buffer_offset > 0:
-							self.page_cursor_offset = self.lines_per_page
-							InteractiveShell.turn_backward(self)
-							InteractiveShell.render(self)
-							if not self.hover_previous():
-								self.page_cursor_offset = -1
-
-					elif not self.hover_next() and not self.hovered():
-						self.page_cursor_offset = -1
-
-				InteractiveShell.render(self)
-
-			elif self.pending_hover_offset >= 1:
-				if not self.hover_next():
-
-					if self.pending_hover_offset == 1:
-						self.page_cursor_offset = -1
-						InteractiveShell.turn_forward(self)
-						InteractiveShell.render(self)
-						if not self.hover_next():
-							self.page_cursor_offset = -1
-
-					elif not self.hover_previous() and not self.hovered():
-						self.page_cursor_offset = -1
-
-				InteractiveShell.render(self)
-
-			self.pending_hover_offset = 0
-
-	def observe(self, raw: str) -> bool:
-		if self.eof_when_enter and ord(raw) in {10, 13}: # Enter
-			if self.which() == -1:
-				return False
-			raise EOFError()
-		observed = Shell.observe(self, raw)
-		if raw != "\x1b" and raw != "\xe0" and raw != "\x00":
-			return observed
-		key = self.inputraw(1)
-		if raw == "\xe0" or raw == "\x00": # Windows
-			if key == "H": # Up
-				self.turn_up()
-			elif key == "P": # Down
-				self.turn_down()
-			elif key == "M": # Forward
-				self.turn_forward()
-			elif key == "K": # Backward
-				self.turn_backward()
-			else:
-				return observed
-			return True
-		if key != "[":
-			return observed
-		joy = self.inputraw(1) # Unix
-		if joy == "A": # Up
-			self.turn_up()
-		elif joy == "B": # Down
-			self.turn_down()
-		elif joy == "C": # Forward
-			self.turn_forward()
-		elif joy == "D": # Backward
-			self.turn_backward()
-		else:
-			return observed
-		return True
-
-	def draw(self, interactable: Shell.Interactable, page: int, page_occupied_lines: int) -> Any:
-		if isinstance(interactable, SelectiveShell.Selectable):
-			return interactable.render(self, self.offset, self.line, page, self.page_buffer_offset, page_occupied_lines, self.page_cursor_offset == self.page_buffer_offset)
-		return InteractiveShell.draw(self, interactable, page, page_occupied_lines)
-
-	def enter(self) -> None:
-		self.page_cursor_offset = -1
-		self.pending_hover_offset = 2
-		InteractiveShell.enter(self)
-
-	def hovered(self) -> bool:
-		interactable = self.get_interactable(self.which())
-		return interactable.hoverable() if isinstance(interactable, SelectiveShell.Selectable) else False
-
-	def which(self) -> int:
-		return self.global_buffer_offset + self.page_cursor_offset if self.page_cursor_offset != -1 else -1
-
-	def what(self) -> Optional[str]:
-		try:
-			return self.interactables[self.which()].key
-		except IndexError:
-			return None
-
-	class Selectable(InteractiveShell.Interactable):
-		def __init__(self, key: Optional[str]) -> None:
-			InteractiveShell.Interactable.__init__(self, key)
-
-		def render(self, shell: 'SelectiveShell', offset: int, line: int, page: int = 0, index: int = -1, lines_before: int = -1, at_cursor: Optional[bool] = None) -> Any:
-			pass
-
-		def lines(self, shell: 'SelectiveShell') -> int:
-			return 0
-
-		def hoverable(self) -> bool:
-			return True
-
-		def placeholder(self) -> str:
-			return "..."
-
-		def observe_key(self, what: str, at_cursor: Optional[bool] = None) -> bool:
-			return False
-
-class Separator(Shell.Interactable):
-	size: int
-
-	def __init__(self, key: Optional[str] = "separator", size: int = 1) -> None:
-		Shell.Interactable.__init__(self, key)
-		self.size = size
-
-	def render(self, shell: Shell, offset: int, line: int) -> None:
-		shell.write("\n" * self.size)
-
-	def lines(self, shell: Shell) -> int:
-		return self.size
-
-class Notice(Shell.Interactable):
-	text: Optional[str]
-
-	def __init__(self, key: Optional[str], text: Optional[str] = None) -> None:
-		Shell.Interactable.__init__(self, key)
-		self.text = text or key
-
-	def render(self, shell: Shell, offset: int, line: int) -> None:
-		shell.write(str(self.text) + "\n")
-
-	def lines(self, shell: Shell) -> int:
-		return str(self.text).count("\n") + 1
-
-class Entry(SelectiveShell.Selectable):
-	text: Optional[str]; arrow: Optional[str]
-
-	def __init__(self, key: Optional[str], text: Optional[str] = None, arrow: Optional[str] = "> ") -> None:
-		SelectiveShell.Selectable.__init__(self, key)
-		self.text = text or key
-		self.arrow = arrow
-
-	def get_arrow(self, at_cursor: Optional[bool] = None) -> str:
-		return "" if at_cursor is None else \
-			str(self.arrow) if at_cursor else " " * len(str(self.arrow))
-
-	def render(self, shell: SelectiveShell, offset: int, line: int, page: int = 0, index: int = -1, lines_before: int = -1, at_cursor: Optional[bool] = None) -> None:
-		shell.write(self.get_arrow(at_cursor) + str(self.text) + "\n")
-
-	def placeholder(self) -> str:
-		return str(self.text).partition("\n")[0]
-
-	def lines(self, shell: SelectiveShell) -> int:
-		return str(self.text).count("\n") + 1
-
-class Switch(Entry):
-	checked_arrow: Optional[str]; hover_checked_arrow: Optional[str]
-	checked: bool
-
-	def __init__(self, key: Optional[str], text: Optional[str] = None, checked: bool = False, arrow: Optional[str] = None, unchecked_arrow: Optional[str] = None, checked_arrow: Optional[str] = "  [x] ", hover_checked_arrow: Optional[str] = "> [x] ") -> None:
-		if not arrow:
-			arrow = "> " + stringify("[ ]", color=PLATFORM_STYLE_DIM, reset=colorama.Style.RESET_ALL) + " "
-		Entry.__init__(self, key, text, arrow)
 		self.checked = checked
-		if not unchecked_arrow:
-			unchecked_arrow = "  " + stringify("[ ]", color=PLATFORM_STYLE_DIM, reset=colorama.Style.RESET_ALL) + " "
-		self.unchecked_arrow = unchecked_arrow
-		self.checked_arrow = checked_arrow
-		self.hover_checked_arrow = hover_checked_arrow
+		self.on_checked = on_checked
+		self.unchecked_checkbox_text = unchecked_checkbox_text or "[ ] "
+		self.checked_checkbox_text = checked_checkbox_text or "[x] "
 
-	def get_arrow(self, at_cursor: Optional[bool] = None) -> str:
-		return str(self.hover_checked_arrow) if at_cursor and self.checked else \
-			str(self.arrow) if at_cursor else str(self.checked_arrow) if self.checked else \
-			str(self.unchecked_arrow) if self.unchecked_arrow else " " * len(str(self.arrow))
+	def render_checkbox(self) -> AnyFormattedText:
+		return [
+			("class:checkbox.active", self.checked_checkbox_text) if self.checked \
+				else ("class:checkbox.inactive", self.unchecked_checkbox_text)
+		]
 
-	def observe_key(self, what: str, at_cursor: Optional[bool] = None) -> bool:
-		if at_cursor and ord(what) in {10, 13}:
-			self.checked = not self.checked
-			return True
-		return Entry.observe_key(self, what)
+	def render_text(self) -> AnyFormattedText:
+		text = Interactable.render_text(self)
+		return merge_formatted_text((
+			to_formatted_text(self.render_checkbox(), self.style),
+			to_formatted_text(text, self.style),
+		))
 
-class Input(Entry):
-	hint: Optional[str]; template: Optional[str]; maximum_length: int
+	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
+		self.checked = not self.checked
+		Interactable.interact(self, event)
 
-	def __init__(self, key: Optional[str], hint: Optional[str] = None, text: Optional[str] = "", arrow: Optional[str] = "> ", template: Optional[str] = None, maximum_length: int = 40) -> None:
-		Entry.__init__(self, key, text, arrow)
-		from .utils import ensure_not_whitespace
-		self.text = ensure_not_whitespace(text, "")
+class Editable(BufferControl):
+	"""
+	Editable area, text can be written when input become focused, supports prompt, placeholder, etc.
+	"""
+
+	def __init__(
+		self,
+		prompt: AnyFormattedText = None,
+		text: str = "",
+		multiline: FilterOrBool = False,
+		focusable: FilterOrBool = True,
+		*,
+		style: str = "",
+		hint: Optional[str] = None,
+		use_hint_as_fallback: bool = True,
+		read_only: FilterOrBool = False,
+        on_text_changed: Optional[BufferEventHandler] = None,
+		dont_extend_height: bool = True,
+		dont_extend_width: bool = False,
+		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
+		wrap_lines: FilterOrBool = True,
+		input_processors: Optional[List[Processor]] = None,
+		include_default_input_processors: bool = True,
+		lexer: Optional[Lexer] = None,
+		preview_search: FilterOrBool = False,
+		search_buffer_control: Optional[Union[SearchBufferControl, Callable[[], SearchBufferControl]]] = None,
+		menu_position: Optional[Callable[[], Optional[int]]] = None,
+		add_interact_key_bindings: bool = True,
+		on_interact: Optional[Callable[['Editable'], None]] = None,
+		idle_selector_text: Optional[str] = "  ",
+		focused_selector_text: Optional[str] = "> ",
+		focus_on_click: FilterOrBool = True,
+		tag: object = None,
+	) -> None:
+		buffer = Buffer(
+			document=Document(text),
+			read_only=read_only,
+			# TODO: Handle arrows cursor movement for multine
+			multiline=multiline,
+			on_text_changed=on_text_changed,
+		)
+		BufferControl.__init__(
+			self,
+			buffer=buffer,
+			input_processors=input_processors,
+			include_default_input_processors=include_default_input_processors,
+			lexer=lexer,
+			preview_search=preview_search,
+			focusable=focusable,
+			search_buffer_control=search_buffer_control,
+			menu_position=menu_position,
+			focus_on_click=focus_on_click,
+		)
+
+		self.has_focus = has_focus(self)
+		self.window = Window(
+			content=self,
+			height=Dimension(min=1),
+			dont_extend_height=dont_extend_height,
+			dont_extend_width=dont_extend_width,
+			align=align,
+			wrap_lines=wrap_lines,
+			left_margins=[
+				ConditionalMargin(
+					InteractableMargin(self.has_focus, idle_selector_text, focused_selector_text),
+					self.focusable
+				)
+			],
+			right_margins=[
+				ConditionalMargin(
+					InteractableMargin(False, idle_selector_text, focused_selector_text),
+					self.focusable
+				)
+			],
+		)
+
+		self.style = style
+		self.prompt = prompt
 		self.hint = hint
-		self.template = template
-		self.maximum_length = maximum_length
+		self.use_hint_as_fallback = use_hint_as_fallback
 
-	def render(self, shell: SelectiveShell, offset: int, line: int, page: int = 0, index: int = -1, lines_before: int = -1, at_cursor: Optional[bool] = None) -> None:
-		stringified_text = str(self.text)
-		text = stringified_text if len(stringified_text) > 0 else "..." if not self.template else self.template
-		shell.write(self.get_arrow(at_cursor) + (self.hint or "") + (text if len(stringified_text) > 0 else stringify(text, color=PLATFORM_STYLE_DIM, reset=colorama.Style.RESET_ALL)) \
-			  + (stringify(" ", color=7, reset=colorama.Style.RESET_ALL) if at_cursor and len(stringified_text) > 0 else "") + "\n")
+		if not self.input_processors:
+			self.input_processors = []
+		self.input_processors.extend((
+			ConditionalProcessor(
+				BeforeInput(lambda: self.prompt),
+				Condition(self.has_prompt)
+			),
+			ConditionalProcessor(
+				AfterInput(lambda: [("class:editable.hint", self.hint)]),
+				Condition(self.has_hint)
+			),
+		))
 
-	def read(self) -> Optional[str]:
-		return self.template if len(str(self.text)) == 0 and self.template else self.text
+		if add_interact_key_bindings:
+			self.add_interact_key_bindings()
+		self.on_interact = on_interact
+		self.tag = tag
 
-	def observe_key(self, what: str, at_cursor: Optional[bool] = None) -> bool:
-		if at_cursor and not (what == "\x1b" or what == "\xe0" or what == "\x00"):
-			if ord(what) in {10, 13}:
-				if self.template and (not self.text or len(self.text) == 0):
-					self.text = self.template
-				return True
-			if what in ("\x7f", "\x08"): # backspace
-				if self.text and len(self.text) > 0:
-					self.text = self.text[::-1][1:][::-1]
-			elif what.isprintable() and len(str(self.text) + what) <= self.maximum_length:
-				if not self.text:
-					self.text = ""
-				self.text += what
-			return True
-		return Entry.observe_key(self, what)
+	def has_prompt(self) -> bool:
+		return self.prompt is not None and len(to_formatted_text(self.prompt, self.style)) > 0
 
-class Progress(Shell.Interactable):
-	text: Optional[str]; weight: int
-	progress: float
+	def has_hint(self) -> bool:
+		return self.hint is not None and len(self.buffer.text) == 0 and len(self.hint) > 0
 
-	def __init__(self, key: Optional[str] = "progress", progress: float = 0.0, weight: int = 49, text: Optional[str] = None) -> None:
-		Shell.Interactable.__init__(self, key)
-		self.progress = progress
-		self.weight = weight
+	def is_interactable(self) -> bool:
+		return not self.buffer.multiline() or len(self.buffer.text) == 0
+
+	def add_interact_key_bindings(self) -> None:
+		if self.key_bindings is None:
+			self.key_bindings = KeyBindings()
+		kb = self.key_bindings
+
+		@kb.add(Keys.Enter, filter=Condition(self.is_interactable))
+		def _(event: KeyPressEvent) -> None:
+			self.interact(event)
+
+	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
+		if self.on_interact:
+			self.on_interact(self)
+		if self.use_hint_as_fallback and not self.buffer.read_only() and self.has_hint():
+			self.buffer.document = Document(self.hint or "...")
+
+	def __pt_container__(self) -> Container:
+		return self.window
+
+def format_timedelta(timedelta: timedelta) -> str:
+    result = f"{timedelta}".split(".")[0]
+    if result.startswith("0:"):
+        result = result[2:]
+    return result
+
+class Progress(UIControl):
+	"""
+	Percentage bar with left time and interaction ability.
+	"""
+
+	def __init__(
+		self,
+		text: Optional[str] = None,
+		focusable: FilterOrBool = False,
+		on_interact: Optional[Callable[['Progress'], None]] = None,
+		*,
+		style: str = "",
+		dont_extend_height: bool = True,
+		dont_extend_width: bool = False,
+		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
+		wrap_lines: FilterOrBool = True,
+		add_interact_key_bindings: bool = False,
+		idle_selector_text: Optional[str] = "  ",
+		focused_selector_text: Optional[str] = "> ",
+		tag: object = None,
+	):
+		self.done = False
+		self.start_time = datetime.now()
+		self.stopped = False
+		self.stop_time = None
+		self.percentage = 0.0
 		self.text = text
 
-	def render(self, shell: Shell, offset: int, line: int) -> None:
-		text = (str(self.text) if self.text else str(int(self.progress * 100)) + "%").center(self.weight)
-		size = int(self.weight * self.progress)
-		shell.write(stringify(text[:size], color=7, reset=colorama.Style.RESET_ALL) + stringify(text[size:self.weight], color=PLATFORM_STYLE_DIM, reset=colorama.Style.RESET_ALL) + "\n")
+		self.focusable = to_filter(focusable)
+		self.has_focus = has_focus(self)
+		self.window = Window(
+			content=self,
+			height=Dimension(min=1),
+			dont_extend_height=dont_extend_height,
+			dont_extend_width=dont_extend_width,
+			align=align,
+			wrap_lines=wrap_lines,
+			left_margins=[
+				ConditionalMargin(
+					InteractableMargin(self.has_focus, idle_selector_text, focused_selector_text),
+					self.focusable
+				)
+			],
+			right_margins=[
+				ConditionalMargin(
+					InteractableMargin(False, idle_selector_text, focused_selector_text),
+					self.focusable
+				)
+			],
+		)
 
-	def seek(self, progress: float, text: Optional[str] = None) -> None:
-		self.progress = progress
-		if text:
+		self.style = style
+		self.key_bindings = None
+		if add_interact_key_bindings:
+			self.add_interact_key_bindings()
+		self.on_interact = on_interact
+		self.tag = tag
+
+	def is_focusable(self) -> bool:
+		return self.focusable()
+
+	def add_interact_key_bindings(self) -> None:
+		if self.key_bindings is None:
+			self.key_bindings = KeyBindings()
+		kb = self.key_bindings
+
+		@kb.add(Keys.Enter)
+		@kb.add(" ")
+		def _(event: KeyPressEvent) -> None:
+			self.interact(event)
+
+	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
+		if self.on_interact:
+			self.on_interact(self)
+
+	def get_key_bindings(self) -> Optional[KeyBindingsBase]:
+		return self.key_bindings
+
+	def render_progress(self, offset: int, width: int) -> AnyFormattedText:
+		time_left = self.time_left()
+		percentage_text = f"{self.percentage:.1f}% "
+		time_left_text = f" {format_timedelta(time_left) if time_left else 'N/A'}"
+
+		available_width = width - len(percentage_text) - len(time_left_text)
+		filled_progress_width = int(self.percentage / 100 * available_width)
+		bar_text = self.text.center(available_width) if self.text else " " * available_width
+
+		return [
+			("class:progress.percentage", percentage_text),
+			("class:progress.filled", bar_text[:filled_progress_width]),
+			("class:progress.unfilled", bar_text[filled_progress_width:]),
+			("class:progress.time-left", time_left_text),
+		]
+
+	def create_content(self, width: int, height: int) -> UIContent:
+		return UIContent(
+			get_line=lambda offset: to_formatted_text(
+				self.render_progress(offset, width),
+				self.style
+			),
+			line_count=1,
+			show_cursor=False
+		)
+
+	def update(self, percentage: float, text: Optional[str] = None) -> None:
+		self.percentage = max(0, min(100, percentage))
+		if text is not None:
 			self.text = text
 
-	def lines(self, shell: Shell) -> int:
-		return (str(self.text).count("\n") if self.text else 0) + 1
+	def time_elapsed(self) -> timedelta:
+		if self.stop_time is None:
+			return datetime.now() - self.start_time
+		else:
+			return self.stop_time - self.start_time
 
-	@staticmethod
-	def notify(shell: Optional[Shell], progress: Optional['Progress'], percent: float, message: Optional[str] = None) -> None:
-		if not shell or not progress:
-			if message:
-				Shell.notify(shell, message)
-			return
-		progress.seek(percent, message)
-		shell.render()
+	def time_left(self) -> Optional[timedelta]:
+		if not self.percentage:
+			return None
+		elif self.done or self.stopped:
+			return timedelta(0)
+		else:
+			return self.time_elapsed() * (100 - self.percentage) / self.percentage
 
-class Interrupt(InteractiveShell.Interactable):
-	occupied_page: bool
+	def __pt_container__(self) -> Container:
+		return self.window
 
-	def __init__(self, key: Optional[str] = "interrupt", occupied_page: bool = True) -> None:
-		InteractiveShell.Interactable.__init__(self, key)
-		self.ocuppied_page = occupied_page
+class Debugger(Interactable):
+	"""
+	Debugging staff considered from content with max available width. 
+	"""
 
-	def render(self, shell: InteractiveShell, offset: int, line: int, page: int = 0, index: int = -1, lines_before: int = -1) -> NoReturn:
-		raise EOFError()
+	def __init__(
+		self,
+		*,
+		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
+		tag: object = None,
+	) -> None:
+		Interactable.__init__(
+			self,
+			text="N/A",
+			focusable=False,
+			dont_extend_height=True,
+			dont_extend_width=True,
+			align=align,
+			wrap_lines=False,
+		)
 
-	def lines(self, shell: InteractiveShell) -> int:
-		return shell.lines_per_page if self.ocuppied_page else 0
+	def preferred_width(self, max_available_width: int) -> int:
+		self._max_available_width = max_available_width
+		return super().preferred_width(max_available_width)
 
-class Debugger(SelectiveShell.Selectable):
-	def __init__(self, key: Optional[str] = "debugger") -> None:
-		SelectiveShell.Selectable.__init__(self, key)
+	def render_text(self) -> AnyFormattedText:
+		from prompt_toolkit.application import get_app
+		app = get_app()
+		screen = app.renderer.last_rendered_screen
+		max_available_width = 0
+		if hasattr(self, "_max_available_width"):
+			max_available_width = self._max_available_width
+		if max_available_width <= 0 and screen is not None:
+			max_available_width = screen.width
+		if max_available_width <= 0:
+			return super().render_text()
+		buffer = []
+		if screen is not None:
+			buffer.append(f"{screen.width}x{screen.height}{'f' if screen.show_cursor else 'h'}")
+		buffer.append(f"{app.color_depth.value.split('_', 3)[1]}d/")
+		current_buffer = app.layout.current_buffer
+		if current_buffer is not None:
+			buffer.append(f"{len(current_buffer.text)}b")
+		current_control = app.layout.current_control
+		if current_control is not None:
+			buffer.append(current_control.__class__.__name__)
+		current_window = app.layout.current_window
+		if current_window is not None:
+			render_info = current_window.render_info
+			if render_info is not None:
+				buffer.append(f"{render_info.window_width}x{render_info.window_height}{'n' if render_info.wrap_lines else 's'}")
+		if current_buffer is None and current_control is None and current_window is None:
+			buffer.append("inactive")
+		buffer.append(f"/{sum(1 for _ in app.layout.find_all_controls())}c")
+		buffer.append(f"{len(app.layout.visible_windows)}vw")
+		buffer.append(f"{sum(1 for _ in app.layout.find_all_windows())}w")
+		text = " " + "".join(buffer) + " "
+		if len(text) > self._max_available_width:
+			text = text[:self._max_available_width - 2] + "+ "
+		return [
+			("class:debugger-overlay", text.center(self._max_available_width, "▄").replace("▄▄", "▄▀")),
+		]
 
-	def render(self, shell: SelectiveShell, offset: int, line: int, page: int = 0, index: int = -1, lines_before: int = -1, at_cursor: Optional[bool] = None) -> None:
-		shell.write(f"Page {page}:{shell.global_buffer_offset}, offset {offset}/{shell.page_buffer_offset}, cursor {shell.page_cursor_offset}\n")
 
-	def hoverable(self) -> bool:
-		return False
+def select_prompt_internal(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, fallback: Optional[int] = None) -> Tuple[Optional[int], Optional[Any]]:
+	immutable_variants = list(variants)
+	assert fallback is None or fallback >= 0
+	choice_variants: Sequence[AnyContainer] = []
+	which_offset = 0
+	for variant in immutable_variants:
+		text = text_transformer(variant, which_offset) if text_transformer else variant
+		choice_variants.append(
+			Interactable(text, focusable=True, show_cursor=False, tag=which_offset)
+		)
+		which_offset += 1
 
-def select_prompt_internal(prompt: Optional[str] = None, *variants: Optional[str], fallback: Optional[int] = None) -> Tuple[Optional[int], Optional[Any]]:
+	bindings = KeyBindings()
+	bindings.add(Keys.Down)(focus_next)
+	bindings.add(Keys.Up)(focus_previous)
+
+	@bindings.add(Keys.Enter)
+	@bindings.add(" ")
+	def _(event: KeyPressEvent) -> None:
+		event.app.layout.current_control
+		event.app.exit()
+
+	@bindings.add("c-c")
+	@bindings.add("<sigint>")
+	def _(event: KeyPressEvent) -> NoReturn:
+		event.app.exit()
+		raise KeyboardInterrupt()
+
+	choice_container = ScrollablePane(
+		HSplit(choice_variants),
+		scroll_offsets=ScrollOffsets(3, 3),
+		display_arrows=False,
+	)
+	contents: Sequence[AnyContainer] = []
 	if prompt:
-		printc(prompt, end="")
-	shell = SelectiveShell(infinite_scroll=True, implicit_page_indicator=True)
-	for variant in variants:
-		if variant:
-			shell.interactables.append(Entry(variant))
+		contents.append(Interactable(prompt))
+	contents.append(choice_container)
+	app = Application(
+		layout=Layout(HSplit(contents)),
+		style=get_toolchain_style(),
+		include_default_pygments_style=False,
+		key_bindings=bindings,
+		full_screen=False,
+		mouse_support=True,
+		erase_when_done=True,
+	)
+
 	try:
-		shell.loop()
-		result = shell.which()
-	except KeyboardInterrupt:
-		result = fallback
-	try:
-		interactable = shell.get_interactable(result)
-	except ValueError:
-		return None, None
-	try:
-		if isinstance(interactable, SelectiveShell.Selectable):
-			printc((prompt + " " if prompt else "") + stringify(interactable.placeholder(), color=PLATFORM_STYLE_DIM, reset=colorama.Style.RESET_ALL))
-	except ValueError:
-		pass
-	return result, interactable
+		app.run()
+		control = app.layout.current_control
+		assert isinstance(control, Interactable)
+		which = cast(int, control.tag)
+	except KeyboardInterrupt or EOFError:
+		which = fallback
+
+	what = None
+	if which is not None:
+		what = immutable_variants[which]
+	if what is not None:
+		pretty_print_answer(prompt, what)
+
+	return which, what
 
 @overload
-def select_prompt(prompt: Optional[str] = None, *variants: Optional[str], fallback: Optional[int] = None, returns_what: Literal[False] = False) -> Optional[int]: ...
+def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, fallback: Optional[int] = None, returns_what: Literal[False] = False) -> Optional[int]: ...
 @overload
-def select_prompt(prompt: Optional[str] = None, *variants: Optional[str], fallback: Optional[int] = None, returns_what: Literal[True] = True) -> Optional[str]: ...
+def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, fallback: Optional[int] = None, returns_what: Literal[True] = True) -> Optional[str]: ...
 
-def select_prompt(prompt: Optional[str] = None, *variants: Optional[str], fallback: Optional[int] = None, returns_what: bool = False) -> Optional[Union[str, int]]:
-	if returns_what:
-		interactable = select_prompt_internal(prompt, *variants, fallback=fallback)[1]
-		return interactable.key if interactable else None
-	return select_prompt_internal(prompt, *variants, fallback=fallback)[0]
+def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, fallback: Optional[int] = None, returns_what: bool = False) -> Optional[Union[str, int]]:
+	return select_prompt_internal(prompt, *variants, text_transformer=text_transformer, fallback=fallback)[1 if returns_what else 0]
 
 def confirm(prompt: str, fallback: bool, prints_abort: bool = True) -> bool:
 	try:
 		if input(prompt + (" [Y/n] " if fallback else " [N/y] ")).lower()[:1] == ("n" if fallback else "y"):
 			if prints_abort and fallback:
-				print("Abort.")
+				pretty_print("Abort.")
 			return not fallback
 	except KeyboardInterrupt:
-		print()
+		pretty_print()
 	if prints_abort and not fallback:
-		print("Abort.")
+		pretty_print("Abort.")
 	return fallback
 
+def stringify(*values: object, sep: Optional[str] = " ", end: Optional[str] = "") -> str:
+	buffer = StringIO()
+	print(*values, sep=sep, end=end, file=buffer)
+	return buffer.getvalue()
+
 def link(text: str, url: Optional[str] = None) -> str:
-	return f"{colorama.ansi.OSC}8;;{url or text}{colorama.ansi.BEL}{text}{colorama.ansi.OSC}8;;{colorama.ansi.BEL}"
+	return f"\x1b]8;;{url or text}\a{text}\x1b]8;;\a"
 
 def image(base64: str, options: Optional[Dict[str, object]] = None) -> str:
-	returnValue = colorama.ansi.OSC + "1337;File=inline=1"
+	returnValue = "\x1b]1337;File=inline=1"
 	if options:
 		if "width" in options:
 			returnValue += ";width=" + str(options["width"])
@@ -766,63 +652,41 @@ def image(base64: str, options: Optional[Dict[str, object]] = None) -> str:
 			returnValue += ";height=" + str(options["height"])
 		if "preserveAspectRatio" in options and options["preserveAspectRatio"] == False:
 			returnValue += ";preserveAspectRatio=0"
-	return returnValue + ":" + base64 + colorama.ansi.BEL
+	return f"{returnValue}:{base64}\a"
 
-def printc(*values: object, color: Optional[Union[int, str]] = None, reset: Optional[Union[int, str]] = None, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False):
-	if color is not None:
-		if isinstance(color, int):
-			color = colorama.ansi.code_to_chars(color)
-		print(color, end="", file=file, flush=flush)
-	print(*values, end=end if not reset else "", sep=sep, file=file, flush=flush)
-	if reset is not None:
-		if isinstance(reset, int):
-			reset = colorama.ansi.code_to_chars(reset)
-		print(reset, end=end, file=file, flush=flush)
+def pretty_print(*values: object, style: str = "", sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+	print_formatted_text(to_formatted_text(stringify(*values, sep=sep), style=style), end=end or "\n", file=file, flush=flush, style=get_toolchain_style(), include_default_pygments_style=include_default_pygments_style)
 
-def debug(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False) -> None:
-	printc(*values, color=PLATFORM_STYLE_DIM, reset=colorama.Style.RESET_ALL, sep=sep, end=end, file=file, flush=flush)
+def debug(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.debug", include_default_pygments_style=include_default_pygments_style)
 
-def info(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False) -> None:
-	printc(*values, color=colorama.Fore.LIGHTGREEN_EX, reset=colorama.Fore.RESET, sep=sep, end=end, file=file, flush=flush)
+def info(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.info", include_default_pygments_style=include_default_pygments_style)
 
-def warn(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False) -> None:
-	printc(*values, color=colorama.Fore.LIGHTYELLOW_EX, reset=colorama.Fore.RESET, sep=sep, end=end, file=file, flush=flush)
+def warn(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.warn", include_default_pygments_style=include_default_pygments_style)
 
-def error(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False) -> None:
-	printc(*values, color=colorama.Fore.LIGHTRED_EX, reset=colorama.Fore.RESET, sep=sep, end=end, file=file, flush=flush)
+def error(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.error", include_default_pygments_style=include_default_pygments_style)
 
-class StringBuffer:
-	value: str = ""
-	def write(self, data: str) -> None: self.value += data
-
-def stringify(*values: object, color: Optional[Union[int, str]] = None, reset: Optional[Union[int, str]] = None, sep: Optional[str] = " ", end: Optional[str] = "") -> str:
-	buffer = StringBuffer()
-	printc(*values, color=color, reset=reset, sep=sep, end=end, file=buffer)
-	return buffer.value
+def pretty_print_answer(prompt: AnyFormattedText, *values: object, sep: str=", ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+	if prompt:
+		pretty_print(prompt, end=" ", file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+	pretty_print(*values, style="class:print.answer", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 
 def abort(*values: object, sep: Optional[str] = " ", code: int = 255, cause: Optional[BaseException] = None) -> NoReturn:
 	if cause:
 		from traceback import print_exception
-		buffer = StringBuffer()
+		buffer = StringIO()
 		print_exception(cause.__class__, cause, cause.__traceback__, file=buffer)
-		error("\n".join(buffer.value.rsplit("\n", 9)[1:-1]))
+		error(buffer.getvalue().rsplit("\n", 9)[1:-1], sep="\n")
 	if len(values) != 0:
-		printc(stringify(*values, sep=sep, color=colorama.Style.BRIGHT, reset=colorama.Style.NORMAL), color=colorama.Fore.LIGHTRED_EX, reset=colorama.Fore.RESET)
+		pretty_print(*values, sep=sep, style="class:print.abort-message")
 	elif not cause:
-		print("Abort.")
+		pretty_print("Abort.")
 	try:
 		from .task import unlock_all_tasks
 		unlock_all_tasks()
 	except IOError:
 		pass
 	exit(code)
-
-
-if __name__ == "__main__":
-	shell = Shell()
-	while True:
-		try:
-			key = shell.input(1)
-		except KeyboardInterrupt:
-			break
-		print(ord(key), " :: ", str(key.encode("unicode-escape"))[2:][::-1][1:][::-1].replace("\\\\", "\\"), sep="")

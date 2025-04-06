@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from . import GLOBALS
 from .base_config import BaseConfig
 from .hglob import glob
-from .shell import abort, confirm, debug, warn
+from .shell import abort, confirm, debug, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory,
                     get_project_folder_by_name)
 
@@ -203,7 +203,7 @@ def merge_json(left: Dict[Any, Any], right: Dict[Any, Any]) -> Dict[Any, Any]:
 
 def import_project(path: Optional[str] = None, destination: Optional[str] = None) -> str:
 	if not path:
-		print("Specify absolute or relative path to toolchain folder that must be imported as project, it may be Inner Core mod or already exists Mod Toolchain folder.")
+		pretty_print("Specify absolute or relative path to toolchain folder that must be imported as project, it may be Inner Core mod or already exists Mod Toolchain folder.")
 		try:
 			path = input("Which directory will be imported? ")
 			if len(path) == 0 or path.isspace():
@@ -227,7 +227,7 @@ def import_project(path: Optional[str] = None, destination: Optional[str] = None
 		abort("Destination is not directory!")
 	if not (isfile(join(path, "build.config")) or isfile(join(path, "make.json"))):
 		abort("Not found 'build.config' or 'make.json' entry to import, nothing to do!")
-	print(f"Importing {path!r} into {basename(destination)!r}")
+	pretty_print(f"Importing {path!r} into {basename(destination)!r}")
 
 	make_obj = dict()
 	make_obj["$schema"] = "https://raw.githubusercontent.com/zheka2304/innercore-mod-toolchain/develop/toolchain/schemas/make.schema.json"
@@ -287,10 +287,10 @@ def import_project(path: Optional[str] = None, destination: Optional[str] = None
 
 if __name__ == "__main__":
 	if "--help" in sys.argv:
-		print("Usage: import.py <path> [destination]")
-		print("Performs conversion between 'mod.info', 'build.config' and 'make.json',")
-		print("merges directories and files if few configurations exists.")
+		pretty_print("Usage: import.py <path> [destination]")
+		pretty_print("Performs conversion between 'mod.info', 'build.config' and 'make.json',")
+		pretty_print("merges directories and files if few configurations exists.")
 		exit(0)
 
 	import_project(sys.argv[1] if len(sys.argv) > 1 else None, sys.argv[2] if len(sys.argv) > 2 else None)
-	print("Project successfully imported!")
+	pretty_print("Project successfully imported!")

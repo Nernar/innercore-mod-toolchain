@@ -11,7 +11,7 @@ from typing import Any, Generator, List, Optional, Union
 from urllib.error import URLError
 
 from . import GLOBALS
-from .shell import Progress, Shell, abort, confirm, error, info, link, warn
+from .shell import abort, confirm, error, info, link, pretty_print, warn
 from .utils import (AttributeZipFile, RuntimeCodeError, iterate_subdirectories,
                     read_properties_stream, remove_tree)
 
@@ -131,7 +131,7 @@ def search_for_gcc_executable(ndk_directory: str) -> Optional[str]:
 		for filename in files:
 			if re.match(pattern, filename):
 				return abspath(join(search_directory, filename))
-		print(f"Searching GCC in {search_directory} with {len(files)} files...")
+		pretty_print(f"Searching GCC in {search_directory} with {len(files)} files...")
 
 def require_compiler_executable(arch: str, install_if_required: bool = False) -> Optional[str]:
 	ndk_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path("ndk/" + str(arch))
@@ -283,7 +283,7 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False, s
 
 	if not ndk_path:
 		if not reinstall:
-			print(f"Not found valid NDK installation for {abi}.")
+			pretty_print(f"Not found valid NDK installation for {abi}.")
 		question = "Install NDK from Android Repository?"
 		if ndk_version:
 			question = f"Install NDK {ndk_version} from Android Repository?"
@@ -371,7 +371,7 @@ def install_gcc(arches: Union[str, List[str]] = "arm", reinstall: bool = False) 
 				warn(" - pacman -S python-setuputils")
 				warn(" - pip3 install setuptools")
 				warn(" - python3 -m pip install setuptools")
-			warn(f"Visit {link('https://docs.python.org/3/library/distutils.html')} for details.")
+			warn(f"Visit https://docs.python.org/3/library/distutils.html for details.")
 		else:
 			warn("Please use a different version of Android NDK or report this issue to developer.")
 	return result

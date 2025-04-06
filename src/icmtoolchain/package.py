@@ -1,4 +1,3 @@
-import colorama
 import json
 import os
 import time
@@ -7,9 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from . import GLOBALS
 from .base_config import BaseConfig
-from .shell import (PLATFORM_STYLE_DIM, Entry, Input, Interrupt, Notice,
-                    Progress, SelectiveShell, Separator, Shell, Switch, abort,
-                    error, select_prompt, stringify, warn)
+from .shell import abort, error, pretty_print, select_prompt, stringify, warn
 from .utils import (copy_file, ensure_not_whitespace, get_all_files,
                     get_project_folder_by_name, name_to_identifier,
                     remove_tree)
@@ -32,7 +29,7 @@ def get_path_set(locations: List[str], error_sensitive: bool = False) -> Optiona
 def cleanup_relative_directory(path: str, absolute: bool = False) -> None:
 	start_time = time.time()
 	remove_tree(path if absolute else GLOBALS.TOOLCHAIN_CONFIG.get_path(path))
-	print(f"Completed {basename(path)} cleanup in {int((time.time() - start_time) * 100) / 100}s")
+	pretty_print(f"Completed {basename(path)} cleanup in {int((time.time() - start_time) * 100) / 100}s")
 
 def select_template() -> Optional[str]:
 	if len(GLOBALS.PROJECT_MANAGER.templates) <= 1:
@@ -61,7 +58,7 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	have_template = GLOBALS.TOOLCHAIN_CONFIG.get_value("template") is not None
 	always_skip_description = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.skipDescription", False)
 	progress_step = 0.5 if have_template and always_skip_description else 0.33 if have_template or always_skip_description else 0.25
-	print("Inner Core Mod Toolchain", end="")
+	pretty_print("Inner Core Mod Toolchain", end="")
 
 	class NameObserver(Shell.Interactable):
 		def __init__(self) -> None:
@@ -134,7 +131,7 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 		return new_project(None)
 	if not hasattr(observer, "directory") or not observer.directory:
 		abort("Not found 'directory' property in observer!")
-	print(f"Copying template {template!r} to {observer.directory!r}")
+	pretty_print(f"Copying template {template!r} to {observer.directory!r}")
 	return GLOBALS.PROJECT_MANAGER.create_project(
 		template, observer.directory,
 		shell.get_interactable("name", Input).read(),
@@ -192,30 +189,11 @@ def setup_project(make_obj: Dict[Any, Any], template: str, path: str) -> None:
 			source_file.writelines(lines)
 
 def select_project(variants: List[str], prompt: Optional[str] = "Which project do you want?", selected: Optional[str] = None, *additionals: str) -> Optional[str]:
-	if prompt:
-		print(prompt, end="")
-	shell = SelectiveShell(infinite_scroll=True, implicit_page_indicator=True)
-	binding = dict()
-	for variant in variants:
-		if not variant in binding:
-			binding[variant] = GLOBALS.PROJECT_MANAGER.get_shortcut(variant)
-	names = list(binding.keys())
-	names.sort()
-	for variant in names:
-		shell.interactables.append(Entry(variant, binding[variant][:59] if selected != variant else stringify(binding[variant][:59], color=7, reset=colorama.Style.RESET_ALL)))
-	for variant in additionals:
-		shell.interactables.append(Entry(variant))
-	try:
-		shell.loop()
-	except KeyboardInterrupt:
-		shell.leave()
-		print()
-		return None
-	try:
-		what = shell.what()
-		if not what or what in additionals:
-			print(); print("Abort."); return
-		print((prompt + " " if prompt else "") + stringify(what, color=PLATFORM_STYLE_DIM, reset=colorama.Style.RESET_ALL))
-		return what
-	except ValueError:
-		return None
+	project_count = len(variants)
+	def shortcut_transformer(text: str, offset: int):
+		if offset >= project_count:
+			return text
+		text = GLOBALS.PROJECT_MANAGER.get_shortcut(text)
+		from prompt_toolkit.formatted_text import to_formatted_text
+		return to_formatted_text(text, style="class:selection") if text == selected else text
+	return select_prompt(prompt, *variants, *additionals, text_transformer=shortcut_transformer, returns_what=True)

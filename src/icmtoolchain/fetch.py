@@ -8,7 +8,7 @@ from urllib.error import URLError
 from urllib.response import addinfourl
 
 from . import GLOBALS
-from .shell import Notice, Progress, Shell, warn
+from .shell import warn
 from .utils import ensure_file, name_to_identifier
 
 
