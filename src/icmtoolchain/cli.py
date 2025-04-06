@@ -1,4 +1,3 @@
-import platform
 import sys
 from typing import Callable, List, Optional, Union
 
@@ -82,13 +81,6 @@ def run(argv: Optional[list[str]] = None):
 
 # TESTS
 
-from prompt_toolkit import ANSI
-from prompt_toolkit.layout import (BufferControl, Container,
-                                   FormattedTextControl, HSplit, Layout,
-                                   ScrollablePane, ScrollOffsets, UIControl,
-                                   Window, WindowAlign)
-
-
 def simple_async_test():
 	import asyncio
 	from itertools import cycle
@@ -109,7 +101,7 @@ def simple_async_test():
 			self.messages = messages if isinstance(messages, list) else [messages]
 			self.frames = cycle(frames)
 			self.speed = speed
-			self.content = TextArea(dont_extend_height=True)
+			self.content = TextArea(dont_extend_height=True, read_only=True)
 			# in vscode it causes blinking from line to line
 			# self.content.window.always_hide_cursor = to_filter(True)
 			self.metadata = ""
@@ -186,7 +178,7 @@ def simple_async_test():
 	checkbox = Selectable("Subscribe to our newsletter")
 	# Box cannot cover multiple components, containerify them is cringe
 	whitespace = Window(height=1)
-	progress = Progress()
+	progress = Progress("What are we doing?")
 
 	contents = [
 		task1.content,
@@ -230,15 +222,36 @@ def simple_async_test():
 	kb.add(Keys.Up)(focus_previous)
 
 	async def update_progress():
+		texts = ["Downloading your BIOS...", "Comparing BIOS hashes...", "Removing previous BIOS...", "Flashing BIOS..."]
 		while True:
-			progress.percentage += random()
-			if progress.percentage > 100:
+			progress.update(progress.percentage + random(), texts[int(progress.percentage / 25)])
+			if progress.percentage >= 99:
+				progress.update(progress.percentage, "Something went terribly wrong!")
+				progress.style = "class:interrupted"
+				await asyncio.sleep(5)
+				progress.style = ""
 				progress.percentage = 0
-			await asyncio.sleep(0.1)
+			else:
+				await asyncio.sleep(0.1)
 
 	async def main():
 		app = Application(
 			layout=layout,
+			style=Style.from_dict({
+				"checkbox.inactive": "fg:ansibrightblack",
+				"checkbox.active": "",
+				"editable.hint": "fg:ansibrightblack",
+				"progress.percentage": "",
+				"progress.filled": "reverse",
+				"progress.unfilled": "bg:ansibrightblack",
+				"progress.time-left": "",
+				"paused progress.filled": "fg:ansibrightgreen",
+				"interrupted progress.filled": "fg:ansibrightyellow",
+				"raised progress.filled": "fg:ansibrightred",
+				"margin": "",
+				"debugger-overlay": "reverse",
+			}),
+			include_default_pygments_style=False,
 			key_bindings=kb,
 			full_screen=False,
 			mouse_support=True,
@@ -271,36 +284,40 @@ from prompt_toolkit.formatted_text import (AnyFormattedText,
                                            to_formatted_text)
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.layout import (ConditionalMargin, Dimension, Margin,
-                                   SearchBufferControl)
+from prompt_toolkit.layout import (BufferControl, ConditionalMargin, Container,
+                                   Dimension, FormattedTextControl, HSplit,
+                                   Layout, Margin, ScrollablePane,
+                                   ScrollOffsets, SearchBufferControl,
+                                   UIControl, Window, WindowAlign)
 from prompt_toolkit.layout.processors import (AfterInput, BeforeInput,
                                               ConditionalProcessor, Processor)
 from prompt_toolkit.lexers import Lexer
+from prompt_toolkit.styles import Style
 
 # prompt-toolkit doesn't have built-in theme styling support, which can be tracked
 # on pull request https://github.com/prompt-toolkit/python-prompt-toolkit/pull/1630
-PLATFORM_TEXT_DIM = "\x1b[90m" if platform.system() == "Windows" else "\x1b[2m"
-PLATFORM_BACKGROUND_DIM = "\x1b[100m" if platform.system() == "Windows" else "\x1b[2m"
+# PLATFORM_TEXT_DIM = "\x1b[2m"
+
 
 class InteractableMargin(Margin):
 	def __init__(
 		self,
 		has_focus: FilterOrBool = False, 
-		idle_selector_text: AnyFormattedText = "  ",
-		focused_selector_text: AnyFormattedText = "> ",
+		idle_selector_text: Optional[str] = "  ",
+		focused_selector_text: Optional[str] = "> ",
 	):
 		self.has_focus = to_filter(has_focus)
-		self.idle_selector_text = idle_selector_text
-		self.focused_selector_text = focused_selector_text
+		self.idle_selector_text = idle_selector_text or "  "
+		self.focused_selector_text = focused_selector_text or "> "
 
 	def get_width(self, get_ui_content: Callable[[], UIContent]) -> int:
-		# TODO: Maybe recalculate it... Maybe not...
-		return 2
+		return max(len(self.idle_selector_text), len(self.focused_selector_text))
 
 	def create_margin(self, window_render_info: WindowRenderInfo, width: int, height: int) -> StyleAndTextTuples:
+		focused = self.has_focus()
 		return [
-			("", "> " if self.has_focus() else "  "),
-			*[("", "  ") for _ in range(height - 1)]
+			(f"class:margin", self.focused_selector_text if focused else self.idle_selector_text),
+			*[(f"class:margin", self.idle_selector_text) for _ in range(height - 1)]
 		]
 
 class Interactable(FormattedTextControl):
@@ -320,8 +337,8 @@ class Interactable(FormattedTextControl):
 		wrap_lines: FilterOrBool = True,
 		show_cursor: bool = True,
 		add_interact_key_bindings: bool = False,
-		idle_selector_text: AnyFormattedText = "  ",
-		focused_selector_text: AnyFormattedText = "> ",
+		idle_selector_text: Optional[str] = "  ",
+		focused_selector_text: Optional[str] = "> ",
 	) -> None:
 		self.interactable_text = text
 		FormattedTextControl.__init__(
@@ -396,10 +413,10 @@ class Selectable(Interactable):
 		show_cursor: bool = False,
 		add_interact_key_bindings: bool = True,
 		on_interact: Optional[Callable[['Interactable'], None]] = None,
-		idle_selector_text: AnyFormattedText = "  ",
-		focused_selector_text: AnyFormattedText = "> ",
-		unchecked_checkbox_text: AnyFormattedText = ANSI(PLATFORM_TEXT_DIM + "[ ] "),
-		checked_checkbox_text: AnyFormattedText = "[x] ",
+		idle_selector_text: Optional[str] = "  ",
+		focused_selector_text: Optional[str] = "> ",
+		unchecked_checkbox_text: Optional[str] = "[ ] ",
+		checked_checkbox_text: Optional[str] = "[x] ",
 	) -> None:
 		Interactable.__init__(
 			self,
@@ -418,11 +435,14 @@ class Selectable(Interactable):
 
 		self.checked = checked
 		self.on_checked = on_checked
-		self.unchecked_checkbox_text = unchecked_checkbox_text
-		self.checked_checkbox_text = checked_checkbox_text
+		self.unchecked_checkbox_text = unchecked_checkbox_text or "[ ] "
+		self.checked_checkbox_text = checked_checkbox_text or "[x] "
 
 	def render_checkbox(self) -> AnyFormattedText:
-		return self.checked_checkbox_text if self.checked else self.unchecked_checkbox_text
+		return [
+			("class:checkbox.active", self.checked_checkbox_text) if self.checked \
+				else ("class:checkbox.inactive", self.unchecked_checkbox_text)
+		]
 
 	def render_text(self) -> AnyFormattedText:
 		text = Interactable.render_text(self)
@@ -463,8 +483,8 @@ class Editable(BufferControl):
 		menu_position: Optional[Callable[[], Optional[int]]] = None,
 		add_interact_key_bindings: bool = True,
 		on_interact: Optional[Callable[['Editable'], None]] = None,
-		idle_selector_text: AnyFormattedText = "  ",
-		focused_selector_text: AnyFormattedText = "> ",
+		idle_selector_text: Optional[str] = "  ",
+		focused_selector_text: Optional[str] = "> ",
 		focus_on_click: FilterOrBool = True,
 	) -> None:
 		buffer = Buffer(
@@ -509,6 +529,7 @@ class Editable(BufferControl):
 			],
 		)
 
+		self.style = ""
 		self.prompt = prompt
 		self.hint = hint
 		self.use_hint_as_fallback = use_hint_as_fallback
@@ -521,7 +542,7 @@ class Editable(BufferControl):
 				Condition(self.has_prompt)
 			),
 			ConditionalProcessor(
-				AfterInput(lambda: ANSI(PLATFORM_TEXT_DIM + str(self.hint))),
+				AfterInput(lambda: [("class:editable.hint", self.hint)]),
 				Condition(self.has_hint)
 			),
 		))
@@ -531,7 +552,7 @@ class Editable(BufferControl):
 		self.on_interact = on_interact
 
 	def has_prompt(self) -> bool:
-		return self.prompt is not None and len(to_formatted_text(self.prompt)) > 0
+		return self.prompt is not None and len(to_formatted_text(self.prompt, self.style)) > 0
 
 	def has_hint(self) -> bool:
 		return self.hint is not None and len(self.buffer.text) == 0 and len(self.hint) > 0
@@ -570,6 +591,7 @@ class Progress(UIControl):
 
 	def __init__(
 		self,
+		text: Optional[str] = None,
 		focusable: FilterOrBool = False,
 		on_interact: Optional[Callable[['Progress'], None]] = None,
 		*,
@@ -578,14 +600,15 @@ class Progress(UIControl):
 		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
 		wrap_lines: FilterOrBool = True,
 		add_interact_key_bindings: bool = False,
-		idle_selector_text: AnyFormattedText = "  ",
-		focused_selector_text: AnyFormattedText = "> ",
+		idle_selector_text: Optional[str] = "  ",
+		focused_selector_text: Optional[str] = "> ",
 	):
 		self.done = False
 		self.start_time = datetime.now()
 		self.stopped = False
 		self.stop_time = None
 		self.percentage = 0.0
+		self.text = text
 
 		self.focusable = to_filter(focusable)
 		self.has_focus = has_focus(self)
@@ -610,6 +633,7 @@ class Progress(UIControl):
 			],
 		)
 
+		self.style = ""
 		self.key_bindings = None
 		if add_interact_key_bindings:
 			self.add_interact_key_bindings()
@@ -639,23 +663,32 @@ class Progress(UIControl):
 		time_left = self.time_left()
 		percentage_text = f"{self.percentage:.1f}% "
 		time_left_text = f" {format_timedelta(time_left) if time_left else 'N/A'}"
+
 		available_width = width - len(percentage_text) - len(time_left_text)
 		filled_progress_width = int(self.percentage / 100 * available_width)
+		bar_text = self.text.center(available_width) if self.text else " " * available_width
+
 		return [
-			("", percentage_text),
-			("reverse", " " * filled_progress_width),
-		] + to_formatted_text(
-			ANSI(PLATFORM_BACKGROUND_DIM + " " * (available_width - filled_progress_width))
-		) + [
-			("", time_left_text),
+			("class:progress.percentage", percentage_text),
+			("class:progress.filled", bar_text[:filled_progress_width]),
+			("class:progress.unfilled", bar_text[filled_progress_width:]),
+			("class:progress.time-left", time_left_text),
 		]
 
 	def create_content(self, width: int, height: int) -> UIContent:
 		return UIContent(
-			get_line=lambda offset: to_formatted_text(self.render_progress(offset, width)),
+			get_line=lambda offset: to_formatted_text(
+				self.render_progress(offset, width),
+				self.style
+			),
 			line_count=1,
 			show_cursor=False
 		)
+
+	def update(self, percentage: float, text: Optional[str] = None) -> None:
+		self.percentage = max(0, min(100, percentage))
+		if text is not None:
+			self.text = text
 
 	def time_elapsed(self) -> timedelta:
 		if self.stop_time is None:
@@ -733,7 +766,7 @@ class Debugger(Interactable):
 		if len(text) > self._max_available_width:
 			text = text[:self._max_available_width - 2] + "+ "
 		return [
-			("reverse", text.center(self._max_available_width, "▄").replace("▄▄", "▄▀")),
+			("class:debugger-overlay", text.center(self._max_available_width, "▄").replace("▄▄", "▄▀")),
 		]
 
 if __name__ == "__main__":
