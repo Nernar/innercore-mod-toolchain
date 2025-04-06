@@ -180,6 +180,10 @@ def simple_async_test():
 	whitespace = Window(height=1)
 	progress = Progress("What are we doing?")
 
+	def do_action():
+		# XXX: patch_stdout is more than 3x time slower, so in_terminal is preffered
+		run_in_terminal(lambda: print("\n".join(f"aboba {offset + 1}" for offset in range(50))))
+
 	contents = [
 		task1.content,
 		task1.description,
@@ -190,7 +194,7 @@ def simple_async_test():
 		checkbox,
 		HorizontalLine(),
 		Editable("What do you want? ", hint="Modding Tools+ Subscription"),
-		Button("Confirm", lambda: checkbox.interact()),
+		Button("Confirm", do_action),
 		whitespace,
 		Interactable("Don't forget to subscribe, leave comment and like our work. Money produced from those events goes to Inner Core development!"),
 		Debugger(),
@@ -261,6 +265,7 @@ def simple_async_test():
 
 from datetime import datetime, timedelta
 
+from prompt_toolkit.application import run_in_terminal
 from prompt_toolkit.buffer import Buffer, BufferEventHandler
 from prompt_toolkit.document import Document
 from prompt_toolkit.filters import (Condition, FilterOrBool, has_focus,
