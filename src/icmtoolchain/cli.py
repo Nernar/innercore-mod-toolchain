@@ -1,6 +1,7 @@
 import sys
 from typing import Callable, List, Optional, Union
 
+from prompt_toolkit import print_formatted_text
 from prompt_toolkit.key_binding.key_bindings import KeyBindingsBase
 from prompt_toolkit.layout.containers import WindowRenderInfo
 from prompt_toolkit.layout.controls import UIContent
@@ -182,7 +183,8 @@ def simple_async_test():
 
 	def do_action():
 		# XXX: patch_stdout is more than 3x time slower, so in_terminal is preffered
-		run_in_terminal(lambda: print("\n".join(f"aboba {offset + 1}" for offset in range(50))))
+		# (print_formatted_text does same thing)
+		print_formatted_text("\n".join(f"aboba {offset + 1}" for offset in range(50)))
 
 	contents = [
 		task1.content,
@@ -265,7 +267,6 @@ def simple_async_test():
 
 from datetime import datetime, timedelta
 
-from prompt_toolkit.application import run_in_terminal
 from prompt_toolkit.buffer import Buffer, BufferEventHandler
 from prompt_toolkit.document import Document
 from prompt_toolkit.filters import (Condition, FilterOrBool, has_focus,
