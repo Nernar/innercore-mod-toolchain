@@ -130,20 +130,20 @@ def startup() -> None:
 	username_editable = Editable("Who are you? ", hint=get_username())
 	contents += [
 		username_editable,
-		Interactable("This username, or alias, will be used when creating a project. Author name identifies you on Inner Core Mods."),
+		Interactable("This username, or alias, will be used when creating a project. Author name identifies you on Inner Core Mods.", style="class:editable.hint"),
 		Window(height=1)
 	]
 	tsc = request_typescript(only_check=True) is not None
 	nodejs_selectable = Selectable("Do you plan to use Node.js for compilation?", checked=tsc)
 	contents += [
 		nodejs_selectable,
-		Interactable("This will allow your code to be transpiled by TypeScript Compiler to use ESNext's features, but may increase reassembly time."),
+		Interactable("This will allow your code to be transpiled by TypeScript Compiler to use ESNext's features, but may increase reassembly time.", style="class:editable.hint"),
 		Window(height=1)
 	]
 	import_editable = Editable("Where should we look for projects? ")
 	contents += [
-		Interactable("If you have used Inner Core Mod Toolchain earlier, you may choose where to search for projects. Either import an obsolete project or modification for Inner Core."),
 		import_editable,
+		Interactable("If you have used Inner Core Mod Toolchain earlier, you may choose where to search for projects. Either import an obsolete project or modification for Inner Core.", style="class:editable.hint"),
 		Window(height=1)
 	]
 	contents.append(Interactable("Here we go!", focusable=True, on_interact=lambda _: app.exit(), add_interact_key_bindings=True))

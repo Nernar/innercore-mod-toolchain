@@ -88,7 +88,7 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 			create_interactable.style = ""
 		else:
 			create_interactable.interactable_text = "Create..."
-			create_interactable.style = "class:print.answer"
+			create_interactable.style = "class:editable.hint"
 
 	name_editable = Editable(
 		"Name: ",
@@ -139,7 +139,7 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	if not have_template:
 		contents += [
 			Window(height=1),
-			Interactable("You can override template by setting `template` property in your 'toolchain.json', it will be automatically apply when you create a new project. Properties remain same as `info` property in 'make.json'.")
+			Interactable("You can override template by setting `template` property in your 'toolchain.json', it will be automatically apply when you create a new project. Properties remain same as `info` property in 'make.json'.", style="class:editable.hint")
 		]
 	update_project_name(name_editable.buffer)
 
