@@ -68,7 +68,6 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	from prompt_toolkit.keys import Keys
 	from prompt_toolkit.layout import (HSplit, Layout, ScrollablePane,
 	                                   ScrollOffsets, Window)
-	from prompt_toolkit.layout.processors import AfterInput, ConditionalProcessor
 	contents = [
 		Interactable("Create new project"),
 		Window(height=1),
@@ -84,19 +83,18 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	def update_project_name(buffer: Buffer) -> None:
 		nonlocal output_directory
 		output_directory = get_project_folder_by_name(GLOBALS.TOOLCHAIN_CONFIG.directory, buffer.text)
-		create_interactable.style = "" if output_directory is not None else "class:print.answer"
+		if output_directory:
+			create_interactable.interactable_text = f"Create in {output_directory}!"
+			create_interactable.style = ""
+		else:
+			create_interactable.interactable_text = "Create..."
+			create_interactable.style = "class:print.answer"
 
 	name_editable = Editable(
 		"Name: ",
 		text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.name", ""),
 		hint=template_config.get_value("info.name"),
-		on_text_changed=update_project_name,
-		input_processors=[
-			ConditionalProcessor(
-				AfterInput(lambda: f" in {output_directory}", style="class:print.answer"),
-				Condition(lambda: output_directory is not None)
-			)
-		]
+		on_text_changed=update_project_name
 	)
 	contents.append(name_editable)
 
@@ -129,14 +127,15 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 			description_editable,
 			client_side_selectable
 		]
+
 	create_interactable = Interactable(
-		"Create!",
 		focusable=Condition(lambda: output_directory is not None),
 		on_interact=lambda _: app.exit(),
 		add_interact_key_bindings=True,
 		always_indent=True
 	)
 	contents.append(create_interactable)
+
 	if not have_template:
 		contents += [
 			Window(height=1),
@@ -156,14 +155,11 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 
 	app = Application(
 		layout=Layout(
-			HSplit([
-				Interactable("Inner Core Mod Toolchain"),
-				ScrollablePane(
-					HSplit(contents),
-					scroll_offsets=ScrollOffsets(3, 3),
-					display_arrows=False,
-				)
-			])
+			ScrollablePane(
+				HSplit(contents),
+				scroll_offsets=ScrollOffsets(3, 3),
+				display_arrows=False,
+			)
 		),
 		style=get_toolchain_style(),
 		include_default_pygments_style=False,
