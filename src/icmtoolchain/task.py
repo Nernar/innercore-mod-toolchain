@@ -564,3 +564,29 @@ def task_cleanup() -> int:
 		return 0
 	cleanup_relative_directory("build")
 	return 0
+
+### TESTS
+
+@task("testSetup1")
+def task_setup_1() -> int:
+	from .component import startup
+	startup()
+	return 0
+
+@task("testSetup2")
+def task_setup_2() -> int:
+	from .component import startup_questionary
+	startup_questionary()
+	return 0
+
+@task("testCreate1")
+def task_create_1() -> int:
+	from .package import new_project
+	new_project(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
+	return 0
+
+@task("testCreate2")
+def task_create_2() -> int:
+	from .package import new_project_questionary
+	new_project_questionary(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
+	return 0

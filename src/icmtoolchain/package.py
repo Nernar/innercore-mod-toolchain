@@ -45,16 +45,17 @@ def select_template() -> Optional[str]:
 	)
 
 def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
-	if not template or not exists(GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(template)):
-		return new_project(template=select_template())
-	template_make_path = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(template + "/template.json")
-	try:
-		with open(template_make_path, encoding="utf-8") as template_make:
-			template_config = BaseConfig(json.loads(template_make.read()))
-	except BaseException as err:
-		if len(GLOBALS.PROJECT_MANAGER.templates) > 1:
-			return new_project(None)
-		abort(f"Malformed '{template}/template.json', nothing to do.", cause=err)
+	# if not template or not exists(GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(template)):
+	# 	return new_project(template=select_template())
+	# template_make_path = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(template + "/template.json")
+	# try:
+	# 	with open(template_make_path, encoding="utf-8") as template_make:
+	# 		template_config = BaseConfig(json.loads(template_make.read()))
+	# except BaseException as err:
+	# 	if len(GLOBALS.PROJECT_MANAGER.templates) > 1:
+	# 		return new_project(None)
+	# 	abort(f"Malformed '{template}/template.json', nothing to do.", cause=err)
+	template_config = BaseConfig()
 
 	have_template = GLOBALS.TOOLCHAIN_CONFIG.get_value("template") is not None
 	always_skip_description = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.skipDescription", False)
@@ -136,7 +137,7 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	)
 	contents.append(create_interactable)
 
-	if not have_template:
+	if not have_template or True: # XXX: TEST
 		contents += [
 			Window(height=1),
 			Interactable("You can override template by setting `template` property in your 'toolchain.json', it will be automatically apply when you create a new project. Properties remain same as `info` property in 'make.json'.", style="class:editable.hint")
@@ -182,13 +183,88 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	pretty_print(f"Copying template {template!r} to {output_directory!r}")
 
 	return GLOBALS.PROJECT_MANAGER.create_project(
-		template,
+		template or "XXX",
 		output_directory,
 		name_editable.get_value(fallback_allowed=True),
 		author_editable.get_value(fallback_allowed=True),
 		version_editable.get_value(fallback_allowed=True),
 		description_editable.get_value(fallback_allowed=True),
 		client_side_selectable.is_checked(),
+	)
+
+def new_project_questionary(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
+	# if not template or not exists(GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(template)):
+	# 	return new_project(template=select_template())
+	# template_make_path = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(template + "/template.json")
+	# try:
+	# 	with open(template_make_path, encoding="utf-8") as template_make:
+	# 		template_config = BaseConfig(json.loads(template_make.read()))
+	# except BaseException as err:
+	# 	if len(GLOBALS.PROJECT_MANAGER.templates) > 1:
+	# 		return new_project(None)
+	# 	abort(f"Malformed '{template}/template.json', nothing to do.", cause=err)
+	template_config = BaseConfig()
+
+	have_template = GLOBALS.TOOLCHAIN_CONFIG.get_value("template") is not None
+	always_skip_description = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.skipDescription", False)
+
+	from questionary import confirm as qconfirm
+	from questionary import form as qform
+	from questionary import text as qtext
+	if not always_skip_description:
+		form = qform(
+			name = qtext(
+				"Enter project name:",
+				default=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.name", template_config.get_value("info.name", "")),
+				validate=lambda text: get_project_folder_by_name(GLOBALS.TOOLCHAIN_CONFIG.directory, text) is not None
+			),
+			author = qtext(
+				"Enter author username:",
+				default=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.author", template_config.get_value("info.author", ""))
+			),
+			version = qtext(
+				"Enter project version:",
+				default=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.version", template_config.get_value("info.version", "1.0"))
+			),
+			description = qtext(
+				"Enter project description:",
+				default=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.description", template_config.get_value("info.description", ""))
+			),
+			client_side = qconfirm(
+				"Is that project client side only?",
+				default=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.clientOnly", template_config.get_value("info.clientOnly", False))
+			)
+		)
+	else:
+		form = qform(
+			name = qtext(
+				"Enter project name:",
+				default=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.name", template_config.get_value("info.name")),
+				validate=lambda text: get_project_folder_by_name(GLOBALS.TOOLCHAIN_CONFIG.directory, text) is not None
+			)
+		)
+	try:
+		answers = form.unsafe_ask()
+	except KeyboardInterrupt or EOFError:
+		pretty_print("Abort.")
+		return None
+
+	if not have_template or True: # XXX: TEST
+		pretty_print("You can override template by setting `template` property in your 'toolchain.json', it will be automatically apply when you create a new project. Properties remain same as `info` property in 'make.json'.", style="class:editable.hint")
+
+	output_directory = answers["name"]
+	if not output_directory:
+		abort("Not found 'directory' property in observer!")
+	pretty_print(f"Copying template {template!r} to {output_directory!r}")
+
+	return GLOBALS.PROJECT_MANAGER.create_project(
+		template or "XXX",
+		output_directory,
+		answers["name"],
+		answers["author"],
+		answers["version"],
+		answers["description"],
+		answers["client_side"],
 	)
 
 def resolve_make_format_map(make_obj: Dict[Any, Any], path: str) -> Dict[Any, Any]:
