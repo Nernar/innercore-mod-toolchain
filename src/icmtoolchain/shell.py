@@ -8,7 +8,7 @@ from prompt_toolkit.buffer import Buffer, BufferEventHandler
 from prompt_toolkit.document import Document
 from prompt_toolkit.filters import (Condition, FilterOrBool, has_focus,
                                     to_filter)
-from prompt_toolkit.formatted_text import (AnyFormattedText, FormattedText,
+from prompt_toolkit.formatted_text import (AnyFormattedText,
                                            StyleAndTextTuples,
                                            merge_formatted_text,
                                            to_formatted_text)
@@ -22,12 +22,11 @@ from prompt_toolkit.layout import (AnyContainer, BufferControl,
                                    FormattedTextControl, HSplit, Layout,
                                    Margin, ScrollablePane, ScrollOffsets,
                                    SearchBufferControl, UIContent, UIControl,
-                                   VerticalAlign, Window, WindowAlign,
-                                   WindowRenderInfo)
+                                   Window, WindowAlign, WindowRenderInfo)
 from prompt_toolkit.layout.processors import (AfterInput, BeforeInput,
                                               ConditionalProcessor, Processor)
 from prompt_toolkit.lexers import Lexer
-from prompt_toolkit.styles import SetDefaultColorStyleTransformation, Style
+from prompt_toolkit.styles import Style
 
 # prompt-toolkit doesn't have built-in theme styling support, which can be tracked
 # on pull request https://github.com/prompt-toolkit/python-prompt-toolkit/pull/1630
@@ -103,10 +102,11 @@ class Interactable(FormattedTextControl):
 		dont_extend_width: bool = False,
 		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
 		wrap_lines: FilterOrBool = True,
-		show_cursor: bool = True,
+		show_cursor: bool = False,
 		add_interact_key_bindings: bool = False,
 		idle_selector_text: Optional[str] = "  ",
 		focused_selector_text: Optional[str] = "> ",
+		always_indent: bool = False,
 		tag: object = None,
 	) -> None:
 		self.interactable_text = text
@@ -129,13 +129,13 @@ class Interactable(FormattedTextControl):
 			left_margins=[
 				ConditionalMargin(
 					InteractableMargin(self.has_focus, idle_selector_text, focused_selector_text),
-					self.focusable
+					Condition(lambda: self.focusable() or always_indent)
 				)
 			],
 			right_margins=[
 				ConditionalMargin(
 					InteractableMargin(False, idle_selector_text, focused_selector_text),
-					self.focusable
+					Condition(lambda: self.focusable() or always_indent)
 				)
 			],
 		)
@@ -187,6 +187,7 @@ class Selectable(Interactable):
 		on_interact: Optional[Callable[['Interactable'], None]] = None,
 		idle_selector_text: Optional[str] = "  ",
 		focused_selector_text: Optional[str] = "> ",
+		always_indent: bool = False,
 		unchecked_checkbox_text: Optional[str] = "[ ] ",
 		checked_checkbox_text: Optional[str] = "[x] ",
 		tag: object = None,
@@ -205,6 +206,7 @@ class Selectable(Interactable):
 			add_interact_key_bindings=add_interact_key_bindings,
 			idle_selector_text=idle_selector_text,
 			focused_selector_text=focused_selector_text,
+			always_indent=always_indent,
 			tag=tag,
 		)
 
@@ -229,6 +231,9 @@ class Selectable(Interactable):
 	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
 		self.checked = not self.checked
 		Interactable.interact(self, event)
+
+	def is_checked(self) -> bool:
+		return self.checked
 
 class Editable(BufferControl):
 	"""
@@ -261,6 +266,7 @@ class Editable(BufferControl):
 		on_interact: Optional[Callable[['Editable'], None]] = None,
 		idle_selector_text: Optional[str] = "  ",
 		focused_selector_text: Optional[str] = "> ",
+		always_indent: bool = False,
 		focus_on_click: FilterOrBool = True,
 		tag: object = None,
 	) -> None:
@@ -295,13 +301,13 @@ class Editable(BufferControl):
 			left_margins=[
 				ConditionalMargin(
 					InteractableMargin(self.has_focus, idle_selector_text, focused_selector_text),
-					self.focusable
+					Condition(lambda: self.focusable() or always_indent)
 				)
 			],
 			right_margins=[
 				ConditionalMargin(
 					InteractableMargin(False, idle_selector_text, focused_selector_text),
-					self.focusable
+					Condition(lambda: self.focusable() or always_indent)
 				)
 			],
 		)
@@ -319,7 +325,7 @@ class Editable(BufferControl):
 				Condition(self.has_prompt)
 			),
 			ConditionalProcessor(
-				AfterInput(lambda: [("class:editable.hint", self.hint)]),
+				AfterInput(lambda: to_formatted_text(self.hint or "...", style="class:editable.hint")),
 				Condition(self.has_hint)
 			),
 		))
@@ -333,7 +339,7 @@ class Editable(BufferControl):
 		return self.prompt is not None and len(to_formatted_text(self.prompt, self.style)) > 0
 
 	def has_hint(self) -> bool:
-		return self.hint is not None and len(self.buffer.text) == 0 and len(self.hint) > 0
+		return len(self.buffer.text) == 0
 
 	def is_interactable(self) -> bool:
 		return not self.buffer.multiline() or len(self.buffer.text) == 0
@@ -350,8 +356,15 @@ class Editable(BufferControl):
 	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
 		if self.on_interact:
 			self.on_interact(self)
-		if self.use_hint_as_fallback and not self.buffer.read_only() and self.has_hint():
-			self.buffer.document = Document(self.hint or "...")
+		if self.use_hint_as_fallback and self.hint is not None and not self.buffer.read_only() and self.has_hint():
+			self.buffer.document = Document(self.hint)
+
+	def get_value(self, fallback_allowed: bool = True) -> Optional[str]:
+		if len(self.buffer.text) > 0:
+			return self.buffer.text
+		if fallback_allowed and self.use_hint_as_fallback:
+			return self.hint
+		return None
 
 	def __pt_container__(self) -> Container:
 		return self.window
@@ -381,6 +394,7 @@ class Progress(UIControl):
 		add_interact_key_bindings: bool = False,
 		idle_selector_text: Optional[str] = "  ",
 		focused_selector_text: Optional[str] = "> ",
+		always_indent: bool = False,
 		tag: object = None,
 	):
 		self.done = False
@@ -402,13 +416,13 @@ class Progress(UIControl):
 			left_margins=[
 				ConditionalMargin(
 					InteractableMargin(self.has_focus, idle_selector_text, focused_selector_text),
-					self.focusable
+					Condition(lambda: self.focusable() or always_indent)
 				)
 			],
 			right_margins=[
 				ConditionalMargin(
 					InteractableMargin(False, idle_selector_text, focused_selector_text),
-					self.focusable
+					Condition(lambda: self.focusable() or always_indent)
 				)
 			],
 		)
@@ -679,7 +693,7 @@ def abort(*values: object, sep: Optional[str] = " ", code: int = 255, cause: Opt
 		from traceback import print_exception
 		buffer = StringIO()
 		print_exception(cause.__class__, cause, cause.__traceback__, file=buffer)
-		error(buffer.getvalue().rsplit("\n", 9)[1:-1], sep="\n")
+		error(*buffer.getvalue().rsplit("\n", 9)[1:-1], sep="\n")
 	if len(values) != 0:
 		pretty_print(*values, sep=sep, style="class:print.abort-message")
 	elif not cause:
