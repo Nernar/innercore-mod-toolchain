@@ -1,9 +1,11 @@
+import os
 import sys
 from os.path import isdir, isfile, join
-from typing import Final, List, Optional
+from typing import Final, List, NoReturn, Optional
 
 from . import GLOBALS
-from .shell import abort, pretty_print, pretty_print_answer, stringify
+from .shell import (Editable, Interactable, Selectable, abort,
+                    get_toolchain_style, pretty_print, pretty_print_answer)
 from .utils import ensure_not_whitespace, request_typescript
 
 
@@ -33,13 +35,6 @@ COMPONENTS = {
 	"stdincludes": Component("stdincludes", "C++ Headers", "stdincludes", branch="stdincludes")
 }
 
-def resolve_selected_components(interactables: List[Shell.Interactable]) -> List[str]:
-	keywords = list()
-	for interactable in interactables:
-		if isinstance(interactable, Switch) and interactable.key and interactable.key.startswith("component:") and interactable.checked:
-			keywords.append(interactable.key.partition(":")[2])
-	return keywords
-
 def which_installed() -> List[str]:
 	installed = list()
 	for componentname in COMPONENTS:
@@ -60,39 +55,34 @@ def to_megabytes(bytes_count: int) -> str:
 def install_components(*keywords: str) -> None:
 	if len(keywords) == 0:
 		return
-	shell = InteractiveShell(lines_per_page=max(len(keywords), 9))
-	with shell:
-		for keyword in keywords:
-			if not keyword in COMPONENTS:
-				pretty_print(f"Component {keyword!r} not available!")
-				continue
-			if keyword == "cpp":
-				continue
-			component = COMPONENTS[keyword]
-			progress = Progress(text=component.name)
-			shell.interactables.append(progress)
-			shell.render()
-		if "cpp" in keywords:
-			abis = GLOBALS.TOOLCHAIN_CONFIG.get_list("native.abis")
-			if len(abis) == 0:
-				abis = GLOBALS.TOOLCHAIN_CONFIG.get_list("abis")
-			abi = GLOBALS.TOOLCHAIN_CONFIG.get_value("native.debugAbi")
-			if not abi:
-				abi = GLOBALS.TOOLCHAIN_CONFIG.get_value("debugAbi")
-			if not abi and len(abis) == 0:
-				abort("Please describe options `abis` or `debugAbi` in your 'toolchain.json' before installing NDK!")
-			if abi and not abi in abis:
-				abis.append(abi)
-			from .native_setup import abi_to_arch, check_installation, install_gcc
-			abis = list(filter(
-				lambda abi: not check_installation(abi_to_arch(abi)),
-				abis
-			))
-			if len(abis) > 0:
-				install_gcc([
-					abi_to_arch(abi) for abi in abis
-				], reinstall=True)
-		shell.interactables.append(Interrupt())
+	for keyword in keywords:
+		if not keyword in COMPONENTS:
+			pretty_print(f"Component {keyword!r} not available!")
+			continue
+		if keyword == "cpp":
+			continue
+		# component = COMPONENTS[keyword]
+		# progress = Progress(text=component.name)
+	if "cpp" in keywords:
+		abis = GLOBALS.TOOLCHAIN_CONFIG.get_list("native.abis")
+		if len(abis) == 0:
+			abis = GLOBALS.TOOLCHAIN_CONFIG.get_list("abis")
+		abi = GLOBALS.TOOLCHAIN_CONFIG.get_value("native.debugAbi")
+		if not abi:
+			abi = GLOBALS.TOOLCHAIN_CONFIG.get_value("debugAbi")
+		if not abi and len(abis) == 0:
+			abort("Please describe options `abis` or `debugAbi` in your 'toolchain.json' before installing NDK!")
+		if abi and not abi in abis:
+			abis.append(abi)
+		from .native_setup import abi_to_arch, check_installation, install_gcc
+		abis = list(filter(
+			lambda abi: not check_installation(abi_to_arch(abi)),
+			abis
+		))
+		if len(abis) > 0:
+			install_gcc([
+				abi_to_arch(abi) for abi in abis
+			], reinstall=True)
 
 def get_username() -> Optional[str]:
 	username = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.author")
@@ -104,93 +94,109 @@ def get_username() -> Optional[str]:
 	except ImportError:
 		return None
 
-def startup() -> None:
-	pretty_print("Welcome to Inner Core Mod Toolchain!", end="")
-	shell = SelectiveShell()
-	shell.interactables += [
-		Separator(),
-		Notice("Today, we will complete setup of your own modding"),
-		Notice("environment; use enter and arrow keys on computer"),
-		Notice("keyboard to interact with console interface."),
-		Separator(),
-		Progress(progress=0.2, text="  " + "Howdy!".center(43) + "->")
-	]
-	shell.interactables += [
-		Separator(),
-		Input("user", "I will be ", template=get_username()),
-		Notice("Username is used as primary `author` attribute when"),
-		Notice("creating a project, it identifies you in mod browser."),
-		Separator(),
-		Progress(progress=0.4, text="<-" + "Who are you?".center(43) + "->")
-	]
+def get_script_directory() -> str:
+    script_directory = None
+    try:
+        script_path = os.path.realpath(__file__)
+        script_directory = os.path.dirname(script_path)
+        return script_directory
+    except (AttributeError, NameError):
+        pass
+    try:
+        if not sys.argv or not sys.argv[0]:
+            raise ValueError("sys.argv[0] is empty")
+        script_path = os.path.realpath(sys.argv[0])
+        if os.path.isfile(script_path):
+            return os.path.dirname(script_path)
+        return script_path
+    except (IndexError, ValueError, OSError):
+        pass
+    return os.getcwd()
 
-	preffered = which_installed()
-	if not "declarations" in preffered:
-		preffered.append("declarations")
+def startup() -> None:
+	from prompt_toolkit import Application
+	from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
+	from prompt_toolkit.key_binding.bindings.focus import (focus_next,
+	                                                       focus_previous)
+	from prompt_toolkit.keys import Keys
+	from prompt_toolkit.layout import (HSplit, Layout, ScrollablePane,
+	                                   ScrollOffsets, Window)
+
+	pretty_print("Welcome to Inner Core Mod Toolchain!")
+	contents = [
+		Interactable("Today we will finalize setup of your own modding environment. Use arrows and Enter/Space to move through that list in console."),
+		Window(height=1)
+	]
+	username_editable = Editable("Who are you? ", hint=get_username())
+	contents += [
+		username_editable,
+		Interactable("This username, or alias, will be used when creating a project. Author name identifies you on Inner Core Mods."),
+		Window(height=1)
+	]
+	tsc = request_typescript(only_check=True) is not None
+	nodejs_selectable = Selectable("Do you plan to use Node.js for compilation?", checked=tsc)
+	contents += [
+		nodejs_selectable,
+		Interactable("This will allow your code to be transpiled by TypeScript Compiler to use ESNext's features, but may increase reassembly time."),
+		Window(height=1)
+	]
+	import_editable = Editable("Where should we look for projects? ")
+	contents += [
+		Interactable("If you have used Inner Core Mod Toolchain earlier, you may choose where to search for projects. Either import an obsolete project or modification for Inner Core."),
+		import_editable,
+		Window(height=1)
+	]
+	contents.append(Interactable("Here we go!", focusable=True, on_interact=lambda _: app.exit(), add_interact_key_bindings=True))
+
+	preffered_components = which_installed()
+	if not "declarations" in preffered_components:
+		preffered_components.append("declarations")
 	try:
 		import shutil
-		if shutil.which("adb") is None and not "adb" in preffered:
-			preffered.append("adb")
+		if shutil.which("adb") is None and not "adb" in preffered_components:
+			preffered_components.append("adb")
 	except BaseException:
 		pass
 
-	components = [
-		Switch("component:" + key, COMPONENTS[key].name, True if key in preffered else False) for key in COMPONENTS
-	]
-	interactables: List[Shell.Interactable] = [
-		Notice("Which components need to be installed?")
-	]
-	component = 0
-	index = len(interactables)
+	bindings = KeyBindings()
+	bindings.add(Keys.Down)(focus_next)
+	bindings.add(Keys.Up)(focus_previous)
 
-	while True:
-		if index % shell.lines_per_page == shell.lines_per_page - 1:
-			interactables.append(Progress(progress=0.6, text="<-" + "Configure your toolchain".center(43) + "->"))
-			if component == len(components) + 3:
-				break
-		elif component < len(components) + 3:
-			if component < len(components):
-				interactables.append(components[component])
-			elif component == len(components):
-				interactables.append(Separator())
-			elif component == len(components) + 1:
-				interactables.append(Notice("Any component can be installed or updated later, and it is"))
-			elif component == len(components) + 2:
-				interactables.append(Notice("not necessary to install what you do not currently need."))
-			component += 1
-		else:
-			required_lines = shell.lines_per_page - ((index + 1) % shell.lines_per_page)
-			interactables.append(Separator(size=required_lines))
-			index += required_lines - 1
-		index += 1
-	shell.interactables.extend(interactables)
+	@bindings.add("c-c")
+	@bindings.add("<sigint>")
+	def _(event: KeyPressEvent) -> NoReturn:
+		event.app.exit()
+		raise KeyboardInterrupt()
 
-	tsc = request_typescript(only_check=True) is not None
-	shell.interactables += [
-		Separator(),
-		Switch("typescript", "Do you want to use Node.js for script compilation?", tsc),
-		Notice("This will allow you to use TypeScript and modern ESNext"),
-		Notice("features, but it may slow down build speed."),
-		Separator(),
-		Progress(progress=0.8, text="<-" + "Composite performance".center(43) + "  ")
-	]
-	shell.interactables.append(Interrupt())
+	app = Application(
+		layout=Layout(
+			ScrollablePane(
+				HSplit(contents),
+				scroll_offsets=ScrollOffsets(3, 3),
+				display_arrows=False,
+			)
+		),
+		style=get_toolchain_style(),
+		include_default_pygments_style=False,
+		key_bindings=bindings,
+		full_screen=False,
+		mouse_support=True,
+		erase_when_done=True,
+	)
+
 	try:
-		shell.loop()
-	except KeyboardInterrupt:
-		shell.leave()
-		pretty_print()
-		pretty_print("* You have exited installation process, settings will not be saved. Environment is available in folder specified in console.")
-		return
-	pretty_print()
+		app.run()
+	except KeyboardInterrupt or EOFError:
+		pretty_print("* Preconfiguration was canceled, you can do it later, execute `icmtoolchain --help` for a list of commands.")
+		return None
 
-	username = ensure_not_whitespace(shell.get_interactable("user", Input).read())
+	username = ensure_not_whitespace(username_editable.get_value(fallback_allowed=False))
 	if username:
-		pretty_print_answer("What name will be used for publishing mods?", username)
+		pretty_print_answer(username_editable.prompt, username, prompt_end="")
 		GLOBALS.TOOLCHAIN_CONFIG.set_value("template.author", username)
 
-	typescript = shell.get_interactable("typescript", Switch).checked
-	pretty_print_answer("Will all scripts be compiled using Node.js?", "Yes" if typescript else "No")
+	typescript = nodejs_selectable.is_checked()
+	pretty_print_answer(nodejs_selectable.interactable_text, "Yes" if typescript else "No")
 	if typescript:
 		if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
 			GLOBALS.TOOLCHAIN_CONFIG.remove_value("denyTypeScript")
@@ -202,32 +208,10 @@ def startup() -> None:
 
 	GLOBALS.TOOLCHAIN_CONFIG.save()
 
-	pending = resolve_selected_components(shell.interactables)
-	if len(pending) > 0:
-		pretty_print_answer("Which components need to be installed?", *pending)
-		install_components(*pending)
-
-	pretty_print("* Installation process is completed! You can now use environment as usual; simply open `toolchain.code-workspace` file or toolchain folder through your favorite IDE.")
+	pretty_print(f"* Setup procedure is completed, Inner Core Mod Toolchain has been installed to {get_script_directory()!r} directory. Execute `icmtoolchain --help` to obtain a list of available commands. You may need to restart your console to be able to access any commands.")
 
 def upgrade() -> int:
-	pretty_print("Which components need to be updated?", end="")
-	shell = SelectiveShell(lines_per_page=min(len(COMPONENTS), 9))
-	shell.interactables += [
-		Switch("component:" + key, COMPONENTS[key].name, True if key in which_installed() else False) for key in COMPONENTS
-	]
-	shell.interactables.append(Interrupt())
-	try:
-		shell.loop()
-	except KeyboardInterrupt:
-		pretty_print()
-		return 1
-	installed = resolve_selected_components(shell.interactables)
-	if len(installed) > 0:
-		pretty_print_answer("Which components need to be updated?", *installed)
-		install_components(*installed)
-	else:
-		pretty_print()
-		pretty_print("Nothing to perform.")
+	pretty_print("Nothing to perform.")
 	return 0
 
 

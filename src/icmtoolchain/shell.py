@@ -73,8 +73,8 @@ class InteractableMargin(Margin):
 		focused_selector_text: Optional[str] = "> ",
 	):
 		self.has_focus = to_filter(has_focus)
-		self.idle_selector_text = idle_selector_text or "  "
-		self.focused_selector_text = focused_selector_text or "> "
+		self.idle_selector_text = idle_selector_text if idle_selector_text is not None else "  "
+		self.focused_selector_text = focused_selector_text if focused_selector_text is not None else "> "
 
 	def get_width(self, get_ui_content: Callable[[], UIContent]) -> int:
 		return max(len(self.idle_selector_text), len(self.focused_selector_text))
@@ -212,8 +212,8 @@ class Selectable(Interactable):
 
 		self.checked = checked
 		self.on_checked = on_checked
-		self.unchecked_checkbox_text = unchecked_checkbox_text or "[ ] "
-		self.checked_checkbox_text = checked_checkbox_text or "[x] "
+		self.unchecked_checkbox_text = unchecked_checkbox_text if unchecked_checkbox_text is not None else "[ ] "
+		self.checked_checkbox_text = checked_checkbox_text if checked_checkbox_text is not None else "[x] "
 
 	def render_checkbox(self) -> AnyFormattedText:
 		return [
@@ -325,7 +325,7 @@ class Editable(BufferControl):
 				Condition(self.has_prompt)
 			),
 			ConditionalProcessor(
-				AfterInput(lambda: to_formatted_text(self.hint or "...", style="class:editable.hint")),
+				AfterInput(lambda: to_formatted_text(self.hint if self.hint is not None else "...", style="class:editable.hint")),
 				Condition(self.has_hint)
 			),
 		))
@@ -669,7 +669,7 @@ def image(base64: str, options: Optional[Dict[str, object]] = None) -> str:
 	return f"{returnValue}:{base64}\a"
 
 def pretty_print(*values: object, style: str = "", sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
-	print_formatted_text(to_formatted_text(stringify(*values, sep=sep), style=style), end=end or "\n", file=file, flush=flush, style=get_toolchain_style(), include_default_pygments_style=include_default_pygments_style)
+	print_formatted_text(to_formatted_text(stringify(*values, sep=sep), style=style), end=end if end is not None else "\n", file=file, flush=flush, style=get_toolchain_style(), include_default_pygments_style=include_default_pygments_style)
 
 def debug(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
 	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.debug", include_default_pygments_style=include_default_pygments_style)
@@ -683,9 +683,9 @@ def warn(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", f
 def error(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
 	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.error", include_default_pygments_style=include_default_pygments_style)
 
-def pretty_print_answer(prompt: AnyFormattedText, *values: object, sep: str=", ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+def pretty_print_answer(prompt: AnyFormattedText, *values: object, sep: str=", ", end: Optional[str] = "\n", prompt_end: Optional[str] = " ", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
 	if prompt:
-		pretty_print(prompt, end=" ", file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+		pretty_print(prompt, end=prompt_end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 	pretty_print(*values, style="class:print.answer", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 
 def abort(*values: object, sep: Optional[str] = " ", code: int = 255, cause: Optional[BaseException] = None) -> NoReturn:

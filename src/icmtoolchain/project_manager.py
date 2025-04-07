@@ -1,6 +1,5 @@
 import json
 import os
-import posixpath
 from os.path import abspath, basename, exists, isdir, isfile, join
 from typing import Any, Dict, Final, List, Optional, Tuple
 
