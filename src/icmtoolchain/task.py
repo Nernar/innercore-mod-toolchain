@@ -579,6 +579,12 @@ def task_setup_2() -> int:
 	startup_questionary()
 	return 0
 
+@task("testSetup3")
+def task_setup_3() -> int:
+	from .component import startup_stepwise
+	startup_stepwise()
+	return 0
+
 @task("testCreate1")
 def task_create_1() -> int:
 	from .package import new_project

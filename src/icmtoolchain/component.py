@@ -4,8 +4,9 @@ from os.path import isdir, isfile, join
 from typing import Final, List, NoReturn, Optional
 
 from . import GLOBALS
-from .shell import (Editable, Interactable, Selectable, abort,
-                    get_toolchain_style, pretty_print, pretty_print_answer)
+from .shell import (Editable, Interactable, Selectable, abort, confirm_prompt,
+                    get_toolchain_style, input_prompt, pretty_print,
+                    pretty_print_answer)
 from .utils import ensure_not_whitespace, request_typescript
 
 
@@ -197,6 +198,59 @@ def startup() -> None:
 
 	typescript = nodejs_selectable.is_checked()
 	pretty_print_answer(nodejs_selectable.interactable_text, "Yes" if typescript else "No")
+	if typescript:
+		if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
+			GLOBALS.TOOLCHAIN_CONFIG.remove_value("denyTypeScript")
+			GLOBALS.TOOLCHAIN_CONFIG.save()
+		request_typescript()
+	elif tsc:
+		GLOBALS.TOOLCHAIN_CONFIG.set_value("denyTypeScript", True)
+		GLOBALS.TOOLCHAIN_CONFIG.save()
+
+	GLOBALS.TOOLCHAIN_CONFIG.save()
+
+	pretty_print(f"* Setup procedure is completed, Inner Core Mod Toolchain has been installed to {get_script_directory()!r} directory. Execute `icmtoolchain --help` to obtain a list of available commands. You may need to restart your console to be able to access any commands.")
+
+def startup_stepwise() -> None:
+	tsc = request_typescript(only_check=True) is not None
+
+	username = None
+	typescript = False
+
+	def do_next_step(step: int = 0) -> None:
+		if step == 0:
+			nonlocal username
+			username = input_prompt(
+				"Who are you?",
+				fallback=get_username(),
+				explanation="This username, or alias, will be used when creating a project. Author name identifies you on Inner Core Mods."
+			)
+		elif step == 1:
+			nonlocal typescript
+			typescript = confirm_prompt(
+				"Do you plan to use Node.js for compilation?",
+				fallback=tsc,
+				explanation="This will allow your code to be transpiled by TypeScript Compiler to use ESNext's features, but may increase reassembly time."
+			)
+		elif step == 2:
+			input_prompt(
+				"Where should we look for projects?",
+				explanation="If you have used Inner Core Mod Toolchain earlier, you may choose where to search for projects. Either import an obsolete project or modification for Inner Core."
+			)
+		else:
+			return
+		do_next_step(step + 1)
+
+	try:
+		do_next_step()
+	except KeyboardInterrupt or EOFError:
+		pretty_print("* Preconfiguration was canceled, you can do it later, execute `icmtoolchain --help` for a list of commands.")
+		return None
+
+	username = ensure_not_whitespace(username)
+	if username:
+		GLOBALS.TOOLCHAIN_CONFIG.set_value("template.author", username)
+
 	if typescript:
 		if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
 			GLOBALS.TOOLCHAIN_CONFIG.remove_value("denyTypeScript")
