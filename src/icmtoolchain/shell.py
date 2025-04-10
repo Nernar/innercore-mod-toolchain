@@ -13,7 +13,7 @@ from prompt_toolkit.formatted_text import (AnyFormattedText,
                                            merge_formatted_text,
                                            to_formatted_text)
 from prompt_toolkit.key_binding import (KeyBindings, KeyBindingsBase,
-                                        KeyPressEvent)
+                                        KeyPressEvent, merge_key_bindings)
 from prompt_toolkit.key_binding.bindings.focus import (focus_next,
                                                        focus_previous)
 from prompt_toolkit.keys import Keys
@@ -100,6 +100,7 @@ class Interactable(FormattedTextControl):
 		style: str = "",
 		dont_extend_height: bool = True,
 		dont_extend_width: bool = False,
+		key_bindings: Optional[KeyBindingsBase] = None,
 		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
 		wrap_lines: FilterOrBool = True,
 		show_cursor: bool = False,
@@ -115,7 +116,8 @@ class Interactable(FormattedTextControl):
 			text=self.render_text,
 			style=style,
 			focusable=focusable,
-			show_cursor=show_cursor
+			key_bindings=key_bindings,
+			show_cursor=show_cursor,
 		)
 
 		self.has_focus = has_focus(self)
@@ -140,6 +142,7 @@ class Interactable(FormattedTextControl):
 			],
 		)
 
+		self.interact_key_bindings = None
 		if add_interact_key_bindings:
 			self.add_interact_key_bindings()
 		self.on_interact = on_interact
@@ -149,18 +152,24 @@ class Interactable(FormattedTextControl):
 		return self.interactable_text
 
 	def add_interact_key_bindings(self) -> None:
-		if self.key_bindings is None:
-			self.key_bindings = KeyBindings()
-		kb = self.key_bindings
+		if not self.interact_key_bindings:
+			self.interact_key_bindings = KeyBindings()
+		bindings = self.interact_key_bindings
 
-		@kb.add(Keys.Enter)
-		@kb.add(" ")
+		@bindings.add(Keys.Enter)
+		@bindings.add(" ")
 		def _(event: KeyPressEvent) -> None:
 			self.interact(event)
 
 	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
 		if self.on_interact:
 			self.on_interact(self)
+
+	def get_key_bindings(self) -> Optional[KeyBindingsBase]:
+		key_bindings = super().get_key_bindings()
+		if key_bindings and self.interact_key_bindings:
+			return merge_key_bindings([key_bindings, self.interact_key_bindings])
+		return key_bindings or self.interact_key_bindings
 
 	def __pt_container__(self) -> Container:
 		return self.window
@@ -180,6 +189,7 @@ class Selectable(Interactable):
 		style: str = "",
 		dont_extend_height: bool = True,
 		dont_extend_width: bool = False,
+		key_bindings: Optional[KeyBindingsBase] = None,
 		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
 		wrap_lines: FilterOrBool = True,
 		show_cursor: bool = False,
@@ -200,6 +210,7 @@ class Selectable(Interactable):
 			style=style,
 			dont_extend_height=dont_extend_height,
 			dont_extend_width=dont_extend_width,
+			key_bindings=key_bindings,
 			align=align,
 			wrap_lines=wrap_lines,
 			show_cursor=show_cursor,
@@ -254,6 +265,7 @@ class Editable(BufferControl):
         on_text_changed: Optional[BufferEventHandler] = None,
 		dont_extend_height: bool = True,
 		dont_extend_width: bool = False,
+		key_bindings: Optional[KeyBindingsBase] = None,
 		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
 		wrap_lines: FilterOrBool = True,
 		input_processors: Optional[List[Processor]] = None,
@@ -288,6 +300,7 @@ class Editable(BufferControl):
 			search_buffer_control=search_buffer_control,
 			menu_position=menu_position,
 			focus_on_click=focus_on_click,
+			key_bindings=key_bindings,
 		)
 
 		self.has_focus = has_focus(self)
@@ -330,6 +343,7 @@ class Editable(BufferControl):
 			),
 		))
 
+		self.interact_key_bindings = None
 		if add_interact_key_bindings:
 			self.add_interact_key_bindings()
 		self.on_interact = on_interact
@@ -345,11 +359,11 @@ class Editable(BufferControl):
 		return not self.buffer.multiline() or len(self.buffer.text) == 0
 
 	def add_interact_key_bindings(self) -> None:
-		if self.key_bindings is None:
-			self.key_bindings = KeyBindings()
-		kb = self.key_bindings
+		if not self.interact_key_bindings:
+			self.interact_key_bindings = KeyBindings()
+		bindings = self.interact_key_bindings
 
-		@kb.add(Keys.Enter, filter=Condition(self.is_interactable))
+		@bindings.add(Keys.Enter, filter=Condition(self.is_interactable))
 		def _(event: KeyPressEvent) -> None:
 			self.interact(event)
 
@@ -365,6 +379,12 @@ class Editable(BufferControl):
 		if fallback_allowed and self.use_hint_as_fallback:
 			return self.hint
 		return None
+
+	def get_key_bindings(self) -> Optional[KeyBindingsBase]:
+		key_bindings = super().get_key_bindings()
+		if key_bindings and self.interact_key_bindings:
+			return merge_key_bindings([key_bindings, self.interact_key_bindings])
+		return key_bindings or self.interact_key_bindings
 
 	def __pt_container__(self) -> Container:
 		return self.window
@@ -389,6 +409,7 @@ class Progress(UIControl):
 		style: str = "",
 		dont_extend_height: bool = True,
 		dont_extend_width: bool = False,
+		key_bindings: Optional[KeyBindingsBase] = None,
 		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
 		wrap_lines: FilterOrBool = True,
 		add_interact_key_bindings: bool = False,
@@ -428,7 +449,8 @@ class Progress(UIControl):
 		)
 
 		self.style = style
-		self.key_bindings = None
+		self.key_bindings = key_bindings
+		self.interact_key_bindings = None
 		if add_interact_key_bindings:
 			self.add_interact_key_bindings()
 		self.on_interact = on_interact
@@ -438,12 +460,12 @@ class Progress(UIControl):
 		return self.focusable()
 
 	def add_interact_key_bindings(self) -> None:
-		if self.key_bindings is None:
-			self.key_bindings = KeyBindings()
-		kb = self.key_bindings
+		if not self.interact_key_bindings:
+			self.interact_key_bindings = KeyBindings()
+		bindings = self.interact_key_bindings
 
-		@kb.add(Keys.Enter)
-		@kb.add(" ")
+		@bindings.add(Keys.Enter)
+		@bindings.add(" ")
 		def _(event: KeyPressEvent) -> None:
 			self.interact(event)
 
@@ -452,7 +474,9 @@ class Progress(UIControl):
 			self.on_interact(self)
 
 	def get_key_bindings(self) -> Optional[KeyBindingsBase]:
-		return self.key_bindings
+		if self.key_bindings and self.interact_key_bindings:
+			return merge_key_bindings([self.key_bindings, self.interact_key_bindings])
+		return self.key_bindings or self.interact_key_bindings
 
 	def render_progress(self, offset: int, width: int) -> AnyFormattedText:
 		time_left = self.time_left()
@@ -567,16 +591,18 @@ class Debugger(Interactable):
 		]
 
 
-def select_prompt_internal(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, fallback: Optional[int] = None) -> Tuple[Optional[int], Optional[Any]]:
+def select_prompt_internal(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, selected_variant: Optional[str] = None, fallback: Optional[int] = None) -> Tuple[Optional[int], Optional[Any]]:
 	immutable_variants = list(variants)
 	assert fallback is None or fallback >= 0
 	choice_variants: Sequence[AnyContainer] = []
+	focused_interactable = None
 	which_offset = 0
 	for variant in immutable_variants:
 		text = text_transformer(variant, which_offset) if text_transformer else variant
-		choice_variants.append(
-			Interactable(text, focusable=True, show_cursor=False, tag=which_offset)
-		)
+		interactable = Interactable(text, focusable=True, show_cursor=False, tag=which_offset)
+		if selected_variant and text == selected_variant:
+			focused_interactable = interactable
+		choice_variants.append(interactable)
 		which_offset += 1
 
 	bindings = KeyBindings()
@@ -586,7 +612,6 @@ def select_prompt_internal(prompt: Optional[str] = None, *variants: str, text_tr
 	@bindings.add(Keys.Enter)
 	@bindings.add(" ")
 	def _(event: KeyPressEvent) -> None:
-		event.app.layout.current_control
 		event.app.exit()
 
 	@bindings.add("c-c")
@@ -605,7 +630,7 @@ def select_prompt_internal(prompt: Optional[str] = None, *variants: str, text_tr
 		contents.append(Interactable(prompt))
 	contents.append(choice_container)
 	app = Application(
-		layout=Layout(HSplit(contents)),
+		layout=Layout(HSplit(contents), focused_interactable),
 		style=get_toolchain_style(),
 		include_default_pygments_style=False,
 		key_bindings=bindings,
@@ -631,12 +656,110 @@ def select_prompt_internal(prompt: Optional[str] = None, *variants: str, text_tr
 	return which, what
 
 @overload
-def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, fallback: Optional[int] = None, returns_what: Literal[False] = False) -> Optional[int]: ...
+def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, selected_variant: Optional[str] = None, fallback: Optional[int] = None, returns_what: Literal[False] = False) -> Optional[int]: ...
 @overload
-def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, fallback: Optional[int] = None, returns_what: Literal[True] = True) -> Optional[str]: ...
+def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, selected_variant: Optional[str] = None, fallback: Optional[int] = None, returns_what: Literal[True] = True) -> Optional[str]: ...
 
-def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, fallback: Optional[int] = None, returns_what: bool = False) -> Optional[Union[str, int]]:
-	return select_prompt_internal(prompt, *variants, text_transformer=text_transformer, fallback=fallback)[1 if returns_what else 0]
+def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, selected_variant: Optional[str] = None, fallback: Optional[int] = None, returns_what: bool = False) -> Optional[Union[str, int]]:
+	return select_prompt_internal(prompt, *variants, text_transformer=text_transformer, selected_variant=selected_variant, fallback=fallback)[1 if returns_what else 0]
+
+def input_prompt(prompt: Optional[str] = None, default_text: Optional[str] = None, explanation: Optional[str] = None, on_text_changed: Optional[Callable[[Editable, Interactable], None]] = None, fallback: Optional[str] = None) -> Optional[str]:
+	contents: Sequence[AnyContainer] = []
+
+	def on_typo(buffer: Buffer) -> None:
+		if on_text_changed:
+			on_text_changed(input_field, explanation_popup)
+
+	input_field = Editable(prompt=f"{prompt or 'Provide a input:'} ", text=default_text or "", hint=fallback, on_text_changed=on_typo, on_interact=lambda _: app.exit())
+	contents.append(input_field)
+
+	explanation_popup = Interactable(explanation, style="class:editable.hint")
+	# if explanation and len(explanation) > 0:
+	contents.append(explanation_popup)
+
+	bindings = KeyBindings()
+
+	@bindings.add("c-c")
+	@bindings.add("<sigint>")
+	def _(event: KeyPressEvent) -> NoReturn:
+		event.app.exit()
+		raise KeyboardInterrupt()
+
+	app = Application(
+		layout=Layout(HSplit(contents)),
+		style=get_toolchain_style(),
+		include_default_pygments_style=False,
+		key_bindings=bindings,
+		full_screen=False,
+		mouse_support=True,
+		erase_when_done=True,
+	)
+
+	requires_fallback = False
+	try:
+		app.run()
+	except KeyboardInterrupt or EOFError:
+		requires_fallback = True
+
+	value = None
+	if not requires_fallback:
+		value = input_field.get_value()
+	if value is None:
+		value = fallback
+	if value is not None:
+		pretty_print_answer(prompt, value)
+
+	return value
+
+def confirm_prompt(prompt: Optional[str] = None, explanation: Optional[str] = None, fallback: bool = True) -> bool:
+	contents: Sequence[AnyContainer] = []
+	contents.append(
+		Editable(prompt=f"{prompt or 'Are you sure?'} ({'Y/n' if fallback else 'N/y'})", hint="", add_interact_key_bindings=False)
+	)
+	if explanation and len(explanation) > 0:
+		contents.append(
+			Interactable(explanation, style="class:editable.hint")
+		)
+
+	bindings = KeyBindings()
+
+	@bindings.add(Keys.Enter)
+	@bindings.add(" ")
+	def _(event: KeyPressEvent) -> None:
+		event.app.exit()
+
+	@bindings.add("y")
+	@bindings.add("Y")
+	def _(event: KeyPressEvent) -> None:
+		event.app.exit(result=True)
+
+	@bindings.add("n")
+	@bindings.add("N")
+	def _(event: KeyPressEvent) -> None:
+		event.app.exit(result=False)
+
+	@bindings.add("c-c")
+	@bindings.add("<sigint>")
+	def _(event: KeyPressEvent) -> NoReturn:
+		event.app.exit()
+		raise KeyboardInterrupt()
+
+	app = Application(
+		layout=Layout(HSplit(contents)),
+		style=get_toolchain_style(),
+		include_default_pygments_style=False,
+		key_bindings=bindings,
+		full_screen=False,
+		mouse_support=True,
+		erase_when_done=True,
+	)
+
+	try:
+		result = app.run()
+	except KeyboardInterrupt or EOFError:
+		result = fallback
+	pretty_print_answer(prompt, "Yes" if result else "No")
+	return result
 
 def confirm(prompt: str, fallback: bool, prints_abort: bool = True) -> bool:
 	try:
