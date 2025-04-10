@@ -82,7 +82,7 @@ def run_test():
 	from itertools import cycle
 	from random import randint, random
 
-	from prompt_toolkit import Application, print_formatted_text
+	from prompt_toolkit import Application
 	from prompt_toolkit.key_binding import KeyBindings
 	from prompt_toolkit.key_binding.bindings.focus import (focus_next,
 	                                                       focus_previous)
@@ -187,7 +187,7 @@ def run_test():
 		info("[INFO] aboba")
 		warn("[WARN] aboba")
 		error("[ERROR] aboba")
-		pretty_print("Wow! You are wonderful!".center(55), style="selection")
+		pretty_print("Wow! You are wonderful!".center(55), style="class:selection")
 
 	contents = [
 		task1.content,

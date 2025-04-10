@@ -521,6 +521,7 @@ class Debugger(Interactable):
 			dont_extend_width=True,
 			align=align,
 			wrap_lines=False,
+			tag=tag,
 		)
 
 	def preferred_width(self, max_available_width: int) -> int:
@@ -559,10 +560,10 @@ class Debugger(Interactable):
 		buffer.append(f"{len(app.layout.visible_windows)}vw")
 		buffer.append(f"{sum(1 for _ in app.layout.find_all_windows())}w")
 		text = " " + "".join(buffer) + " "
-		if len(text) > self._max_available_width:
-			text = text[:self._max_available_width - 2] + "+ "
+		if len(text) > max_available_width:
+			text = text[:max_available_width - 2] + "+ "
 		return [
-			("class:debugger-overlay", text.center(self._max_available_width, "▄").replace("▄▄", "▄▀")),
+			("class:debugger-overlay", text.center(max_available_width, "▄").replace("▄▄", "▄▀")),
 		]
 
 
