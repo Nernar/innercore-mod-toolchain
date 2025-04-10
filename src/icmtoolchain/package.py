@@ -6,8 +6,9 @@ from typing import Any, Dict, List, NoReturn, Optional
 
 from . import GLOBALS
 from .base_config import BaseConfig
-from .shell import (Editable, Interactable, Selectable, abort, error,
-                    get_toolchain_style, pretty_print, select_prompt, warn)
+from .shell import (Editable, Interactable, Selectable, abort, confirm_prompt,
+                    error, get_toolchain_style, input_prompt, pretty_print,
+                    select_prompt, warn)
 from .utils import (copy_file, ensure_not_whitespace, get_all_files,
                     get_project_folder_by_name, name_to_identifier,
                     remove_tree)
@@ -190,6 +191,115 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 		version_editable.get_value(fallback_allowed=True),
 		description_editable.get_value(fallback_allowed=True),
 		client_side_selectable.is_checked(),
+	)
+
+def new_project_stepwise(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
+	# if not template or not exists(GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(template)):
+	# 	return new_project(template=select_template())
+	# template_make_path = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(template + "/template.json")
+	# try:
+	# 	with open(template_make_path, encoding="utf-8") as template_make:
+	# 		template_config = BaseConfig(json.loads(template_make.read()))
+	# except BaseException as err:
+	# 	if len(GLOBALS.PROJECT_MANAGER.templates) > 1:
+	# 		return new_project(None)
+	# 	abort(f"Malformed '{template}/template.json', nothing to do.", cause=err)
+	template_config = BaseConfig()
+
+	have_template = GLOBALS.TOOLCHAIN_CONFIG.get_value("template") is not None
+	always_skip_description = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.skipDescription", False)
+
+	ilya_moment = False
+	output_directory = None
+	project_name = None
+	project_author = None
+	project_version = None
+	project_description = None
+	is_client_side = False
+
+	def update_project_name(input: Editable, explanation: Interactable) -> None:
+		text = input.get_value(fallback_allowed=False)
+		nonlocal output_directory
+		if text:
+			output_directory = get_project_folder_by_name(GLOBALS.TOOLCHAIN_CONFIG.directory, text)
+		else:
+			output_directory = None
+		if output_directory:
+			explanation.interactable_text = f"It will be created and located in {output_directory!r} directory."
+		else:
+			explanation.interactable_text = ""
+
+	def do_next_step(step: int = -1) -> None:
+		if step == -1:
+			nonlocal ilya_moment
+			ilya_moment = confirm_prompt("Are you Reider745?", fallback=False)
+		elif step == 0:
+			if len(GLOBALS.PROJECT_MANAGER.templates) > 1:
+				nonlocal template
+				template = select_prompt(
+					"Which template should be used?",
+					*GLOBALS.PROJECT_MANAGER.templates,
+					fallback=0, returns_what=True
+				)
+		elif step == 1:
+			nonlocal project_name
+			project_name = input_prompt(
+				"Decide a name for your project:" if not ilya_moment else "Name:",
+				default_text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.name", ""),
+				fallback=template_config.get_value("info.name", "Template Mod"),
+				on_text_changed=update_project_name
+			)
+		elif step == 2:
+			nonlocal project_author
+			project_author = input_prompt(
+				"Author who crafted this creation:" if not ilya_moment else "Author:",
+				default_text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.author", ""),
+				fallback=template_config.get_value("info.author")
+			)
+		elif step == 3:
+			nonlocal project_version
+			project_version = input_prompt(
+				"What version a project starts from:" if not ilya_moment else "Version:",
+				default_text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.version", ""),
+				fallback=template_config.get_value("info.version", "1.0")
+			)
+		elif step == 4:
+			nonlocal project_description
+			project_description = input_prompt(
+				"Describe this masterpiece in one sentence:" if not ilya_moment else "Description:",
+				default_text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.description", ""),
+				fallback=template_config.get_value("info.description")
+			)
+		elif step == 5:
+			nonlocal is_client_side
+			is_client_side = confirm_prompt(
+				"Is it a client mod that not requires server?" if not ilya_moment else "Client side?",
+				fallback=False
+			)
+		else:
+			return
+		do_next_step(step + 1)
+
+	try:
+		do_next_step()
+	except KeyboardInterrupt or EOFError:
+		pretty_print("Abort.")
+		return None
+
+	if not output_directory:
+		abort("Not found 'directory' property in observer!")
+	if not have_template or True: # XXX: TEST
+		pretty_print("You can override template by setting `template` property in your 'toolchain.json', it will be automatically apply when you create a new project. Properties remain same as `info` property in 'make.json'.", style="class:editable.hint")
+	pretty_print(f"Copying template {template!r} to {output_directory!r}")
+
+	return GLOBALS.PROJECT_MANAGER.create_project(
+		template or "XXX",
+		output_directory,
+		project_name,
+		project_author,
+		project_version,
+		project_description,
+		is_client_side,
 	)
 
 def new_project_questionary(template: Optional[str] = "../toolchain-mod") -> Optional[int]:

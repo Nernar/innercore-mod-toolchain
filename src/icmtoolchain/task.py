@@ -590,3 +590,9 @@ def task_create_2() -> int:
 	from .package import new_project_questionary
 	new_project_questionary(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
 	return 0
+
+@task("testCreate3")
+def task_create_3() -> int:
+	from .package import new_project_stepwise
+	new_project_stepwise(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
+	return 0
