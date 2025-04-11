@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:de75a47a4ffd38f6346bdeff955ef030ed082f3c7eaf09ecc5a252bf821a4893"
+content_hash = "sha256:1552949492ceb7e83bd450325139abaf32f11a376ccd18b765ac7d29d0d4a5a9"
 
 [[metadata.targets]]
 requires_python = ">=3.7"
@@ -22,20 +22,6 @@ dependencies = [
 files = [
     {file = "prompt_toolkit-3.0.48-py3-none-any.whl", hash = "sha256:f49a827f90062e411f1ce1f854f2aedb3c23353244f8108b89283587397ac10e"},
     {file = "prompt_toolkit-3.0.48.tar.gz", hash = "sha256:d6623ab0477a80df74e646bdbc93621143f5caf104206aa29294d53de1a03d90"},
-]
-
-[[package]]
-name = "questionary"
-version = "1.10.0"
-requires_python = ">=3.6,<4.0"
-summary = "Python library to build pretty command line user prompts ⭐️"
-groups = ["default"]
-dependencies = [
-    "prompt-toolkit<4.0,>=2.0",
-]
-files = [
-    {file = "questionary-1.10.0-py3-none-any.whl", hash = "sha256:fecfcc8cca110fda9d561cb83f1e97ecbb93c613ff857f655818839dac74ce90"},
-    {file = "questionary-1.10.0.tar.gz", hash = "sha256:600d3aefecce26d48d97eee936fdb66e4bc27f934c3ab6dd1e292c4f43946d90"},
 ]
 
 [[package]]

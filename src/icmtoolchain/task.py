@@ -567,38 +567,26 @@ def task_cleanup() -> int:
 
 ### TESTS
 
-@task("testSetup1")
-def task_setup_1() -> int:
+@task("testStartup")
+def task_test_startup() -> int:
 	from .component import startup
 	startup()
 	return 0
 
-@task("testSetup2")
-def task_setup_2() -> int:
-	from .component import startup_questionary
-	startup_questionary()
-	return 0
-
-@task("testSetup3")
-def task_setup_3() -> int:
+@task("testStartupStepwise")
+def task_test_startup_stepwise() -> int:
 	from .component import startup_stepwise
 	startup_stepwise()
 	return 0
 
-@task("testCreate1")
-def task_create_1() -> int:
+@task("testNewProject")
+def task_test_new_project() -> int:
 	from .package import new_project
 	new_project(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
 	return 0
 
-@task("testCreate2")
-def task_create_2() -> int:
-	from .package import new_project_questionary
-	new_project_questionary(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
-	return 0
-
-@task("testCreate3")
-def task_create_3() -> int:
+@task("testNewProjectStepwise")
+def task_test_new_project_stepwise() -> int:
 	from .package import new_project_stepwise
 	new_project_stepwise(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
 	return 0

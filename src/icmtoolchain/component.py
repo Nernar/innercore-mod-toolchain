@@ -264,54 +264,6 @@ def startup_stepwise() -> None:
 
 	pretty_print(f"* Setup procedure is completed, Inner Core Mod Toolchain has been installed to {get_script_directory()!r} directory. Execute `icmtoolchain --help` to obtain a list of available commands. You may need to restart your console to be able to access any commands.")
 
-def startup_questionary() -> None:
-	from questionary import confirm as qconfirm
-	from questionary import form as qform
-	from questionary import text as qtext
-
-	tsc = request_typescript(only_check=True) is not None
-	form = qform(
-		username = qtext(
-			"Who are you?",
-			default=get_username() or "...",
-			instruction="This username, or alias, will be used when creating a project. Author name identifies you on Inner Core Mods."
-		),
-		nodejs = qconfirm(
-			"Do you plan to use Node.js for compilation? This will allow your code to be transpiled by TypeScript Compiler to use ESNext's features, but may increase reassembly time.",
-			default=tsc
-		),
-		import_projects = qtext(
-			"Where should we look for projects?",
-			instruction="If you have used Inner Core Mod Toolchain earlier, you may choose where to search for projects. Either import an obsolete project or modification for Inner Core."
-		)
-	)
-	try:
-		answers = form.unsafe_ask()
-	except KeyboardInterrupt or EOFError:
-		pretty_print("* Preconfiguration was canceled, you can do it later, execute `icmtoolchain --help` for a list of commands.")
-		return None
-
-	username = ensure_not_whitespace(answers["username"])
-	if username:
-		# pretty_print_answer("Who are you?", username)
-		GLOBALS.TOOLCHAIN_CONFIG.set_value("template.author", username)
-
-	typescript = answers["nodejs"]
-	# pretty_print_answer("Do you plan to use Node.js for compilation?", "Yes" if typescript else "No")
-	if typescript:
-		if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
-			GLOBALS.TOOLCHAIN_CONFIG.remove_value("denyTypeScript")
-			GLOBALS.TOOLCHAIN_CONFIG.save()
-		request_typescript()
-	elif tsc:
-		GLOBALS.TOOLCHAIN_CONFIG.set_value("denyTypeScript", True)
-		GLOBALS.TOOLCHAIN_CONFIG.save()
-
-	GLOBALS.TOOLCHAIN_CONFIG.save()
-
-	pretty_print(f"* Setup procedure is completed, Inner Core Mod Toolchain has been installed to {get_script_directory()!r} directory. Execute `icmtoolchain --help` to obtain a list of available commands. You may need to restart your console to be able to access any commands.")
-
-
 def upgrade() -> int:
 	pretty_print("Nothing to perform.")
 	return 0
