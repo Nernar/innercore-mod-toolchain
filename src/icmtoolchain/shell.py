@@ -404,9 +404,11 @@ class Progress(UIControl):
 		self,
 		text: Optional[str] = None,
 		focusable: FilterOrBool = False,
+		percentage: float = 0.0,
 		on_interact: Optional[Callable[['Progress'], None]] = None,
 		*,
 		style: str = "",
+		display_states: bool = True,
 		dont_extend_height: bool = True,
 		dont_extend_width: bool = False,
 		key_bindings: Optional[KeyBindingsBase] = None,
@@ -422,8 +424,9 @@ class Progress(UIControl):
 		self.start_time = datetime.now()
 		self.stopped = False
 		self.stop_time = None
-		self.percentage = 0.0
+		self.percentage = percentage
 		self.text = text
+		self.display_states = display_states
 
 		self.focusable = to_filter(focusable)
 		self.has_focus = has_focus(self)
@@ -479,20 +482,28 @@ class Progress(UIControl):
 		return self.key_bindings or self.interact_key_bindings
 
 	def render_progress(self, offset: int, width: int) -> AnyFormattedText:
-		time_left = self.time_left()
-		percentage_text = f"{self.percentage:.1f}% "
-		time_left_text = f" {format_timedelta(time_left) if time_left else 'N/A'}"
+		available_width = width
+		if self.display_states:
+			time_left = self.time_left()
+			percentage_text = f"{self.percentage:.1f}% "
+			time_left_text = f" {format_timedelta(time_left) if time_left else 'N/A'}"
+			available_width = available_width - len(percentage_text) - len(time_left_text)
 
-		available_width = width - len(percentage_text) - len(time_left_text)
 		filled_progress_width = int(self.percentage / 100 * available_width)
 		bar_text = self.text.center(available_width) if self.text else " " * available_width
 
-		return [
-			("class:progress.percentage", percentage_text),
-			("class:progress.filled", bar_text[:filled_progress_width]),
-			("class:progress.unfilled", bar_text[filled_progress_width:]),
-			("class:progress.time-left", time_left_text),
-		]
+		if self.display_states:
+			return [
+				("class:progress.percentage", percentage_text),
+				("class:progress.filled", bar_text[:filled_progress_width]),
+				("class:progress.unfilled", bar_text[filled_progress_width:]),
+				("class:progress.time-left", time_left_text),
+			]
+		else:
+			return [
+				("class:progress.filled", bar_text[:filled_progress_width]),
+				("class:progress.unfilled", bar_text[filled_progress_width:]),
+			]
 
 	def create_content(self, width: int, height: int) -> UIContent:
 		return UIContent(
