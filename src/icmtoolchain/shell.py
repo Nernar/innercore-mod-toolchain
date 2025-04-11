@@ -1,3 +1,5 @@
+import os
+import platform
 from datetime import datetime, timedelta
 from io import StringIO
 from typing import (Any, Callable, Dict, List, Literal, NoReturn, Optional,
@@ -42,9 +44,13 @@ TOOLCHAIN_STYLE = {
 	"task.execute": "fg:ansibrightgreen bold",
 	"print.answer": "fg:ansibrightblack",
 	"print.debug": "fg:ansibrightblack",
+	"print.yield": "fg:ansibrightblue",
 	"print.info": "fg:ansibrightgreen",
+	"print.success": "fg:ansibrightgreen",
 	"print.warn": "fg:ansibrightyellow",
+	"print.attention": "fg:ansibrightyellow",
 	"print.error": "fg:ansibrightred",
+	"print.failure": "fg:ansibrightred",
 	"print.abort-message": "fg:ansibrightred bold",
 
 	# interactables styling
@@ -64,6 +70,39 @@ TOOLCHAIN_STYLE = {
 
 def get_toolchain_style() -> Style:
 	return Style.from_dict(TOOLCHAIN_STYLE)
+
+def is_unicode_supported() -> bool:
+	environ = os.environ
+	terminal = environ.get("TERM", "")
+	if platform.system() != "Windows":
+		return terminal != "linux" # Linux console (kernel)
+	return (
+		terminal in {
+			"xterm-256color",
+			"alacritty",
+			"rxvt-unicode",
+			"rxvt-unicode-256color"
+		}
+		or environ.get("TERM_PROGRAM") in {
+			"Terminus-Sublime",
+			"vscode"
+		}
+		or bool(environ.get("WT_SESSION")) # Windows Terminal
+		or bool(environ.get("TERMINUS_SUBLIME")) # Terminus (older versions)
+		or environ.get("ConEmuTask") == "{cmd::Cmder}" # ConEmu/cmder
+		or environ.get("TERMINAL_EMULATOR") == "JetBrains-JediTerm"
+	)
+
+if is_unicode_supported():
+	UNICODE_CHECK_MARK = "✓"
+	UNICODE_POINTED_STAR = "✦"
+	UNICODE_BALLOT_X = "✗"
+	UNICODE_SNOWFLAKE = "❄"
+else:
+	UNICODE_CHECK_MARK = "√"
+	UNICODE_POINTED_STAR = "i"
+	UNICODE_BALLOT_X = "×"
+	UNICODE_SNOWFLAKE = "*"
 
 class InteractableMargin(Margin):
 	def __init__(
@@ -822,6 +861,22 @@ def pretty_print_answer(prompt: AnyFormattedText, *values: object, sep: str=", "
 	if prompt:
 		pretty_print(prompt, end=prompt_end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 	pretty_print(*values, style="class:print.answer", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+
+def pretty_print_success(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
+	pretty_print(UNICODE_CHECK_MARK, style="class:print.success", end=" ")
+	pretty_print(*values, style="class:print.success", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+
+def pretty_print_attention(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
+	pretty_print(UNICODE_POINTED_STAR, style="class:print.attention", end=" ")
+	pretty_print(*values, style="class:print.attention", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+
+def pretty_print_failure(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
+	pretty_print(UNICODE_BALLOT_X, style="class:print.failure", end=" ")
+	pretty_print(*values, style="class:print.failure", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+
+def pretty_print_yield(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
+	pretty_print(UNICODE_SNOWFLAKE, style="class:print.yield", end=" ")
+	pretty_print(*values, style="class:print.yield", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 
 def abort(*values: object, sep: Optional[str] = " ", code: int = 255, cause: Optional[BaseException] = None) -> NoReturn:
 	if cause:
