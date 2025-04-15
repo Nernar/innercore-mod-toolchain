@@ -6,11 +6,12 @@ from typing import (Any, Callable, Dict, List, Literal, NoReturn, Optional,
                     Sequence, Tuple, Union, cast, overload)
 
 from prompt_toolkit import Application, print_formatted_text
-from prompt_toolkit.buffer import Buffer, BufferEventHandler
+from prompt_toolkit.buffer import (Buffer, BufferAcceptHandler,
+                                   BufferEventHandler)
 from prompt_toolkit.document import Document
 from prompt_toolkit.filters import (Condition, FilterOrBool, has_focus,
                                     to_filter)
-from prompt_toolkit.formatted_text import (AnyFormattedText,
+from prompt_toolkit.formatted_text import (AnyFormattedText, FormattedText,
                                            StyleAndTextTuples,
                                            merge_formatted_text,
                                            to_formatted_text)
@@ -29,6 +30,7 @@ from prompt_toolkit.layout.processors import (AfterInput, BeforeInput,
                                               ConditionalProcessor, Processor)
 from prompt_toolkit.lexers import Lexer
 from prompt_toolkit.styles import Style
+from prompt_toolkit.validation import Validator
 
 # prompt-toolkit doesn't have built-in theme styling support, which can be tracked
 # on pull request https://github.com/prompt-toolkit/python-prompt-toolkit/pull/1630
@@ -302,6 +304,9 @@ class Editable(BufferControl):
 		use_hint_as_fallback: bool = True,
 		read_only: FilterOrBool = False,
         on_text_changed: Optional[BufferEventHandler] = None,
+		validator: Optional[Validator] = None,
+		validate_while_typing: FilterOrBool = True,
+		accept_handler: Optional[BufferAcceptHandler] = None,
 		dont_extend_height: bool = True,
 		dont_extend_width: bool = False,
 		key_bindings: Optional[KeyBindingsBase] = None,
@@ -313,8 +318,6 @@ class Editable(BufferControl):
 		preview_search: FilterOrBool = False,
 		search_buffer_control: Optional[Union[SearchBufferControl, Callable[[], SearchBufferControl]]] = None,
 		menu_position: Optional[Callable[[], Optional[int]]] = None,
-		add_interact_key_bindings: bool = True,
-		on_interact: Optional[Callable[['Editable'], None]] = None,
 		idle_selector_text: Optional[str] = "  ",
 		focused_selector_text: Optional[str] = "> ",
 		always_indent: bool = False,
@@ -326,6 +329,9 @@ class Editable(BufferControl):
 			read_only=read_only,
 			# TODO: Handle arrows cursor movement for multine
 			multiline=multiline,
+			validator=validator,
+			validate_while_typing=validate_while_typing,
+			accept_handler=accept_handler,
 			on_text_changed=on_text_changed,
 		)
 		BufferControl.__init__(
@@ -373,6 +379,10 @@ class Editable(BufferControl):
 			self.input_processors = []
 		self.input_processors.extend((
 			ConditionalProcessor(
+				BeforeInput(" "),
+				Condition(self.has_prompt)
+			),
+			ConditionalProcessor(
 				BeforeInput(lambda: self.prompt),
 				Condition(self.has_prompt)
 			),
@@ -383,9 +393,7 @@ class Editable(BufferControl):
 		))
 
 		self.interact_key_bindings = None
-		if add_interact_key_bindings:
-			self.add_interact_key_bindings()
-		self.on_interact = on_interact
+		self.add_interact_key_bindings()
 		self.tag = tag
 
 	def has_prompt(self) -> bool:
@@ -395,21 +403,20 @@ class Editable(BufferControl):
 		return len(self.buffer.text) == 0
 
 	def is_interactable(self) -> bool:
-		return not self.buffer.multiline() or len(self.buffer.text) == 0
+		return len(self.buffer.text) == 0 and self.use_hint_as_fallback and self.hint is not None and not self.buffer.read_only()
 
 	def add_interact_key_bindings(self) -> None:
 		if not self.interact_key_bindings:
 			self.interact_key_bindings = KeyBindings()
 		bindings = self.interact_key_bindings
 
-		@bindings.add(Keys.Enter, filter=Condition(self.is_interactable))
+		@bindings.add(" ", filter=Condition(self.is_interactable))
 		def _(event: KeyPressEvent) -> None:
 			self.interact(event)
 
 	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
-		if self.on_interact:
-			self.on_interact(self)
-		if self.use_hint_as_fallback and self.hint is not None and not self.buffer.read_only() and self.has_hint():
+		if self.is_interactable():
+			assert self.hint is not None
 			self.buffer.document = Document(self.hint)
 
 	def get_value(self, fallback_allowed: bool = True) -> Optional[str]:
@@ -694,7 +701,7 @@ def select_prompt_internal(prompt: Optional[str] = None, *variants: str, text_tr
 		control = app.layout.current_control
 		assert isinstance(control, Interactable)
 		which = cast(int, control.tag)
-	except KeyboardInterrupt or EOFError:
+	except (KeyboardInterrupt, EOFError):
 		which = fallback
 
 	what = None
@@ -714,102 +721,19 @@ def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer
 	return select_prompt_internal(prompt, *variants, text_transformer=text_transformer, selected_variant=selected_variant, fallback=fallback)[1 if returns_what else 0]
 
 def input_prompt(prompt: Optional[str] = None, default_text: Optional[str] = None, explanation: Optional[str] = None, on_text_changed: Optional[Callable[[Editable, Interactable], None]] = None, fallback: Optional[str] = None) -> Optional[str]:
-	contents: Sequence[AnyContainer] = []
+	from .prompt import Input
 
-	def on_typo(buffer: Buffer) -> None:
+	def on_input(input: Input, _: str) -> None:
 		if on_text_changed:
-			on_text_changed(input_field, explanation_popup)
+			on_text_changed(input.input_control, input.explanation_control)
 
-	input_field = Editable(prompt=f"{prompt or 'Provide a input:'} ", text=default_text or "", hint=fallback, on_text_changed=on_typo, on_interact=lambda _: app.exit())
-	contents.append(input_field)
-
-	explanation_popup = Interactable(explanation, style="class:editable.hint")
-	# if explanation and len(explanation) > 0:
-	contents.append(explanation_popup)
-
-	bindings = KeyBindings()
-
-	@bindings.add("c-c")
-	@bindings.add("<sigint>")
-	def _(event: KeyPressEvent) -> NoReturn:
-		event.app.exit()
-		raise KeyboardInterrupt()
-
-	app = Application(
-		layout=Layout(HSplit(contents)),
-		style=get_toolchain_style(),
-		include_default_pygments_style=False,
-		key_bindings=bindings,
-		full_screen=False,
-		mouse_support=True,
-		erase_when_done=True,
-	)
-
-	requires_fallback = False
-	try:
-		app.run()
-	except KeyboardInterrupt or EOFError:
-		requires_fallback = True
-
-	value = None
-	if not requires_fallback:
-		value = input_field.get_value()
-	if value is None:
-		value = fallback
-	if value is not None:
-		pretty_print_answer(prompt, value)
-
-	return value
+	input = Input(prompt=prompt, hint=fallback, explanation=explanation, default_text=default_text or "", on_input=on_input)
+	return input.request_safe()
 
 def confirm_prompt(prompt: Optional[str] = None, explanation: Optional[str] = None, fallback: bool = True) -> bool:
-	contents: Sequence[AnyContainer] = []
-	contents.append(
-		Editable(prompt=f"{prompt or 'Are you sure?'} ({'Y/n' if fallback else 'N/y'})", hint="", add_interact_key_bindings=False)
-	)
-	if explanation and len(explanation) > 0:
-		contents.append(
-			Interactable(explanation, style="class:editable.hint")
-		)
-
-	bindings = KeyBindings()
-
-	@bindings.add(Keys.Enter)
-	@bindings.add(" ")
-	def _(event: KeyPressEvent) -> None:
-		event.app.exit()
-
-	@bindings.add("y")
-	@bindings.add("Y")
-	def _(event: KeyPressEvent) -> None:
-		event.app.exit(result=True)
-
-	@bindings.add("n")
-	@bindings.add("N")
-	def _(event: KeyPressEvent) -> None:
-		event.app.exit(result=False)
-
-	@bindings.add("c-c")
-	@bindings.add("<sigint>")
-	def _(event: KeyPressEvent) -> NoReturn:
-		event.app.exit()
-		raise KeyboardInterrupt()
-
-	app = Application(
-		layout=Layout(HSplit(contents)),
-		style=get_toolchain_style(),
-		include_default_pygments_style=False,
-		key_bindings=bindings,
-		full_screen=False,
-		mouse_support=True,
-		erase_when_done=True,
-	)
-
-	try:
-		result = app.run()
-	except KeyboardInterrupt or EOFError:
-		result = fallback
-	pretty_print_answer(prompt, "Yes" if result else "No")
-	return result
+	from .prompt import Confirm
+	confirm = Confirm(prompt=prompt, explanation=explanation, default_value=fallback)
+	return confirm.request_safe()
 
 def confirm(prompt: str, fallback: bool, prints_abort: bool = True) -> bool:
 	try:
@@ -843,7 +767,14 @@ def image(base64: str, options: Optional[Dict[str, object]] = None) -> str:
 	return f"{returnValue}:{base64}\a"
 
 def pretty_print(*values: object, style: str = "", sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
-	print_formatted_text(to_formatted_text(stringify(*values, sep=sep), style=style), end=end if end is not None else "\n", file=file, flush=flush, style=get_toolchain_style(), include_default_pygments_style=include_default_pygments_style)
+	baked_style = get_toolchain_style()
+	print_something = False
+	for value in values:
+		if print_something and sep is not None and len(sep) > 0:
+			print_formatted_text(to_formatted_text(sep, style=style), sep="", end="", file=file, flush=flush, style=baked_style, include_default_pygments_style=include_default_pygments_style)
+		text = to_formatted_text(value, style=style, auto_convert=True) # type: ignore
+		print_formatted_text(text, end=end if end is not None else "\n", file=file, flush=flush, style=baked_style, include_default_pygments_style=include_default_pygments_style)
+		print_something = True
 
 def debug(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
 	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.debug", include_default_pygments_style=include_default_pygments_style)
@@ -859,7 +790,7 @@ def error(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", 
 
 def pretty_print_answer(prompt: AnyFormattedText, *values: object, sep: str=", ", end: Optional[str] = "\n", prompt_end: Optional[str] = " ", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
 	if prompt:
-		pretty_print(prompt, end=prompt_end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+		pretty_print_success(prompt, end=prompt_end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 	pretty_print(*values, style="class:print.answer", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 
 def pretty_print_success(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
