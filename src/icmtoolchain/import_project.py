@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from . import GLOBALS
 from .base_config import BaseConfig
 from .hglob import glob
-from .shell import abort, confirm, debug, pretty_print, warn
+from .shell import abort, confirm_prompt, debug, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory,
                     get_project_folder_by_name)
 
@@ -275,8 +275,7 @@ def import_project(path: Optional[str] = None, destination: Optional[str] = None
 	with open(make_project, "w", encoding="utf-8") as make_file:
 		make_file.write(json.dumps(make_obj, indent="\t", ensure_ascii=False) + "\n")
 
-	if destination == path and not \
-			confirm("Do you want to copy reassigned directories in directory itself?", False, prints_abort=False):
+	if destination == path and not confirm_prompt("Do you want to copy reassigned directories in directory itself?", False):
 		abort()
 
 	debug("Copying files and directories")

@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from . import GLOBALS
 from .hglob import glob
 from .make_config import MakeConfig
-from .shell import (abort, confirm, error, link, pretty_print, select_prompt,
+from .shell import (abort, confirm_prompt, error, pretty_print, select_prompt,
                     warn)
 from .utils import DEVNULL
 
@@ -433,7 +433,7 @@ def get_adb_command_by_serial(serial: str) -> List[str]:
 def get_adb_command_by_tcp(ip: str, port: Optional[int] = None, skip_error: bool = False) -> Optional[List[str]]:
 	ensure_server_running()
 	if not get_adb_command_by_serialno_type("-e", silent=skip_error):
-		if skip_error or not confirm("Are you sure want to save it?", False):
+		if skip_error or not confirm_prompt("Are you sure want to save it?", False):
 			return None
 	device: dict[str, Any] = {
 		"ip": ip

@@ -4,7 +4,8 @@ import re
 import shutil
 import subprocess
 from os.path import abspath, exists, isdir, isfile, islink, join
-from typing import Any, Callable, Dict, Iterable, List, Optional, TextIO, Union, overload
+from typing import (Any, Callable, Dict, Iterable, List, Optional, TextIO,
+                    Union, overload)
 from zipfile import ZipFile, ZipInfo
 
 from . import GLOBALS
@@ -265,11 +266,11 @@ def request_typescript(only_check: bool = False) -> Optional[str]:
 	"""
 	if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
 		return None
-	from .shell import confirm, error, info
+	from .shell import confirm_prompt, error, info
 	tsc = shutil.which("tsc") or request_tool("tsc")
 	if tsc or only_check:
 		return tsc
-	if not confirm("Do you want to enable TypeScript and ES6+ support (requires Node.js to build project) [Y/n]?", True):
+	if not confirm_prompt("Do you want to enable TypeScript and ES6+ support (requires Node.js to build project)?", True):
 		return None
 	info("Updating TypeScript globally via npm...")
 	subprocess.run("npm install -g typescript")

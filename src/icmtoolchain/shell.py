@@ -3,27 +3,23 @@ import platform
 from datetime import datetime, timedelta
 from io import StringIO
 from typing import (Any, Callable, Dict, List, Literal, NoReturn, Optional,
-                    Sequence, Tuple, Union, cast, overload)
+                    Union, overload)
 
-from prompt_toolkit import Application, print_formatted_text
+from prompt_toolkit import print_formatted_text
 from prompt_toolkit.buffer import (Buffer, BufferAcceptHandler,
                                    BufferEventHandler)
 from prompt_toolkit.document import Document
 from prompt_toolkit.filters import (Condition, FilterOrBool, has_focus,
                                     to_filter)
-from prompt_toolkit.formatted_text import (AnyFormattedText, FormattedText,
+from prompt_toolkit.formatted_text import (AnyFormattedText,
                                            StyleAndTextTuples,
                                            merge_formatted_text,
                                            to_formatted_text)
 from prompt_toolkit.key_binding import (KeyBindings, KeyBindingsBase,
                                         KeyPressEvent, merge_key_bindings)
-from prompt_toolkit.key_binding.bindings.focus import (focus_next,
-                                                       focus_previous)
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.layout import (AnyContainer, BufferControl,
-                                   ConditionalMargin, Container, Dimension,
-                                   FormattedTextControl, HSplit, Layout,
-                                   Margin, ScrollablePane, ScrollOffsets,
+from prompt_toolkit.layout import (BufferControl, ConditionalMargin, Container,
+                                   Dimension, FormattedTextControl, Margin,
                                    SearchBufferControl, UIContent, UIControl,
                                    Window, WindowAlign, WindowRenderInfo)
 from prompt_toolkit.layout.processors import (AfterInput, BeforeInput,
@@ -648,77 +644,17 @@ class Debugger(Interactable):
 		]
 
 
-def select_prompt_internal(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, selected_variant: Optional[str] = None, fallback: Optional[int] = None) -> Tuple[Optional[int], Optional[Any]]:
-	immutable_variants = list(variants)
-	assert fallback is None or fallback >= 0
-	choice_variants: Sequence[AnyContainer] = []
-	focused_interactable = None
-	which_offset = 0
-	for variant in immutable_variants:
-		text = text_transformer(variant, which_offset) if text_transformer else variant
-		interactable = Interactable(text, focusable=True, show_cursor=False, tag=which_offset)
-		if selected_variant and text == selected_variant:
-			focused_interactable = interactable
-		choice_variants.append(interactable)
-		which_offset += 1
-
-	bindings = KeyBindings()
-	bindings.add(Keys.Down)(focus_next)
-	bindings.add(Keys.Up)(focus_previous)
-
-	@bindings.add(Keys.Enter)
-	@bindings.add(" ")
-	def _(event: KeyPressEvent) -> None:
-		event.app.exit()
-
-	@bindings.add("c-c")
-	@bindings.add("<sigint>")
-	def _(event: KeyPressEvent) -> NoReturn:
-		event.app.exit()
-		raise KeyboardInterrupt()
-
-	choice_container = ScrollablePane(
-		HSplit(choice_variants),
-		scroll_offsets=ScrollOffsets(3, 3),
-		display_arrows=False,
-	)
-	contents: Sequence[AnyContainer] = []
-	if prompt:
-		contents.append(Interactable(prompt))
-	contents.append(choice_container)
-	app = Application(
-		layout=Layout(HSplit(contents), focused_interactable),
-		style=get_toolchain_style(),
-		include_default_pygments_style=False,
-		key_bindings=bindings,
-		full_screen=False,
-		mouse_support=True,
-		erase_when_done=True,
-	)
-
-	try:
-		app.run()
-		control = app.layout.current_control
-		assert isinstance(control, Interactable)
-		which = cast(int, control.tag)
-	except (KeyboardInterrupt, EOFError):
-		which = fallback
-
-	what = None
-	if which is not None:
-		what = immutable_variants[which]
-	if what is not None:
-		pretty_print_answer(prompt, what)
-
-	return which, what
-
 @overload
-def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, selected_variant: Optional[str] = None, fallback: Optional[int] = None, returns_what: Literal[False] = False) -> Optional[int]: ...
+def select_prompt(prompt: Optional[str] = None, *variants: str, selected_variant: Optional[Union[str, int]] = None, returns_what: Literal[False] = False, fallback: Optional[Union[str, int]] = None) -> Optional[int]:
+	...
 @overload
-def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, selected_variant: Optional[str] = None, fallback: Optional[int] = None, returns_what: Literal[True] = True) -> Optional[str]: ...
+def select_prompt(prompt: Optional[str] = None, *variants: str, selected_variant: Optional[Union[str, int]] = None, returns_what: Literal[True] = True, fallback: Optional[Union[str, int]] = None) -> Optional[str]:
+	...
 
-def select_prompt(prompt: Optional[str] = None, *variants: str, text_transformer: Optional[Callable[[str, int], AnyFormattedText]] = None, selected_variant: Optional[str] = None, fallback: Optional[int] = None, returns_what: bool = False) -> Optional[Union[str, int]]:
-	return select_prompt_internal(prompt, *variants, text_transformer=text_transformer, selected_variant=selected_variant, fallback=fallback)[1 if returns_what else 0]
+def select_prompt(prompt: Optional[str] = None, *variants: str, selected_variant: Optional[Union[str, int]] = None, returns_what: bool = False, fallback: Optional[Union[str, int]] = None) -> Optional[Union[int, str]]:
+	from .prompt import Select
+	select = Select(prompt=prompt, variants=variants, selected_variant=selected_variant, default_variant=fallback, returns_what=returns_what)
+	return select.request_safe()
 
 def input_prompt(prompt: Optional[str] = None, default_text: Optional[str] = None, explanation: Optional[str] = None, on_text_changed: Optional[Callable[[Editable, Interactable], None]] = None, fallback: Optional[str] = None) -> Optional[str]:
 	from .prompt import Input
@@ -730,22 +666,10 @@ def input_prompt(prompt: Optional[str] = None, default_text: Optional[str] = Non
 	input = Input(prompt=prompt, hint=fallback, explanation=explanation, default_text=default_text or "", on_input=on_input)
 	return input.request_safe()
 
-def confirm_prompt(prompt: Optional[str] = None, explanation: Optional[str] = None, fallback: bool = True) -> bool:
+def confirm_prompt(prompt: Optional[str] = None, fallback: bool = True, explanation: Optional[str] = None) -> bool:
 	from .prompt import Confirm
 	confirm = Confirm(prompt=prompt, explanation=explanation, default_value=fallback)
 	return confirm.request_safe()
-
-def confirm(prompt: str, fallback: bool, prints_abort: bool = True) -> bool:
-	try:
-		if input(prompt + (" [Y/n] " if fallback else " [N/y] ")).lower()[:1] == ("n" if fallback else "y"):
-			if prints_abort and fallback:
-				pretty_print("Abort.")
-			return not fallback
-	except KeyboardInterrupt:
-		pretty_print()
-	if prints_abort and not fallback:
-		pretty_print("Abort.")
-	return fallback
 
 def stringify(*values: object, sep: Optional[str] = " ", end: Optional[str] = "") -> str:
 	buffer = StringIO()

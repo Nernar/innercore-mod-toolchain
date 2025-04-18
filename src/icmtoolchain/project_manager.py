@@ -5,7 +5,7 @@ from typing import Any, Dict, Final, List, Optional, Tuple
 
 from . import GLOBALS
 from .make_config import MakeConfig
-from .shell import abort, confirm, pretty_print, warn
+from .shell import abort, confirm_prompt, pretty_print, warn
 from .utils import ensure_not_whitespace, remove_tree
 
 
@@ -213,7 +213,7 @@ class ProjectManager:
 			if not prompt_when_single:
 				return itwillbe
 			else:
-				if not confirm(prompt_when_single.format(self.get_shortcut(itwillbe)), True):
+				if not confirm_prompt(prompt_when_single.format(self.get_shortcut(itwillbe)), True):
 					return None
 				return itwillbe
 		return select_project(self.projects, prompt, GLOBALS.MAKE_CONFIG.current_project if isinstance(GLOBALS.PREFERRED_CONFIG, MakeConfig) else None, *dont_want_anymore)

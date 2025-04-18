@@ -286,7 +286,10 @@ def new_project_stepwise(template: Optional[str] = "../toolchain-mod") -> Option
 		return None
 
 	if not output_directory:
-		abort("Not found 'directory' property in observer!")
+		assert project_name is not None
+		output_directory = get_project_folder_by_name(GLOBALS.TOOLCHAIN_CONFIG.directory, project_name)
+		if not output_directory:
+			abort("Not found 'directory' property in observer!")
 	if not have_template or True: # XXX: TEST
 		pretty_print("You can override template by setting `template` property in your 'toolchain.json', it will be automatically apply when you create a new project. Properties remain same as `info` property in 'make.json'.", style="class:editable.hint")
 	pretty_print(f"Copying template {template!r} to {output_directory!r}")
@@ -349,13 +352,4 @@ def setup_project(make_obj: Dict[Any, Any], template: str, path: str) -> None:
 			source_file.writelines(lines)
 
 def select_project(variants: List[str], prompt: Optional[str] = "Which project do you want?", selected: Optional[str] = None, *additionals: str) -> Optional[str]:
-	project_count = len(variants)
-
-	def shortcut_transformer(directory: str, offset: int):
-		if offset >= project_count:
-			return directory
-		text = GLOBALS.PROJECT_MANAGER.get_shortcut(directory)
-		from prompt_toolkit.formatted_text import to_formatted_text
-		return to_formatted_text(text, style="class:selection") if directory == selected else text
-
-	return select_prompt(prompt, *variants, *additionals, text_transformer=shortcut_transformer, returns_what=True)
+	return select_prompt(prompt, *variants, *additionals, selected_variant=selected, returns_what=True)

@@ -5,13 +5,12 @@ import subprocess
 import sys
 import zipfile
 from os import environ, getenv, listdir, makedirs
-from os.path import (abspath, basename, dirname, exists, isdir, isfile, join,
-                     realpath)
+from os.path import abspath, dirname, exists, isdir, isfile, join, realpath
 from typing import Any, Generator, List, Optional, Union
 from urllib.error import URLError
 
 from . import GLOBALS
-from .shell import abort, confirm, error, info, link, pretty_print, warn
+from .shell import abort, confirm_prompt, error, info, pretty_print, warn
 from .utils import (AttributeZipFile, RuntimeCodeError, iterate_subdirectories,
                     read_properties_stream, remove_tree)
 
@@ -279,7 +278,7 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False) -
 		question = "Install NDK from Android Repository?"
 		if ndk_version:
 			question = f"Install NDK {ndk_version} from Android Repository?"
-		if reinstall or confirm(question, True):
+		if reinstall or confirm_prompt(question, True):
 			ndk_path = download_gcc(ndk_version=ndk_version)
 		else:
 			abort()

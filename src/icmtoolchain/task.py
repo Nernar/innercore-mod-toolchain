@@ -6,7 +6,7 @@ from typing import Any, Callable, Dict, Final, List, Optional
 
 from . import GLOBALS, PROPERTIES
 from .make_config import MakeConfig
-from .shell import abort, confirm, error, pretty_print, warn
+from .shell import abort, confirm_prompt, error, pretty_print, warn
 from .utils import DEVNULL, ensure_file_directory, remove_tree
 
 
@@ -384,7 +384,7 @@ def task_new_project() -> int:
 		abort()
 	pretty_print("Successfully completed!")
 
-	if not confirm("Select this project?", True):
+	if not confirm_prompt("Select this project?", True):
 		return 0
 	GLOBALS.PROJECT_MANAGER.select_project(index=index)
 	return 0
@@ -398,7 +398,7 @@ def task_import_project(path: str = "", target: str = "") -> int:
 	path = import_project(path if len(path) > 0 else None, target if len(target) > 0 else None)
 	pretty_print("Project successfully imported!")
 
-	if not confirm("Select this project?", True):
+	if not confirm_prompt("Select this project?", True):
 		return 0
 	GLOBALS.PROJECT_MANAGER.select_project(folder=relpath(path, GLOBALS.TOOLCHAIN_CONFIG.directory))
 	return 0
@@ -417,7 +417,7 @@ def task_remove_project() -> int:
 	if not who:
 		pretty_print("Nothing will happen.")
 		return 0
-	if GLOBALS.PROJECT_MANAGER.how_much() > 1 and not confirm("Do you really want to delete it?", True):
+	if GLOBALS.PROJECT_MANAGER.how_much() > 1 and not confirm_prompt("Do you really want to delete it?", True):
 		return 0
 
 	try:
@@ -556,11 +556,11 @@ def task_component_integrity(startup: bool = False) -> int:
 def task_cleanup() -> int:
 	from .package import cleanup_relative_directory
 	if isinstance(GLOBALS.PREFERRED_CONFIG, MakeConfig):
-		if confirm("Do you want to clear selected project cache?", True):
+		if confirm_prompt("Do you want to clear selected project cache?", True):
 			cleanup_relative_directory("build/" + GLOBALS.MAKE_CONFIG.project_unique_name)
 			cleanup_relative_directory(GLOBALS.MOD_STRUCTURE.directory, True)
 		return 0
-	if not confirm("Do you want to clear all projects cache?", True):
+	if not confirm_prompt("Do you want to clear all projects cache?", True):
 		return 0
 	cleanup_relative_directory("build")
 	return 0

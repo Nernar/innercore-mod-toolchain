@@ -1,10 +1,10 @@
 from abc import ABCMeta, abstractmethod
-from typing import Any, Callable, Iterable, NoReturn, Optional, Sequence, Union
+from typing import Any, Callable, Iterable, Optional, Sequence, Union
 
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.formatted_text import (AnyFormattedText,
-                                           merge_formatted_text)
+                                           merge_formatted_text, to_plain_text)
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
 from prompt_toolkit.key_binding.bindings.focus import (focus_next,
                                                        focus_previous)
@@ -121,9 +121,9 @@ class Feedback(metaclass=ABCMeta):
 			pretty_print_success(self.prompt, end=" ")
 			pretty_print(result, style="class:print.answer")
 
-	def complete(self, *, result: object = None) -> None:
+	def complete(self, *, result: object = None, print_result: object = None) -> None:
 		if result is not None:
-			self.print_result(result)
+			self.print_result(print_result if print_result else result)
 		if self.application.is_running:
 			self.application.exit(result=result)
 
@@ -139,7 +139,7 @@ class Input(Feedback):
 		on_validate: Optional[Callable[['Input', str], Optional[bool]]] = None,
 		on_accept: Optional[Callable[['Input', str], Optional[bool]]] = None,
 	):
-		Feedback.__init__(self, prompt=prompt, fallback=default_text)
+		Feedback.__init__(self, prompt=prompt, fallback=default_text or hint)
 		self.control_prompt = prompt
 		self.hint = hint
 		self.use_hint_as_fallback = use_hint_as_fallback
@@ -186,7 +186,8 @@ class Input(Feedback):
 		if self.on_accept:
 			result = self.on_accept(self, buffer.text)
 		if result:
-			self.complete(result=buffer.text)
+			has_text = buffer.text and len(buffer.text) > 0
+			self.complete(result=buffer.text if has_text or not self.use_hint_as_fallback or not self.hint else self.hint)
 		return result is True
 
 class Confirm(Input):
@@ -228,8 +229,9 @@ class Select(Feedback):
 		self,
 		prompt: AnyFormattedText = "What do you like?",
 		variants: Iterable[Optional[str]] = ["Rides", "Guide", "Rides", "Guide", "Rides", "Guide", "Rides", "Guide", "Rides", "Guide", "Rides", "Guide", "Rides", "Guide", "Both"],
-		selected_variant: Optional[str] = None,
-		default_variant: Optional[str] = None,
+		selected_variant: Optional[Union[int, str]] = None,
+		default_variant: Optional[Union[int, str]] = None,
+		returns_what: bool = True,
 		explanation: AnyFormattedText = None,
 		on_accept: Optional[Callable[['Select', str], Optional[bool]]] = None,
 	):
@@ -237,6 +239,7 @@ class Select(Feedback):
 		self.variants = variants
 		self.selected_variant = selected_variant
 		self.default_variant = default_variant
+		self.returns_what = returns_what
 		self.explanation = explanation
 		self.on_accept = on_accept
 
@@ -245,9 +248,17 @@ class Select(Feedback):
 		self.focused_interactable = None
 		which_offset = 0
 		for variant in self.variants:
-			# text = text_transformer(variant, which_offset) if text_transformer else variant
-			interactable = Interactable(variant, focusable=True, show_cursor=False, tag=which_offset)
-			if self.selected_variant and variant == self.selected_variant:
+			is_selected = self.selected_variant is not None and (
+				variant == self.selected_variant or which_offset == self.selected_variant
+			)
+			interactable = Interactable(
+				variant,
+				focusable=True,
+				show_cursor=False,
+				style="class:selection" if is_selected else "",
+				tag=which_offset
+			)
+			if self.default_variant and (variant == self.default_variant or which_offset == self.selected_variant):
 				self.focused_interactable = interactable
 			self.choice_variants.append(interactable)
 			which_offset += 1
@@ -275,8 +286,25 @@ class Select(Feedback):
 		@bindings.add(Keys.Enter)
 		@bindings.add(" ")
 		def _(_: KeyPressEvent) -> None:
-			# MOVE TO FOCUSED
-			self.complete(result=self.default_variant)
+			text = None
+			value = None
+			if self.layout.current_control and isinstance(self.layout.current_control, Interactable):
+				text = to_plain_text(self.layout.current_control.text)
+				value = self.layout.current_control.tag
+			elif self.default_variant is not None:
+				if isinstance(self.default_variant, str):
+					text = self.default_variant
+					for control in self.layout.find_all_controls():
+						if isinstance(control, Interactable) and text == to_plain_text(control.text):
+							value = control.tag
+							break
+				else:
+					value = self.default_variant
+					for control in self.layout.find_all_controls():
+						if isinstance(control, Interactable) and control.tag == self.default_variant:
+							text = to_plain_text(control.text)
+							break
+			self.complete(result=text if self.returns_what else value, print_result=text)
 
 		return bindings
 
