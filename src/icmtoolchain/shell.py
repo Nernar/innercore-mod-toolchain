@@ -96,11 +96,13 @@ if is_unicode_supported():
 	UNICODE_POINTED_STAR = "✦"
 	UNICODE_BALLOT_X = "✗"
 	UNICODE_SNOWFLAKE = "❄"
+	UNICODE_INTERMEDIATE_PROGRESS = ["▖", "▗", "▚","▘", "▝", "▞"]
 else:
 	UNICODE_CHECK_MARK = "√"
 	UNICODE_POINTED_STAR = "i"
 	UNICODE_BALLOT_X = "×"
 	UNICODE_SNOWFLAKE = "*"
+	UNICODE_INTERMEDIATE_PROGRESS = ["▀", "▄"]
 
 class InteractableMargin(Margin):
 	def __init__(
@@ -449,6 +451,7 @@ class Progress(UIControl):
 		percentage: float = 0.0,
 		on_interact: Optional[Callable[['Progress'], None]] = None,
 		*,
+		intermediate: bool = False,
 		style: str = "",
 		display_states: bool = True,
 		dont_extend_height: bool = True,
@@ -469,6 +472,7 @@ class Progress(UIControl):
 		self.percentage = percentage
 		self.text = text
 		self.display_states = display_states
+		self.intermediate = intermediate
 
 		self.focusable = to_filter(focusable)
 		self.has_focus = has_focus(self)
@@ -523,6 +527,11 @@ class Progress(UIControl):
 			return merge_key_bindings([self.key_bindings, self.interact_key_bindings])
 		return self.key_bindings or self.interact_key_bindings
 
+	def render(self, offset: int, width: int) -> AnyFormattedText:
+		if self.intermediate:
+			return self.render_intermediate(offset, width)
+		return self.render_progress(offset, width)
+
 	def render_progress(self, offset: int, width: int) -> AnyFormattedText:
 		available_width = width
 		if self.display_states:
@@ -547,10 +556,26 @@ class Progress(UIControl):
 				("class:progress.unfilled", bar_text[filled_progress_width:]),
 			]
 
+	def render_intermediate(self, offset: int, width: int) -> AnyFormattedText:
+		if not hasattr(self, "intermediate_frame"):
+			self.intermediate_frame = 0
+			self.intermediate_frame_monotic = 0
+		from time import monotonic
+		current_monotic = monotonic()
+		if current_monotic - self.intermediate_frame_monotic > 0.2:
+			self.intermediate_frame_monotic = current_monotic
+			self.intermediate_frame += 1
+			if self.intermediate_frame >= len(UNICODE_INTERMEDIATE_PROGRESS):
+				self.intermediate_frame = 0
+		return [
+			("", f"{UNICODE_INTERMEDIATE_PROGRESS[self.intermediate_frame]} "),
+			("", self.text if self.text is not None else "Please wait...")
+		]
+
 	def create_content(self, width: int, height: int) -> UIContent:
 		return UIContent(
 			get_line=lambda offset: to_formatted_text(
-				self.render_progress(offset, width),
+				self.render(offset, width),
 				self.style
 			),
 			line_count=1,

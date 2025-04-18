@@ -179,6 +179,7 @@ def run_test():
 	# Box cannot cover multiple components, containerify them is cringe
 	whitespace = Window(height=1)
 	progress = Progress("What are we doing?")
+	intermediate_progress = Progress(intermediate=True)
 
 	def do_action():
 		# XXX: patch_stdout is more than 3x time slower, so (run_)in_terminal
@@ -208,6 +209,7 @@ def run_test():
 		task3.description,
 		whitespace,
 		progress,
+		intermediate_progress,
 		whitespace,
 	]
 	for task in pushing_tasks:
@@ -242,6 +244,7 @@ def run_test():
 				progress.percentage = 0
 			else:
 				await asyncio.sleep(0.1)
+			intermediate_progress.text = texts[int(progress.percentage / 25)]
 
 	async def main():
 		app = Application(
