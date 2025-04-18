@@ -1,5 +1,5 @@
 from abc import ABCMeta, abstractmethod
-from typing import Any, Callable, Iterable, Optional, Sequence, Union
+from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Union
 
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
@@ -75,6 +75,10 @@ class Feedback(metaclass=ABCMeta):
 			self._application = self.create_application()
 		return self._application
 
+	def get_result(self) -> Optional[object]:
+		self.inform_if_already_busy()
+		return self.result if hasattr(self, "result") else self.fallback
+
 	def pre_run(self) -> None:
 		pass
 
@@ -84,11 +88,13 @@ class Feedback(metaclass=ABCMeta):
 
 	async def request_async(self) -> Any:
 		self.inform_if_already_busy()
-		return await self.application.run_async(pre_run=self.pre_run)
+		self.result = await self.application.run_async(pre_run=self.pre_run)
+		return self.result
 
 	def request(self) -> Any:
 		self.inform_if_already_busy()
-		return self.application.run(pre_run=self.pre_run)
+		self.result = self.application.run(pre_run=self.pre_run)
+		return self.result
 
 	async def request_async_safe(self, prints_abort: bool = True) -> Any:
 		try:
@@ -122,10 +128,10 @@ class Feedback(metaclass=ABCMeta):
 			pretty_print(result, style="class:print.answer")
 
 	def complete(self, *, result: object = None, print_result: object = None) -> None:
-		if result is not None:
-			self.print_result(print_result if print_result else result)
 		if self.application.is_running:
 			self.application.exit(result=result)
+		if result is not None:
+			self.print_result(print_result if print_result else result)
 
 class Input(Feedback):
 	def __init__(
@@ -135,11 +141,13 @@ class Input(Feedback):
 		explanation: AnyFormattedText = None,
 		default_text: Optional[str] = None,
 		use_hint_as_fallback: bool = True,
+		fallback: object = None,
 		on_input: Optional[Callable[['Input', str], None]] = None,
 		on_validate: Optional[Callable[['Input', str], Optional[bool]]] = None,
 		on_accept: Optional[Callable[['Input', str], Optional[bool]]] = None,
 	):
-		Feedback.__init__(self, prompt=prompt, fallback=default_text or hint)
+		fallback = fallback if fallback is not None else (default_text or hint)
+		Feedback.__init__(self, prompt=prompt, fallback=fallback)
 		self.control_prompt = prompt
 		self.hint = hint
 		self.use_hint_as_fallback = use_hint_as_fallback
@@ -199,7 +207,7 @@ class Confirm(Input):
 		yes_or_no: AnyFormattedText = " (Y/n)",
 		no_or_yes: AnyFormattedText = " (N/y)",
 	):
-		Input.__init__(self, prompt=prompt, hint="", explanation=explanation)
+		Input.__init__(self, prompt=prompt, hint="", explanation=explanation, fallback=default_value)
 		self.control_prompt = merge_formatted_text([prompt, yes_or_no if default_value else no_or_yes])
 		self.default_value = default_value
 		self.read_only = True
@@ -228,14 +236,14 @@ class Select(Feedback):
 	def __init__(
 		self,
 		prompt: AnyFormattedText = "What do you like?",
-		variants: Iterable[Optional[str]] = ["Rides", "Guide", "Rides", "Guide", "Rides", "Guide", "Rides", "Guide", "Rides", "Guide", "Rides", "Guide", "Rides", "Guide", "Both"],
+		variants: Iterable[Optional[str]] = ["Rides", "Guide", "Both"],
 		selected_variant: Optional[Union[int, str]] = None,
 		default_variant: Optional[Union[int, str]] = None,
-		returns_what: bool = True,
+		returns_what: bool = False,
 		explanation: AnyFormattedText = None,
 		on_accept: Optional[Callable[['Select', str], Optional[bool]]] = None,
 	):
-		Feedback.__init__(self, prompt=prompt)
+		Feedback.__init__(self, prompt=prompt, fallback=default_variant)
 		self.variants = variants
 		self.selected_variant = selected_variant
 		self.default_variant = default_variant
@@ -308,7 +316,106 @@ class Select(Feedback):
 
 		return bindings
 
-# REVIEW
+class Review:
+	def __init__(self, **feedback: Union[Optional[Feedback], Callable[['Review'], Optional[Feedback]]]) -> None:
+		self.current_feedback = None
+		self.feedback_keys = [entry for entry in feedback]
+		self.feedback_callables = {
+			entry: feedback[entry] for entry in feedback
+		}
+
+	def request_feedback(self) -> Optional[Feedback]:
+		if not hasattr(self, "current_offset"):
+			raise ValueError("Review#request_feedback: Review.current_offset")
+		if hasattr(self, "current_feedback") and self.current_feedback is not None:
+			self.current_feedback.inform_if_already_busy()
+
+		self.current_feedback = None
+		self.current_key = None
+		while self.current_feedback is None:
+			self.current_offset += 1
+			if len(self.feedback_keys) <= self.current_offset:
+				break
+
+			feedback_key = self.feedback_keys[self.current_offset]
+			if not feedback_key or not feedback_key in self.feedback_callables:
+				continue
+
+			feedback = self.feedback_callables[feedback_key]
+			if callable(feedback):
+				feedback = feedback(self)
+			if feedback is not None:
+				self.current_key = feedback_key
+			self.current_feedback = feedback
+
+		return self.current_feedback
+
+	def receive_feedback(self, returns_empty_properties: bool = False) -> Optional[object]:
+		if not hasattr(self, "current_feedback") or self.current_feedback is None or \
+				not hasattr(self, "current_key") or self.current_key is None:
+			raise ValueError("Review#receive_feedback: Review.current_feedback or Review.current_key")
+		if not hasattr(self, "results") or self.results is None:
+			raise ValueError("Review#receive_feedback: Review.results")
+		self.current_feedback.inform_if_already_busy()
+
+		result = self.current_feedback.get_result()
+		if result is not None or returns_empty_properties:
+			self.results[self.current_key] = result
+		return result
+
+	def request(self, returns_empty_properties: bool = False) -> Dict[str, Any]:
+		assert not self.current_feedback
+		self.results = {}
+		self.current_offset = -1
+		while True:
+			feedback = self.request_feedback()
+			if not feedback:
+				break
+			feedback.request()
+			self.receive_feedback(returns_empty_properties=returns_empty_properties)
+		self.current_feedback = None
+		return self.results
+
+	async def request_async(self, returns_empty_properties: bool = False) -> Any:
+		assert not self.current_feedback
+		self.results = {}
+		self.current_offset = -1
+		while True:
+			feedback = self.request_feedback()
+			if not feedback:
+				break
+			await feedback.request_async()
+			self.receive_feedback(returns_empty_properties=returns_empty_properties)
+		self.current_feedback = None
+		return self.results
+
+	def request_safe(self, prints_abort: bool = True, returns_empty_properties: bool = False) -> Optional[Dict[str, Any]]:
+		try:
+			return self.request(returns_empty_properties=returns_empty_properties)
+		except (KeyboardInterrupt, EOFError):
+			if prints_abort:
+				pretty_print_attention("Abort.")
+
+	async def request_async_safe(self, prints_abort: bool = True, returns_empty_properties: bool = False) -> Optional[Dict[str, Any]]:
+		try:
+			return await self.request_async(returns_empty_properties=returns_empty_properties)
+		except (KeyboardInterrupt, EOFError):
+			if prints_abort:
+				pretty_print_attention("Abort.")
 
 if __name__ == "__main__":
-	Select(selected_variant="Both", default_variant="Guide").request_safe()
+	from random import randint
+	templates_available = randint(0, 1) == 0
+	results = Review(
+		template=lambda review: Select(
+			"Which template should be used?",
+			variants=["Mod Template (../toolchain-mod-template)", "Modding Tools Template (../template-assistant)"],
+			explanation="Templates are used to provide initial project description, create initial files, and more."
+		) if templates_available else None,
+		name=Input("Decide a name for your project:", hint="Template Mod"),
+		author=Input("Author who crafted this creation:", hint="Reider746"),
+		version=Input("What version a project starts from:", hint="1.0"),
+		description=Input("Describe this masterpiece in one sentence:"),
+		client_side=Confirm("Is it a client mod that not requires server?", default_value=False)
+	).request_safe()
+	print(results)

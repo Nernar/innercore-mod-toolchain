@@ -697,8 +697,9 @@ def pretty_print(*values: object, style: str = "", sep: Optional[str] = " ", end
 		if print_something and sep is not None and len(sep) > 0:
 			print_formatted_text(to_formatted_text(sep, style=style), sep="", end="", file=file, flush=flush, style=baked_style, include_default_pygments_style=include_default_pygments_style)
 		text = to_formatted_text(value, style=style, auto_convert=True) # type: ignore
-		print_formatted_text(text, end=end if end is not None else "\n", file=file, flush=flush, style=baked_style, include_default_pygments_style=include_default_pygments_style)
+		print_formatted_text(text, end="", file=file, flush=flush, style=baked_style, include_default_pygments_style=include_default_pygments_style)
 		print_something = True
+	print_formatted_text(end if end is not None else "\n", end="", file=file, flush=flush, style=baked_style, include_default_pygments_style=include_default_pygments_style)
 
 def debug(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
 	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.debug", include_default_pygments_style=include_default_pygments_style)
