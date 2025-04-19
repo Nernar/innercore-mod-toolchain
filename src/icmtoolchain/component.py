@@ -128,7 +128,7 @@ def startup() -> None:
 		Interactable("Today we will finalize setup of your own modding environment. Use arrows and Enter/Space to move through that list in console."),
 		Window(height=1)
 	]
-	username_editable = Editable("Who are you? ", hint=get_username())
+	username_editable = Editable("Who are you?", hint=get_username())
 	contents += [
 		username_editable,
 		Interactable("This username, or alias, will be used when creating a project. Author name identifies you on Inner Core Mods.", style="class:editable.hint"),
@@ -141,7 +141,7 @@ def startup() -> None:
 		Interactable("This will allow your code to be transpiled by TypeScript Compiler to use ESNext's features, but may increase reassembly time.", style="class:editable.hint"),
 		Window(height=1)
 	]
-	import_editable = Editable("Where should we look for projects? ")
+	import_editable = Editable("Where should we look for projects?")
 	contents += [
 		import_editable,
 		Interactable("If you have used Inner Core Mod Toolchain earlier, you may choose where to search for projects. Either import an obsolete project or modification for Inner Core.", style="class:editable.hint"),

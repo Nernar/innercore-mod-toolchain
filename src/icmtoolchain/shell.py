@@ -3,9 +3,9 @@ import platform
 from datetime import datetime, timedelta
 from io import StringIO
 from typing import (Any, Callable, Dict, List, Literal, NoReturn, Optional,
-                    Union, overload)
+                    TypeVar, Union, overload)
 
-from prompt_toolkit import print_formatted_text
+from prompt_toolkit import Application, print_formatted_text
 from prompt_toolkit.buffer import (Buffer, BufferAcceptHandler,
                                    BufferEventHandler)
 from prompt_toolkit.document import Document
@@ -17,11 +17,16 @@ from prompt_toolkit.formatted_text import (AnyFormattedText,
                                            to_formatted_text)
 from prompt_toolkit.key_binding import (KeyBindings, KeyBindingsBase,
                                         KeyPressEvent, merge_key_bindings)
+from prompt_toolkit.key_binding.bindings.focus import (focus_next,
+                                                       focus_previous)
 from prompt_toolkit.keys import Keys
-from prompt_toolkit.layout import (BufferControl, ConditionalMargin, Container,
-                                   Dimension, FormattedTextControl, Margin,
+from prompt_toolkit.layout import (AnyContainer, BufferControl,
+                                   ConditionalMargin, Container, Dimension,
+                                   FormattedTextControl, HSplit, Layout,
+                                   Margin, ScrollablePane, ScrollOffsets,
                                    SearchBufferControl, UIContent, UIControl,
-                                   Window, WindowAlign, WindowRenderInfo)
+                                   Window, WindowAlign, WindowRenderInfo,
+                                   to_container)
 from prompt_toolkit.layout.processors import (AfterInput, BeforeInput,
                                               ConditionalProcessor, Processor)
 from prompt_toolkit.lexers import Lexer
@@ -103,6 +108,93 @@ else:
 	UNICODE_BALLOT_X = "×"
 	UNICODE_SNOWFLAKE = "*"
 	UNICODE_INTERMEDIATE_PROGRESS = ["▀", "▄"]
+
+interactive_application: Optional[Application] = None
+
+def request_application(*content: Optional[AnyContainer]) -> Application:
+	global interactive_application
+	if interactive_application is not None:
+		if interactive_application.is_running:
+			if len(content) != 0:
+				container = interactive_application.layout.container
+				while hasattr(container, "content"):
+					container = container.content # type: ignore
+				assert hasattr(container, "children")
+				children: List[Container] = container.children # type: ignore
+				for control in content:
+					if control and not control in children:
+						children.append(to_container(control))
+			return interactive_application
+		interactive_application = None
+
+	bindings = KeyBindings()
+	bindings.add(Keys.Down)(focus_next)
+	bindings.add(Keys.Up)(focus_previous)
+
+	@bindings.add("c-c")
+	@bindings.add("<sigint>")
+	def _(event: KeyPressEvent) -> None:
+		event.app.exit(exception=KeyboardInterrupt())
+
+	layout = Layout(
+		ScrollablePane(
+			HSplit([
+				to_container(control) for control in content if control
+			]),
+			scroll_offsets=ScrollOffsets(3, 3),
+			display_arrows=False,
+		)
+	)
+
+	interactive_application = Application(
+		layout=layout,
+		style=get_toolchain_style(),
+		include_default_pygments_style=False,
+		key_bindings=bindings,
+		full_screen=False,
+		mouse_support=True,
+		erase_when_done=True,
+	)
+	return interactive_application
+
+def clear_application(*content: Optional[AnyContainer], force_exit: bool = False) -> None:
+	global interactive_application
+	if interactive_application is None:
+		return
+	if interactive_application.is_running and len(content) != 0:
+		container = interactive_application.layout.container
+		while hasattr(container, "content"):
+			container = container.content # type: ignore
+		assert hasattr(container, "children")
+		children: List[Container] = container.children # type: ignore
+		for control in content:
+			if control and not control in children:
+				children.remove(to_container(control))
+		if len(children) == 0:
+			interactive_application.exit()
+	if not interactive_application.is_running:
+		interactive_application = None
+
+_SCT = TypeVar("_SCT", bound=Optional[AnyContainer])
+
+class InteractiveSession(dict[str, _SCT]):
+	application: Application
+
+	def __init__(self, **content: _SCT) -> None:
+		dict.__init__(self, **content)
+
+	def __enter__(self, *args, **kwargs) -> 'InteractiveSession[_SCT]':
+		self.application = request_application(*self.values())
+		from threading import Thread
+		self.thread = Thread(target=lambda: self.application.run())
+		self.thread.start()
+		return self
+
+	def __exit__(self, *args, **kwargs) -> None:
+		clear_application(*self.values())
+		if hasattr(self, "thread"):
+			self.thread.join()
+			del self.thread
 
 class InteractableMargin(Margin):
 	def __init__(
@@ -775,3 +867,28 @@ def abort(*values: object, sep: Optional[str] = " ", code: int = 255, cause: Opt
 	except IOError:
 		pass
 	exit(code)
+
+if __name__ == "__main__":
+	preparing = Progress(intermediate=True)
+	progress = Progress(intermediate=True)
+	progress2 = Progress("I'm abobus", percentage=100.0)
+	application = request_application(preparing, progress, progress2)
+	import asyncio
+	async def in_coroutine():
+		async def update_progress():
+			while progress.percentage < 100:
+				progress.update(progress.percentage + 1.5)
+				progress2.update(progress.percentage - 1.5)
+				await asyncio.sleep(0.1)
+			application.exit()
+		application.create_background_task(update_progress())
+		await application.run_async()
+	asyncio.run(in_coroutine())
+	clear_application(preparing, progress, progress2)
+
+	import time
+	with InteractiveSession(preparing=Progress(intermediate=True), progress=Progress("I'm aboba"), progress2=Progress("I'm abobus", percentage=100.0)) as session:
+		while session["progress"].percentage < 100:
+			session["progress"].update(session["progress"].percentage + 1.5)
+			session["progress2"].update(session["progress2"].percentage - 1.5)
+			time.sleep(0.1)
