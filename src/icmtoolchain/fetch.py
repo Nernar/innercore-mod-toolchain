@@ -40,7 +40,7 @@ class HttpConnection10:
 			pass
 
 def retrieve_stream(input: IO[bytes], output: Optional[IO[bytes]] = None, /, chunk_size: int = 8192, progress_handler: Optional[Callable[[int], None]] = None) -> int:
-	if chunk_size < -1 or chunk_size == 0:
+	if chunk_size != -1 and chunk_size < 1:
 		raise ValueError(f"chunk_size should be > 0 or == -1, got {chunk_size}!")
 	with input as stream:
 		received = 0

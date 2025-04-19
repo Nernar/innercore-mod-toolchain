@@ -171,7 +171,7 @@ class Input(Feedback):
 			idle_selector_text="",
 			focused_selector_text=""
 		)
-		self.explanation_control = Interactable(text=self.explanation, style="class:editable.hint")
+		self.explanation_control = Interactable(text=lambda: self.explanation, style="class:editable.hint")
 
 		return HSplit([
 			self.input_control,
@@ -270,7 +270,7 @@ class Select(Feedback):
 				self.focused_interactable = interactable
 			self.choice_variants.append(interactable)
 			which_offset += 1
-		self.explanation_control = Interactable(text=self.explanation, style="class:editable.hint")
+		self.explanation_control = Interactable(text=lambda: self.explanation, style="class:editable.hint")
 
 		return HSplit([
 			Interactable(self.prompt),
