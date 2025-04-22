@@ -235,8 +235,8 @@ def run_test():
 	async def update_progress():
 		texts = ["Downloading your BIOS...", "Comparing BIOS hashes...", "Removing previous BIOS...", "Flashing BIOS..."]
 		while True:
-			progress.update(progress.percentage + random(), texts[int(progress.percentage / 25)])
-			if progress.percentage >= 99:
+			progress.update(progress.percentage + random() / 100.0, texts[int(progress.percentage * 4)])
+			if progress.percentage >= 0.99:
 				progress.update(progress.percentage, "Something went terribly wrong!")
 				progress.style = "class:interrupted"
 				await asyncio.sleep(5)
@@ -244,7 +244,7 @@ def run_test():
 				progress.percentage = 0
 			else:
 				await asyncio.sleep(0.1)
-			intermediate_progress.text = texts[int(progress.percentage / 25)]
+			intermediate_progress.text = texts[int(progress.percentage * 4)]
 
 	async def main():
 		app = Application(

@@ -8,7 +8,7 @@ from urllib.error import URLError
 from urllib.response import addinfourl
 
 from . import GLOBALS
-from .shell import warn
+from .shell import pretty_print_failure, warn
 from .utils import ensure_file, name_to_identifier
 
 
@@ -125,12 +125,13 @@ def create_download_github_repository_request(repository: str, branch: str = "ma
 def queue_download_request(url: str, data: Optional[bytes] = None, output_path: Optional[str] = None, /, placeholder: Optional[str] = None, timeout: float = 10, seconds_between_requests: float = 0.5, attempts: int = 2):
 	if not placeholder:
 		placeholder = url.rsplit("/", 1)[-1]
-	# progress = Progress(text=placeholder)
-	try:
-		_, fetch = create_download_request(url, data, placeholder=placeholder, timeout=timeout, seconds_between_requests=seconds_between_requests, attempts=attempts)
-		fetch(output_path, lambda received, size: None) # progress.notify(shell, progress, received / size, f"{placeholder} ({received / size / 1048576:.1f}%)")
-		# progress.notify(shell, progress, 1, placeholder)
-	except URLError as exc:
-		# Shell.notify(shell, f"#{exc.errno}: {exc.strerror}")
-		# Progress.notify(shell, progress, 1, "Check your network connection!")
-		pass
+	from .shell import InteractiveSession, Progress
+	with InteractiveSession(progress=Progress(text=placeholder)) as session:
+		try:
+			_, fetch = create_download_request(url, data, placeholder=placeholder, timeout=timeout, seconds_between_requests=seconds_between_requests, attempts=attempts)
+			fetch(output_path, lambda received, size: session["progress"].update(received / size, f"{placeholder} ({received / size / 1048576:.1f}%)"))
+			session["progress"].update(1.0, placeholder)
+		except URLError as exc:
+			pretty_print_failure(f"#{exc.errno}: {exc.strerror}")
+			session["progress"].update(1.0, "Check your network connection!")
+			session["progress"].style = "class:interrupted"

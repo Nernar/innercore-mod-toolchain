@@ -634,11 +634,11 @@ class Progress(UIControl):
 		available_width = width
 		if self.display_states:
 			time_left = self.time_left()
-			percentage_text = f"{self.percentage:.1f}% "
+			percentage_text = f"{self.percentage * 100:.1f}% "
 			time_left_text = f" {format_timedelta(time_left) if time_left else 'N/A'}"
 			available_width = available_width - len(percentage_text) - len(time_left_text)
 
-		filled_progress_width = int(self.percentage / 100 * available_width)
+		filled_progress_width = int(self.percentage * available_width)
 		bar_text = self.text.center(available_width) if self.text else " " * available_width
 
 		if self.display_states:
@@ -681,7 +681,7 @@ class Progress(UIControl):
 		)
 
 	def update(self, percentage: float, text: Optional[str] = None) -> None:
-		self.percentage = max(0, min(100, percentage))
+		self.percentage = max(0, min(1.0, percentage))
 		if text is not None:
 			self.text = text
 
@@ -697,7 +697,7 @@ class Progress(UIControl):
 		elif self.done or self.stopped:
 			return timedelta(0)
 		else:
-			return self.time_elapsed() * (100 - self.percentage) / self.percentage
+			return self.time_elapsed() * (1.0 - self.percentage) / self.percentage
 
 	def __pt_container__(self) -> Container:
 		return self.window
@@ -877,14 +877,14 @@ def abort(*values: object, sep: Optional[str] = " ", code: int = 255, cause: Opt
 if __name__ == "__main__":
 	preparing = Progress(intermediate=True)
 	progress = Progress(intermediate=True)
-	progress2 = Progress("I'm abobus", percentage=100.0)
+	progress2 = Progress("I'm abobus", percentage=1.0)
 	application = request_application(preparing, progress, progress2)
 	import asyncio
 	async def in_coroutine():
 		async def update_progress():
-			while progress.percentage < 100:
-				progress.update(progress.percentage + 1.5)
-				progress2.update(progress.percentage - 1.5)
+			while progress.percentage < 1.0:
+				progress.update(progress.percentage + 0.015)
+				progress2.update(progress.percentage - 0.015)
 				await asyncio.sleep(0.1)
 			application.exit()
 		application.create_background_task(update_progress())
@@ -893,8 +893,8 @@ if __name__ == "__main__":
 	clear_application(preparing, progress, progress2)
 
 	import time
-	with InteractiveSession(preparing=Progress(intermediate=True), progress=Progress("I'm aboba"), progress2=Progress("I'm abobus", percentage=100.0)) as session:
-		while session["progress"].percentage < 100:
-			session["progress"].update(session["progress"].percentage + 1.5)
-			session["progress2"].update(session["progress2"].percentage - 1.5)
+	with InteractiveSession(preparing=Progress(intermediate=True), progress=Progress("I'm aboba"), progress2=Progress("I'm abobus", percentage=1.0)) as session:
+		while session["progress"].percentage < 1.0:
+			session["progress"].update(session["progress"].percentage + 0.015)
+			session["progress2"].update(session["progress2"].percentage - 0.015)
 			time.sleep(0.1)
