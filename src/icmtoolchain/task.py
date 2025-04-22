@@ -6,7 +6,8 @@ from typing import Any, Callable, Dict, Final, List, Optional
 
 from . import GLOBALS, PROPERTIES
 from .make_config import MakeConfig
-from .shell import abort, confirm_prompt, error, pretty_print, warn
+from .shell import (abort, confirm_prompt, error, pretty_print,
+                    pretty_print_success, warn)
 from .utils import DEVNULL, ensure_file_directory, remove_tree
 
 
@@ -380,9 +381,8 @@ def task_new_project() -> int:
 
 	index = new_project(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
 	if index is None:
-		pretty_print()
-		abort()
-	pretty_print("Successfully completed!")
+		return 1
+	pretty_print_success("Successfully completed!")
 
 	if not confirm_prompt("Select this project?", True):
 		return 0
@@ -563,30 +563,4 @@ def task_cleanup() -> int:
 	if not confirm_prompt("Do you want to clear all projects cache?", True):
 		return 0
 	cleanup_relative_directory("build")
-	return 0
-
-### TESTS
-
-@task("testStartup")
-def task_test_startup() -> int:
-	from .component import startup
-	startup()
-	return 0
-
-@task("testStartupStepwise")
-def task_test_startup_stepwise() -> int:
-	from .component import startup_stepwise
-	startup_stepwise()
-	return 0
-
-@task("testNewProject")
-def task_test_new_project() -> int:
-	from .package import new_project
-	new_project(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
-	return 0
-
-@task("testNewProjectStepwise")
-def task_test_new_project_stepwise() -> int:
-	from .package import new_project_stepwise
-	new_project_stepwise(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
 	return 0

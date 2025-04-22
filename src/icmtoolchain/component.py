@@ -1,12 +1,10 @@
 import os
 import sys
 from os.path import isdir, isfile, join
-from typing import Final, List, NoReturn, Optional
+from typing import Final, List, Optional
 
 from . import GLOBALS
-from .shell import (Editable, Interactable, Selectable, abort, confirm_prompt,
-                    get_toolchain_style, input_prompt, pretty_print,
-                    pretty_print_answer)
+from .shell import abort, pretty_print
 from .utils import ensure_not_whitespace, request_typescript
 
 
@@ -115,40 +113,16 @@ def get_script_directory() -> str:
     return os.getcwd()
 
 def startup() -> None:
-	from prompt_toolkit import Application
-	from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
-	from prompt_toolkit.key_binding.bindings.focus import (focus_next,
-	                                                       focus_previous)
-	from prompt_toolkit.keys import Keys
-	from prompt_toolkit.layout import (HSplit, Layout, ScrollablePane,
-	                                   ScrollOffsets, Window)
+	pretty_print("Welcome to Inner Core Mod Toolchain! Today we will finalize setup of your own modding environment.")
+	tsc_available = request_typescript(only_check=True) is not None
+	from .prompt import Confirm, Input, Review
+	welcome_review = Review(
+		username=Input("Who are you?", hint=get_username(), use_hint_as_fallback=False, explanation="This username, or alias, will be used when creating a project. Author name identifies you on Inner Core Mods."),
+		use_typescript=Confirm("Do you plan to use Node.js for compilation?", default_value=tsc_available, explanation="This will allow your code to be transpiled by TypeScript Compiler to use ESNext's features, but may increase reassembly time."),
+		import_location=Input("Where should we look for projects?", explanation="If you have used Inner Core Mod Toolchain earlier, you may choose where to search for projects. Either import an obsolete project or modification for Inner Core.")
+	)
 
-	pretty_print("Welcome to Inner Core Mod Toolchain!")
-	contents = [
-		Interactable("Today we will finalize setup of your own modding environment. Use arrows and Enter/Space to move through that list in console."),
-		Window(height=1)
-	]
-	username_editable = Editable("Who are you?", hint=get_username())
-	contents += [
-		username_editable,
-		Interactable("This username, or alias, will be used when creating a project. Author name identifies you on Inner Core Mods.", style="class:editable.hint"),
-		Window(height=1)
-	]
-	tsc = request_typescript(only_check=True) is not None
-	nodejs_selectable = Selectable("Do you plan to use Node.js for compilation?", checked=tsc)
-	contents += [
-		nodejs_selectable,
-		Interactable("This will allow your code to be transpiled by TypeScript Compiler to use ESNext's features, but may increase reassembly time.", style="class:editable.hint"),
-		Window(height=1)
-	]
-	import_editable = Editable("Where should we look for projects?")
-	contents += [
-		import_editable,
-		Interactable("If you have used Inner Core Mod Toolchain earlier, you may choose where to search for projects. Either import an obsolete project or modification for Inner Core.", style="class:editable.hint"),
-		Window(height=1)
-	]
-	contents.append(Interactable("Here we go!", focusable=True, on_interact=lambda _: app.exit(), add_interact_key_bindings=True))
-
+	# TODO: Reuse someday...
 	preffered_components = which_installed()
 	if not "declarations" in preffered_components:
 		preffered_components.append("declarations")
@@ -159,106 +133,23 @@ def startup() -> None:
 	except BaseException:
 		pass
 
-	bindings = KeyBindings()
-	bindings.add(Keys.Down)(focus_next)
-	bindings.add(Keys.Up)(focus_previous)
-
-	@bindings.add("c-c")
-	@bindings.add("<sigint>")
-	def _(event: KeyPressEvent) -> NoReturn:
-		event.app.exit()
-		raise KeyboardInterrupt()
-
-	app = Application(
-		layout=Layout(
-			ScrollablePane(
-				HSplit(contents),
-				scroll_offsets=ScrollOffsets(3, 3),
-				display_arrows=False,
-			)
-		),
-		style=get_toolchain_style(),
-		include_default_pygments_style=False,
-		key_bindings=bindings,
-		full_screen=False,
-		mouse_support=True,
-		erase_when_done=True,
-	)
-
 	try:
-		app.run()
+		results = welcome_review.request(returns_empty_properties=True)
 	except KeyboardInterrupt or EOFError:
 		pretty_print("* Preconfiguration was canceled, you can do it later, execute `icmtoolchain --help` for a list of commands.")
 		return None
 
-	username = ensure_not_whitespace(username_editable.get_value(fallback_allowed=False))
-	if username:
-		pretty_print_answer(username_editable.prompt, username, prompt_end="")
-		GLOBALS.TOOLCHAIN_CONFIG.set_value("template.author", username)
-
-	typescript = nodejs_selectable.is_checked()
-	pretty_print_answer(nodejs_selectable.interactable_text, "Yes" if typescript else "No")
-	if typescript:
-		if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
-			GLOBALS.TOOLCHAIN_CONFIG.remove_value("denyTypeScript")
-			GLOBALS.TOOLCHAIN_CONFIG.save()
-		request_typescript()
-	elif tsc:
-		GLOBALS.TOOLCHAIN_CONFIG.set_value("denyTypeScript", True)
-		GLOBALS.TOOLCHAIN_CONFIG.save()
-
-	GLOBALS.TOOLCHAIN_CONFIG.save()
-
-	pretty_print(f"* Setup procedure is completed, Inner Core Mod Toolchain has been installed to {get_script_directory()!r} directory. Execute `icmtoolchain --help` to obtain a list of available commands. You may need to restart your console to be able to access any commands.")
-
-def startup_stepwise() -> None:
-	tsc = request_typescript(only_check=True) is not None
-
-	username = None
-	typescript = False
-
-	def do_next_step(step: int = 0) -> None:
-		if step == 0:
-			nonlocal username
-			username = input_prompt(
-				"Who are you?",
-				fallback=get_username(),
-				explanation="This username, or alias, will be used when creating a project. Author name identifies you on Inner Core Mods."
-			)
-		elif step == 1:
-			nonlocal typescript
-			typescript = confirm_prompt(
-				"Do you plan to use Node.js for compilation?",
-				fallback=tsc,
-				explanation="This will allow your code to be transpiled by TypeScript Compiler to use ESNext's features, but may increase reassembly time."
-			)
-		elif step == 2:
-			input_prompt(
-				"Where should we look for projects?",
-				explanation="If you have used Inner Core Mod Toolchain earlier, you may choose where to search for projects. Either import an obsolete project or modification for Inner Core."
-			)
-		else:
-			return
-		do_next_step(step + 1)
-
-	try:
-		do_next_step()
-	except KeyboardInterrupt or EOFError:
-		pretty_print("* Preconfiguration was canceled, you can do it later, execute `icmtoolchain --help` for a list of commands.")
-		return None
-
-	username = ensure_not_whitespace(username)
+	username = ensure_not_whitespace(results["username"])
 	if username:
 		GLOBALS.TOOLCHAIN_CONFIG.set_value("template.author", username)
 
-	if typescript:
+	use_typescript = results["use_typescript"]
+	if use_typescript:
 		if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
 			GLOBALS.TOOLCHAIN_CONFIG.remove_value("denyTypeScript")
-			GLOBALS.TOOLCHAIN_CONFIG.save()
 		request_typescript()
-	elif tsc:
+	elif tsc_available:
 		GLOBALS.TOOLCHAIN_CONFIG.set_value("denyTypeScript", True)
-		GLOBALS.TOOLCHAIN_CONFIG.save()
 
 	GLOBALS.TOOLCHAIN_CONFIG.save()
 
