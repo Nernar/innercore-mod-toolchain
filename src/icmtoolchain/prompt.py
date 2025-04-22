@@ -451,20 +451,3 @@ class Review:
 		except (KeyboardInterrupt, EOFError):
 			if prints_abort:
 				pretty_print_attention("Abort.")
-
-if __name__ == "__main__":
-	from random import randint
-	templates_available = randint(0, 1) == 0
-	results = Review(
-		template=lambda review: Select(
-			"Which template should be used?",
-			variants=["Mod Template (../toolchain-mod-template)", "Modding Tools Template (../template-assistant)"],
-			explanation="Templates are used to provide initial project description, create initial files, and more."
-		) if templates_available else None,
-		name=Input("Decide a name for your project:", hint="Template Mod"),
-		author=Input("Author who crafted this creation:", hint="Reider746"),
-		version=Input("What version a project starts from:", hint="1.0"),
-		description=Input("Describe this masterpiece in one sentence:"),
-		client_side=Confirm("Is it a client mod that not requires server?", default_value=False)
-	).request_safe()
-	print(results)
