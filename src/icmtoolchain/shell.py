@@ -235,6 +235,7 @@ class Interactable(FormattedTextControl):
 		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
 		wrap_lines: FilterOrBool = True,
 		show_cursor: bool = False,
+		interact_on_enter: bool = False,
 		add_interact_key_bindings: bool = False,
 		idle_selector_text: Optional[str] = "  ",
 		focused_selector_text: Optional[str] = "> ",
@@ -273,6 +274,7 @@ class Interactable(FormattedTextControl):
 			],
 		)
 
+		self.interact_on_enter = interact_on_enter
 		self.interact_key_bindings = None
 		if add_interact_key_bindings:
 			self.add_interact_key_bindings()
@@ -287,7 +289,7 @@ class Interactable(FormattedTextControl):
 			self.interact_key_bindings = KeyBindings()
 		bindings = self.interact_key_bindings
 
-		@bindings.add(Keys.Enter)
+		@bindings.add(Keys.Enter, filter=Condition(lambda: self.interact_on_enter))
 		@bindings.add(" ")
 		def _(event: KeyPressEvent) -> None:
 			self.interact(event)
@@ -372,6 +374,8 @@ class Selectable(Interactable):
 
 	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
 		self.checked = not self.checked
+		if self.on_checked:
+			self.on_checked(self, self.checked)
 		Interactable.interact(self, event)
 
 	def is_checked(self) -> bool:
@@ -551,6 +555,7 @@ class Progress(UIControl):
 		key_bindings: Optional[KeyBindingsBase] = None,
 		align: Union[WindowAlign, Callable[[], WindowAlign]] = WindowAlign.LEFT,
 		wrap_lines: FilterOrBool = True,
+		interact_on_enter: bool = False,
 		add_interact_key_bindings: bool = False,
 		idle_selector_text: Optional[str] = "  ",
 		focused_selector_text: Optional[str] = "> ",
@@ -591,6 +596,7 @@ class Progress(UIControl):
 
 		self.style = style
 		self.key_bindings = key_bindings
+		self.interact_on_enter = interact_on_enter
 		self.interact_key_bindings = None
 		if add_interact_key_bindings:
 			self.add_interact_key_bindings()
@@ -605,7 +611,7 @@ class Progress(UIControl):
 			self.interact_key_bindings = KeyBindings()
 		bindings = self.interact_key_bindings
 
-		@bindings.add(Keys.Enter)
+		@bindings.add(Keys.Enter, filter=Condition(lambda: self.interact_on_enter))
 		@bindings.add(" ")
 		def _(event: KeyPressEvent) -> None:
 			self.interact(event)
@@ -776,7 +782,7 @@ def select_prompt(prompt: Optional[str] = None, *variants: str, selected_variant
 def input_prompt(prompt: Optional[str] = None, default_text: Optional[str] = None, explanation: Optional[str] = None, on_text_changed: Optional[Callable[[Editable, Interactable], None]] = None, fallback: Optional[str] = None) -> Optional[str]:
 	from .prompt import Input
 
-	def on_input(input: Input, _: str) -> None:
+	def on_input(input: Input, text: str) -> None:
 		if on_text_changed:
 			on_text_changed(input.input_control, input.explanation_control)
 
