@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod
-from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Union
+from typing import (Any, Callable, Dict, Iterable, Optional, Sequence, Union,
+                    cast)
 
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
@@ -19,6 +20,8 @@ from .shell import (Editable, Interactable, get_toolchain_style, pretty_print,
 
 
 class Feedback(metaclass=ABCMeta):
+	on_pre_request: Optional[Callable[['Feedback'], None]]
+
 	def __init__(self, prompt: AnyFormattedText = "Ooh, was it supposed to be a query here?", fallback: object = None) -> None:
 		self.prompt = prompt
 		self.fallback = fallback
@@ -77,10 +80,11 @@ class Feedback(metaclass=ABCMeta):
 
 	def get_result(self) -> Optional[object]:
 		self.inform_if_already_busy()
-		return self.result if hasattr(self, "result") else self.fallback
+		return self.result if hasattr(self, "result") and self.result is not None else self.fallback
 
 	def pre_run(self) -> None:
-		pass
+		if hasattr(self, "on_pre_request") and self.on_pre_request:
+			self.on_pre_request(self)
 
 	def inform_if_already_busy(self) -> None:
 		if self.application.is_running:
@@ -190,13 +194,15 @@ class Input(Feedback):
 		return True
 
 	def accept_handler(self, buffer: Buffer) -> bool:
-		result = True
+		accepted = True
 		if self.on_accept:
-			result = self.on_accept(self, buffer.text)
-		if result:
-			has_text = buffer.text and len(buffer.text) > 0
-			self.complete(result=buffer.text if has_text or not self.use_hint_as_fallback or not self.hint else self.hint)
-		return result is True
+			accepted = self.on_accept(self, buffer.text) is not False
+		if not accepted:
+			self.application.output.bell()
+			return False
+		has_text = buffer.text and len(buffer.text) > 0
+		self.complete(result=buffer.text if has_text or not self.use_hint_as_fallback or not self.hint else self.hint)
+		return True
 
 class Confirm(Input):
 	def __init__(
@@ -241,7 +247,8 @@ class Select(Feedback):
 		default_variant: Optional[Union[int, str]] = None,
 		returns_what: bool = False,
 		explanation: AnyFormattedText = None,
-		on_accept: Optional[Callable[['Select', str], Optional[bool]]] = None,
+		on_focus: Optional[Callable[['Select', int, str, Interactable], None]] = None,
+		on_accept: Optional[Callable[['Select', int, str, Interactable], Optional[bool]]] = None,
 	):
 		Feedback.__init__(self, prompt=prompt, fallback=default_variant)
 		self.variants = variants
@@ -249,6 +256,7 @@ class Select(Feedback):
 		self.default_variant = default_variant
 		self.returns_what = returns_what
 		self.explanation = explanation
+		self.on_focus = on_focus
 		self.on_accept = on_accept
 
 	def create_content(self) -> AnyContainer:
@@ -288,35 +296,58 @@ class Select(Feedback):
 	def create_key_bindings(self) -> KeyBindings:
 		bindings = super().create_key_bindings()
 
-		bindings.add(Keys.Down)(focus_next)
-		bindings.add(Keys.Up)(focus_previous)
+		@bindings.add(Keys.Down)
+		def _(event: KeyPressEvent) -> None:
+			focus_next(event)
+			if self.layout.current_control and isinstance(self.layout.current_control, Interactable):
+				self.focus_handler(self.layout.current_control)
+
+		@bindings.add(Keys.Up)
+		def _(event: KeyPressEvent) -> None:
+			focus_previous(event)
+			if self.layout.current_control and isinstance(self.layout.current_control, Interactable):
+				self.focus_handler(self.layout.current_control)
 
 		@bindings.add(Keys.Enter)
 		@bindings.add(" ")
 		def _(_: KeyPressEvent) -> None:
-			text = None
-			value = None
 			if self.layout.current_control and isinstance(self.layout.current_control, Interactable):
-				text = to_plain_text(self.layout.current_control.text)
-				value = self.layout.current_control.tag
+				self.accept_handler(self.layout.current_control)
 			elif self.default_variant is not None:
-				if isinstance(self.default_variant, str):
-					text = self.default_variant
-					for control in self.layout.find_all_controls():
-						if isinstance(control, Interactable) and text == to_plain_text(control.text):
-							value = control.tag
-							break
-				else:
-					value = self.default_variant
-					for control in self.layout.find_all_controls():
-						if isinstance(control, Interactable) and control.tag == self.default_variant:
-							text = to_plain_text(control.text)
-							break
-			self.complete(result=text if self.returns_what else value, print_result=text)
+				for control in self.layout.find_all_controls():
+					if not isinstance(control, Interactable):
+						continue
+					if isinstance(self.default_variant, str) and self.default_variant == to_plain_text(control.text):
+						self.accept_handler(control)
+						break
+					elif self.default_variant == control.tag:
+						self.accept_handler(control)
+						break
 
 		return bindings
 
+	def focus_handler(self, control: Interactable) -> None:
+		if self.on_focus:
+			text = to_plain_text(control.text)
+			value = cast(int, control.tag)
+			self.on_focus(self, value, text, control)
+
+	def accept_handler(self, control: Interactable) -> bool:
+		text = to_plain_text(control.text)
+		value = cast(int, control.tag)
+		accepted = True
+		if self.on_accept:
+			accepted = self.on_accept(self, value, text, control) is not False
+		if not accepted:
+			self.application.output.bell()
+			return False
+		self.complete(result=text if self.returns_what else value, print_result=text)
+		return True
+
 class Review:
+	on_receive_feedback: Optional[Callable[['Review', str, Feedback, Any], None]]
+	on_request_feedback: Optional[Callable[['Review', str, Feedback], bool]]
+
 	def __init__(self, **feedback: Union[Optional[Feedback], Callable[['Review'], Optional[Feedback]]]) -> None:
 		self.current_feedback = None
 		self.feedback_keys = [entry for entry in feedback]
@@ -348,6 +379,11 @@ class Review:
 				self.current_key = feedback_key
 			self.current_feedback = feedback
 
+			if self.current_feedback and hasattr(self, "on_request_feedback") and self.on_request_feedback:
+				assert self.current_key is not None
+				if not self.on_request_feedback(self, self.current_key, self.current_feedback):
+					self.current_feedback = None
+
 		return self.current_feedback
 
 	def receive_feedback(self, returns_empty_properties: bool = False) -> Optional[object]:
@@ -361,7 +397,20 @@ class Review:
 		result = self.current_feedback.get_result()
 		if result is not None or returns_empty_properties:
 			self.results[self.current_key] = result
+			if hasattr(self, "on_receive_feedback") and self.on_receive_feedback:
+				self.on_receive_feedback(self, self.current_key, self.current_feedback, result)
 		return result
+
+	def require_feedback(self, key: str) -> Feedback:
+		if hasattr(self, "current_key") and key == self.current_key and self.current_feedback:
+			return self.current_feedback
+		if key in self.feedback_callables and self.feedback_callables[key]:
+			feedback = self.feedback_callables[key]
+			if callable(feedback):
+				feedback = feedback(self)
+			assert feedback is not None
+			return feedback
+		raise ValueError(f"Feedback {key!r} is not found!")
 
 	def request(self, returns_empty_properties: bool = False) -> Dict[str, Any]:
 		assert not self.current_feedback
