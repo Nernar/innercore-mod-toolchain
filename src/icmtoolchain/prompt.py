@@ -1,9 +1,10 @@
 from abc import ABCMeta, abstractmethod
-from typing import (Any, Callable, Dict, Iterable, Optional, Sequence, Union,
-                    cast)
+from typing import (Any, Callable, Dict, Iterable, List, Optional, Sequence,
+                    Sized, Tuple, Union, cast)
 
 from prompt_toolkit import Application
 from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.filters import Condition
 from prompt_toolkit.formatted_text import (AnyFormattedText,
                                            merge_formatted_text, to_plain_text)
 from prompt_toolkit.key_binding import KeyBindings, KeyPressEvent
@@ -14,8 +15,8 @@ from prompt_toolkit.layout import (AnyContainer, HSplit, Layout,
                                    ScrollablePane, ScrollOffsets)
 from prompt_toolkit.validation import Validator
 
-from .shell import (Editable, Interactable, get_toolchain_style, pretty_print,
-                    pretty_print_attention, pretty_print_failure,
+from .shell import (Editable, Interactable, Selectable, get_toolchain_style,
+                    pretty_print, pretty_print_attention, pretty_print_failure,
                     pretty_print_success, pretty_print_yield)
 
 
@@ -121,15 +122,18 @@ class Feedback(metaclass=ABCMeta):
 		elif result is False:
 			pretty_print_failure(self.prompt, end=" ")
 			pretty_print("No", style="class:print.answer")
-		elif result == "":
-			pretty_print_attention(self.prompt, end=" ")
-			pretty_print("<nope>", style="class:print.answer")
 		elif result == self.fallback:
 			pretty_print_yield(self.prompt, end=" ")
 			pretty_print(result, style="class:print.answer")
+		elif isinstance(result, Sized) and len(result) == 0:
+			pretty_print_attention(self.prompt, end=" ")
+			pretty_print("<nope>", style="class:print.answer")
 		else:
 			pretty_print_success(self.prompt, end=" ")
-			pretty_print(result, style="class:print.answer")
+			if not isinstance(result, str) and isinstance(result, Iterable):
+				pretty_print(*result, sep=", ", style="class:print.answer")
+			else:
+				pretty_print(result, style="class:print.answer")
 
 	def complete(self, *, result: object = None, print_result: object = None) -> None:
 		if self.application.is_running:
@@ -197,7 +201,7 @@ class Input(Feedback):
 		accepted = True
 		if self.on_accept:
 			accepted = self.on_accept(self, buffer.text) is not False
-		if not accepted:
+		if accepted is False:
 			self.application.output.bell()
 			return False
 		has_text = buffer.text and len(buffer.text) > 0
@@ -258,25 +262,19 @@ class Select(Feedback):
 		self.explanation = explanation
 		self.on_focus = on_focus
 		self.on_accept = on_accept
+		self.use_space_as_accept = True
 
 	def create_content(self) -> AnyContainer:
 		self.choice_variants: Sequence[AnyContainer] = []
 		self.focused_interactable = None
 		which_offset = 0
 		for variant in self.variants:
-			is_selected = self.selected_variant is not None and (
-				variant == self.selected_variant or which_offset == self.selected_variant
-			)
-			interactable = Interactable(
-				variant,
-				focusable=True,
-				show_cursor=False,
-				style="class:selection" if is_selected else "",
-				tag=which_offset
-			)
-			if self.default_variant and (variant == self.default_variant or which_offset == self.selected_variant):
-				self.focused_interactable = interactable
-			self.choice_variants.append(interactable)
+			if variant is None:
+				continue
+			control = self.create_choice_content(variant, which_offset)
+			if self.default_variant and (variant == self.default_variant or which_offset == self.default_variant):
+				self.focused_interactable = control
+			self.choice_variants.append(control)
 			which_offset += 1
 		self.explanation_control = Interactable(text=lambda: self.explanation, style="class:editable.hint")
 
@@ -289,6 +287,18 @@ class Select(Feedback):
 			),
 			self.explanation_control
 		])
+
+	def create_choice_content(self, variant: str, offset: int) -> AnyContainer:
+		selected = self.selected_variant is not None and (
+			variant == self.selected_variant or offset == self.selected_variant
+		)
+		return Interactable(
+			variant,
+			focusable=True,
+			show_cursor=False,
+			style="class:selection" if selected else "",
+			tag=offset
+		)
 
 	def create_layout(self) -> Layout:
 		return Layout(self.content, self.focused_interactable)
@@ -309,7 +319,7 @@ class Select(Feedback):
 				self.focus_handler(self.layout.current_control)
 
 		@bindings.add(Keys.Enter)
-		@bindings.add(" ")
+		@bindings.add(" ", filter=Condition(lambda: self.use_space_as_accept))
 		def _(_: KeyPressEvent) -> None:
 			if self.layout.current_control and isinstance(self.layout.current_control, Interactable):
 				self.accept_handler(self.layout.current_control)
@@ -317,7 +327,7 @@ class Select(Feedback):
 				for control in self.layout.find_all_controls():
 					if not isinstance(control, Interactable):
 						continue
-					if isinstance(self.default_variant, str) and self.default_variant == to_plain_text(control.text):
+					if isinstance(self.default_variant, str) and self.default_variant == to_plain_text(control.interactable_text):
 						self.accept_handler(control)
 						break
 					elif self.default_variant == control.tag:
@@ -328,20 +338,93 @@ class Select(Feedback):
 
 	def focus_handler(self, control: Interactable) -> None:
 		if self.on_focus:
-			text = to_plain_text(control.text)
+			text = to_plain_text(control.interactable_text)
 			value = cast(int, control.tag)
 			self.on_focus(self, value, text, control)
 
 	def accept_handler(self, control: Interactable) -> bool:
-		text = to_plain_text(control.text)
+		text = to_plain_text(control.interactable_text)
 		value = cast(int, control.tag)
 		accepted = True
 		if self.on_accept:
 			accepted = self.on_accept(self, value, text, control) is not False
-		if not accepted:
+		if accepted is False:
 			self.application.output.bell()
 			return False
 		self.complete(result=text if self.returns_what else value, print_result=text)
+		return True
+
+class Checkbox(Select):
+	def __init__(
+		self,
+		prompt: AnyFormattedText = "What do you like?",
+		variants: Iterable[Optional[str]] = ["Rides", "Guide", "Both"],
+		selected_variants: Optional[Iterable[Union[int, str]]] = None,
+		default_variant: Optional[Union[int, str]] = None,
+		returns_what: bool = False,
+		allow_to_choose_nothing: bool = False,
+		explanation: AnyFormattedText = None,
+		fallback: Optional[Iterable[Union[int, str]]] = None,
+		on_focus: Optional[Callable[['Checkbox', int, str, Selectable], None]] = None,
+		on_checked: Optional[Callable[['Checkbox', int, str, bool, Selectable], Optional[bool]]] = None,
+		on_accept: Optional[Callable[['Checkbox', List[int], List[str], Selectable], Optional[bool]]] = None,
+	):
+		Select.__init__(self, prompt=prompt, variants=variants, default_variant=default_variant, returns_what=returns_what, explanation=explanation)
+		self.on_focus = on_focus
+		self.on_checked = on_checked
+		self.on_accept = on_accept
+		if fallback is not None:
+			self.fallback = fallback
+		self.selected_variants = selected_variants
+		self.allow_to_choose_nothing = allow_to_choose_nothing
+		self.on_focus = on_focus
+		self.on_accept = on_accept
+		self.use_space_as_accept = False
+
+	def create_choice_content(self, variant: str, offset: int) -> AnyContainer:
+		selected = self.selected_variants is not None and (
+			variant in self.selected_variants or offset in self.selected_variants
+		)
+		return Selectable(
+			variant,
+			focusable=True,
+			checked=selected,
+			show_cursor=False,
+			on_checked=self.on_choice_checked,
+			tag=offset
+		)
+
+	def on_choice_checked(self, control: Selectable, checked: bool) -> None:
+		text = to_plain_text(control.interactable_text)
+		value = cast(int, control.tag)
+		accepted = True
+		if self.on_checked:
+			accepted = self.on_checked(self, value, text, checked, control)
+		if accepted is False:
+			self.application.output.bell()
+			control.checked = not control.checked
+
+	def obtain_selection(self) -> Tuple[List[int], List[str]]:
+		selection = ([], [])
+		for control in self.choice_variants:
+			if isinstance(control, Selectable) and control.checked:
+				selection[0].append(cast(int, control.tag))
+				selection[1].append(to_plain_text(control.interactable_text))
+		return selection
+
+	def accept_handler(self, control: Selectable) -> bool:
+		selection = self.obtain_selection()
+		assert len(selection[0]) == len(selection[1])
+		if not self.allow_to_choose_nothing and len(selection[0]) == 0:
+			self.application.output.bell()
+			return False
+		accepted = True
+		if self.on_accept:
+			accepted = self.on_accept(self, selection[0], selection[1], control) is not False
+		if accepted is False:
+			self.application.output.bell()
+			return False
+		self.complete(result=selection[1] if self.returns_what else selection[0], print_result=selection[1])
 		return True
 
 class Review:
