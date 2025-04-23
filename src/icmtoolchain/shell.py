@@ -184,15 +184,18 @@ class InteractiveSession(dict[str, _SCT]):
 		dict.__init__(self, **content)
 
 	def __enter__(self, *args, **kwargs) -> 'InteractiveSession[_SCT]':
+		is_already_running = interactive_application is not None
 		self.application = request_application(*self.values())
-		from threading import Thread
-		self.thread = Thread(target=lambda: self.application.run())
-		self.thread.start()
+		if not is_already_running:
+			from threading import Thread
+			self.thread = Thread(target=lambda: self.application.run())
+			self.thread.start()
 		return self
 
 	def __exit__(self, *args, **kwargs) -> None:
 		clear_application(*self.values())
 		if hasattr(self, "thread"):
+			assert interactive_application is None
 			self.thread.join()
 			del self.thread
 
