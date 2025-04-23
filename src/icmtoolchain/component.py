@@ -4,7 +4,7 @@ from os.path import isdir, isfile, join
 from typing import Final, List, Optional
 
 from . import GLOBALS
-from .shell import abort, pretty_print
+from .shell import abort, pretty_print, pretty_print_attention
 from .utils import ensure_not_whitespace, request_typescript
 
 
@@ -56,12 +56,11 @@ def install_components(*keywords: str) -> None:
 		return
 	for keyword in keywords:
 		if not keyword in COMPONENTS:
-			pretty_print(f"Component {keyword!r} not available!")
+			pretty_print(f"Component {keyword!r} is not available!")
 			continue
 		if keyword == "cpp":
 			continue
-		# component = COMPONENTS[keyword]
-		# progress = Progress(text=component.name)
+		pretty_print_attention(f"What do you expect? We doesn't have {COMPONENTS[keyword].packurl} anymore!")
 	if "cpp" in keywords:
 		abis = GLOBALS.TOOLCHAIN_CONFIG.get_list("native.abis")
 		if len(abis) == 0:

@@ -8,8 +8,9 @@ from typing import Any, Dict, List, Optional, Tuple
 from . import GLOBALS
 from .hglob import glob
 from .make_config import MakeConfig
-from .shell import (abort, confirm_prompt, error, pretty_print, select_prompt,
-                    warn)
+from .shell import (InteractiveSession, Progress, abort, confirm_prompt, error,
+                    pretty_print, pretty_print_attention, pretty_print_failure,
+                    pretty_print_success, select_prompt, warn)
 from .utils import DEVNULL
 
 
@@ -157,7 +158,7 @@ def push_everything(push_unchanged: bool = True, cleanup_remote: bool = True) ->
 	cleanup_remote = GLOBALS.PREFERRED_CONFIG.get_value("adb.cleanupRemote", cleanup_remote)
 
 	result = push_directory(GLOBALS.MOD_STRUCTURE.directory, destination_directory, push_unchanged=push_unchanged, cleanup_remote=cleanup_remote)
-	if result != 0:
+	if result > 0:
 		return result
 	for linked_resource in GLOBALS.LINKED_RESOURCE_STORAGE.iterate_resources():
 		project_path = GLOBALS.MAKE_CONFIG.get_path(linked_resource["relative_path"])
@@ -165,32 +166,31 @@ def push_everything(push_unchanged: bool = True, cleanup_remote: bool = True) ->
 		remote_push_unchanged = linked_resource["push_unchanged"] if "push_unchanged" in linked_resource else push_unchanged
 		remote_cleanup_remote = linked_resource["cleanup_remote"] if "cleanup_remote" in linked_resource else cleanup_remote
 		if isfile(project_path):
-			result = push_file(project_path, remote_path, push_unchanged=remote_push_unchanged, cleanup_remote=remote_cleanup_remote)
+			result = push_file(project_path, remote_path, push_unchanged=remote_push_unchanged, cleanup_remote=remote_cleanup_remote) or result
 		elif isdir(project_path):
-			result = push_directory(project_path, remote_path, push_unchanged=remote_push_unchanged, cleanup_remote=remote_cleanup_remote)
+			result = push_directory(project_path, remote_path, push_unchanged=remote_push_unchanged, cleanup_remote=remote_cleanup_remote) or result
 		else:
 			pretty_print()
 			abort(f"We cannot push {linked_resource['relative_path']!r} resource because we could not determine its type!")
-		if result != 0:
+		if result > 0:
 			return result
-	# if len(shell.interactables) == 0:
-		# progress = Progress("Up to date")
+	if result < 0:
+		pretty_print_success("All files already up to date.")
 
 	GLOBALS.OUTPUT_STORAGE.save()
 	return 0
 
 def push_file(file: str, destination_file: str, push_unchanged: bool = True, cleanup_remote: bool = True) -> int:
 	if not push_unchanged and not GLOBALS.OUTPUT_STORAGE.is_path_changed(file):
-		return 0
-	# file_basename = basename(file)
-	# progress = Progress(f"Pushing {file_basename}")
+		return -1
 
-	destination_file = destination_file.replace("\\", "/")
-	if not destination_file.startswith("/"):
-		destination_file = "/" + destination_file
-	sources_file = file.replace("\\", "/")
-	# progress.seek(1, f"Pushing {file_basename}")
-	try:
+	readable_name = basename(file)
+	with InteractiveSession(progress=Progress(f"Pushing file {readable_name}")) as session:
+		destination_file = destination_file.replace("\\", "/")
+		if not destination_file.startswith("/"):
+			destination_file = "/" + destination_file
+		sources_file = file.replace("\\", "/")
+		# try:
 		if cleanup_remote:
 			subprocess.call(GLOBALS.ADB_COMMAND + [
 				"shell", "rm", "-r", destination_file
@@ -198,17 +198,18 @@ def push_file(file: str, destination_file: str, push_unchanged: bool = True, cle
 		result = subprocess.run(GLOBALS.ADB_COMMAND + [
 			"push", sources_file, destination_file
 		], capture_output=True, text=True)
-	except KeyboardInterrupt:
-		# Progress.notify(shell, progress, 1, "Pushing aborted.")
-		return 1
+		# XXX: except KeyboardInterrupt:
+			# Progress.notify(shell, progress, 1, "Pushing aborted.")
+			# return 1
 
-	if result.returncode != 0:
-		# Progress.notify(shell, progress, 1, f"Failed pushing {file_basename}")
-		cause = result.stdout.splitlines()[-1]
-		if cause and len(cause) > 0:
-			error(cause)
-	# else:
-		# Progress.notify(shell, progress, 1, f"Pushed {file_basename}")
+		if result.returncode != 0:
+			cause = result.stdout.splitlines()[-1]
+			if cause and len(cause) > 0:
+				error(cause)
+			pretty_print_failure(f"Failed to push file {readable_name!r} with error code {result.returncode}!")
+			return result.returncode
+
+	pretty_print_success(f"Pushed file {readable_name!r} into {destination_file!r}.")
 	return result.returncode
 
 def push_directory(directory: str, destination_directory: str, push_unchanged: bool = True, cleanup_remote: bool = True) -> int:
@@ -216,22 +217,23 @@ def push_directory(directory: str, destination_directory: str, push_unchanged: b
 		relpath(path, directory) for path in glob(directory + "/*") \
 			if push_unchanged or GLOBALS.OUTPUT_STORAGE.is_path_changed(path)
 	]
-	if len(items) == 0:
-		return 0
-	# directory_basename = basename(directory)
-	# progress = Progress(f"Pushing {directory_basename}")
+	files_count = len(items)
+	if files_count == 0:
+		return -1
 
-	destination_directory = destination_directory.replace("\\", "/")
-	if not destination_directory.startswith("/"):
-		destination_directory = "/" + destination_directory
-	sources_directory = directory.replace("\\", "/")
+	readable_name = basename(directory)
+	with InteractiveSession(progress=Progress(f"Pushing {readable_name}/")) as session:
+		destination_directory = destination_directory.replace("\\", "/")
+		if not destination_directory.startswith("/"):
+			destination_directory = "/" + destination_directory
+		sources_directory = directory.replace("\\", "/")
 
-	percent = 0
-	for filename in items:
-		src = sources_directory + "/" + filename
-		dst = destination_directory + "/" + filename
-		# progress.seek(percent / len(items), f"Pushing {filename}")
-		try:
+		offset = 0
+		for filename in items:
+			src = sources_directory + "/" + filename
+			dst = destination_directory + "/" + filename
+			session["progress"].update(offset / files_count, f"Pushing {readable_name}/{filename}")
+			# try:
 			if cleanup_remote:
 				subprocess.call(GLOBALS.ADB_COMMAND + [
 					"shell", "rm", "-r", dst
@@ -239,19 +241,19 @@ def push_directory(directory: str, destination_directory: str, push_unchanged: b
 			result = subprocess.run(GLOBALS.ADB_COMMAND + [
 				"push", src, dst
 			], capture_output=True, text=True)
-		except KeyboardInterrupt:
-			# Progress.notify(shell, progress, 1, "Pushing aborted.")
-			return 1
-		percent += 1
+			# XXX: except KeyboardInterrupt:
+				# Progress.notify(shell, progress, 1, "Pushing aborted.")
+				# return 1
+			offset += 1
 
-		if result.returncode != 0:
-			# Progress.notify(shell, progress, 1, f"Failed pushing {filename}")
-			cause = result.stdout.strip().splitlines()[-1]
-			if cause and len(cause) > 0:
-				error(cause)
-			return result.returncode
+			if result.returncode != 0:
+				cause = result.stdout.strip().splitlines()[-1]
+				if cause and len(cause) > 0:
+					error(cause)
+				pretty_print_failure(f"Failed to push directory {readable_name!r} with error code {result.returncode}!")
+				return result.returncode
 
-	# Progress.notify(shell, progress, 1, f"Pushed {directory_basename}")
+	pretty_print_success(f"Pushed directory {readable_name!r} into {destination_directory!r}.")
 	return 0
 
 def make_locks(*locks: str) -> int:
@@ -519,58 +521,56 @@ def setup_via_ping_localhost() -> Optional[List[str]]:
 		pretty_print("Not available right now.")
 		return setup_via_network()
 
-	# progress = Progress(text="Connecting")
-	accepted = list()
-	try:
-		import asyncio
-		asyncio.run(ping_async(ip, accepted))
-	except ImportError:
-		for index in range(256):
-			if str(index) == ip[2]:
-				continue
-			next_ip = "{}.{}".format(ip[0], index)
-			if ping_via_shell(next_ip, index):
-				accepted.append(next_ip)
-	except KeyboardInterrupt:
-		pretty_print()
-		return setup_via_network()
-	if len(accepted) == 0:
-		pretty_print()
-		pretty_print("Not found anything, are you sure that network is connected?")
-		return setup_via_network()
-	subprocess.run([
-		GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
-		"disconnect"
-	], stdout=DEVNULL, stderr=DEVNULL)
-	pretty_print("Found connections: " + ", ".join(accepted))
-	latest = None
-	for next in accepted:
+	with InteractiveSession(progress=Progress("Connecting...")) as session:
+		accepted = list()
 		try:
-			subprocess.run([
-				GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
-				"connect", next
-			], check=True, timeout=5.0, stdout=DEVNULL, stderr=DEVNULL)
-			command = get_adb_command_by_tcp(next, skip_error=True)
-			if command:
-				latest = command
-				break
-			else:
-				pretty_print()
-		except subprocess.CalledProcessError as err:
-			error("adb connect failed with code", err.returncode)
-		except subprocess.TimeoutExpired:
-			pretty_print("Timeout")
-		except KeyboardInterrupt:
-			break
-	if latest:
-		return latest
-	pretty_print("Pinging every port, interrupt operation if you already know it.")
-	for next in accepted:
-		try:
+			import asyncio
+			asyncio.run(ping_async(ip, accepted, progress=session["progress"]))
+		except ImportError:
+			for index in range(256):
+				if str(index) == ip[2]:
+					continue
+				next_ip = "{}.{}".format(ip[0], index)
+				if ping_via_shell(next_ip, index, progress=session["progress"]):
+					accepted.append(next_ip)
+		# XXX: except KeyboardInterrupt:
+			# return setup_via_network()
+
+		if len(accepted) == 0:
+			pretty_print_attention("Not found anything, are you sure that network is connected?")
+			return setup_via_network()
+		subprocess.run([
+			GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+			"disconnect"
+		], stdout=DEVNULL, stderr=DEVNULL)
+		pretty_print("Found connections: " + ", ".join(accepted))
+
+		latest = None
+		for next in accepted:
+			try:
+				subprocess.run([
+					GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+					"connect", next
+				], check=True, timeout=5.0, stdout=DEVNULL, stderr=DEVNULL)
+				command = get_adb_command_by_tcp(next, skip_error=True)
+				if command:
+					latest = command
+					break
+				else:
+					pretty_print()
+			except subprocess.CalledProcessError as err:
+				error("adb connect failed with code", err.returncode)
+			except subprocess.TimeoutExpired:
+				pretty_print("Timeout")
+
+		if latest:
+			return latest
+		pretty_print_attention("Pinging every port, interrupt operation if you already know it.")
+		for next in accepted:
 			ports = list()
 			try:
 				import asyncio
-				asyncio.run(connect_async(next, ports))
+				asyncio.run(connect_async(next, ports, progress=session["progress"]))
 			except ImportError:
 				pass
 			for port in ports:
@@ -578,26 +578,21 @@ def setup_via_ping_localhost() -> Optional[List[str]]:
 				if command:
 					latest = command
 					break
-				else:
-					pretty_print()
-		except KeyboardInterrupt:
-			break
-		pretty_print()
-	pretty_print()
 
 	return latest or setup_via_network()
 
-def ping_via_shell(ip: str, index: int) -> int:
-	# progress.seek(index / 255, f"Pinging {ip}")
+def ping_via_shell(ip: str, index: int, progress: Optional[Progress] = None) -> int:
+	if progress and index % 15 == 0:
+		progress.update(index / 255, f"Pinging {ip}")
 	return subprocess.call([
 		"ping",
 		"-n" if platform.system() == "Windows" else "-c", "1",
 		ip
 	], stdout=DEVNULL, stderr=DEVNULL) == 0
 
-async def ping(ip: str, index: int, accepted: List[str]) -> None:
-	# if index % 15 == 0:
-		# progress.seek(index / 255, f"Pinging {ip}")
+async def ping(ip: str, index: int, accepted: List[str], progress: Optional[Progress] = None) -> None:
+	if progress and index % 15 == 0:
+		progress.update(index / 255, f"Pinging {ip}")
 	import asyncio
 	coroutine = await asyncio.create_subprocess_shell(
 		f"ping {'-n' if platform.system() == 'Windows' else '-c'} 1 {ip}", stdout=DEVNULL, stderr=DEVNULL
@@ -606,22 +601,22 @@ async def ping(ip: str, index: int, accepted: List[str]) -> None:
 	if coroutine.returncode == 0:
 		accepted.append(ip)
 
-async def ping_async(ip: Tuple[str, str, str], accepted: List[str]) -> None:
+async def ping_async(ip: Tuple[str, str, str], accepted: List[str], progress: Optional[Progress] = None) -> None:
 	import asyncio
 	tasks = list()
 	for index in range(256):
 		if str(index) == ip[2]:
 			continue
 		next_ip = "{}.{}".format(ip[0], index)
-		task = asyncio.ensure_future(ping(next_ip, index, accepted))
+		task = asyncio.ensure_future(ping(next_ip, index, accepted, progress=progress))
 		tasks.append(task)
 	await asyncio.gather(*tasks, return_exceptions=True)
 
-async def connect(ip: str, port: int, accepted: List[str]) -> None:
+async def connect(ip: str, port: int, accepted: List[str], progress: Optional[Progress] = None) -> None:
 	if len(accepted) > 0:
 		return
-	# if port % 15 == 0:
-		# progress.seek(port / 65535, f"Connecting to {ip}:{str(port)}")
+	if progress and port % 15 == 0:
+		progress.update(port / 65535, f"Connecting to {ip}:{str(port)}")
 	import asyncio
 	coroutine = await asyncio.create_subprocess_shell(
 		GLOBALS.TOOLCHAIN_CONFIG.get_adb() + " connect " + ip + ":" + str(port), stdout=DEVNULL, stderr=DEVNULL
@@ -630,11 +625,11 @@ async def connect(ip: str, port: int, accepted: List[str]) -> None:
 	if coroutine.returncode == 0:
 		accepted.append(str(port))
 
-async def connect_async(ip: str, accepted: List[str]) -> None:
+async def connect_async(ip: str, accepted: List[str], progress: Optional[Progress] = None) -> None:
 	import asyncio
 	tasks = list()
 	for index in range(1000, 65536):
-		task = asyncio.ensure_future(connect(ip, index, accepted))
+		task = asyncio.ensure_future(connect(ip, index, accepted, progress=progress))
 		tasks.append(task)
 	await asyncio.gather(*tasks, return_exceptions=True)
 

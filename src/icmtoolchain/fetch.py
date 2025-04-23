@@ -8,7 +8,7 @@ from urllib.error import URLError
 from urllib.response import addinfourl
 
 from . import GLOBALS
-from .shell import pretty_print_failure, warn
+from .shell import pretty_print_failure, pretty_print_success, warn
 from .utils import ensure_file, name_to_identifier
 
 
@@ -99,7 +99,7 @@ def create_download_request(url: str, data: Optional[bytes] = None, /, placehold
 	if not placeholder:
 		placeholder = url.rsplit("/", 1)[-1]
 	content_size, responce = retrieve_fetch_request(url, data, timeout=timeout, seconds_between_requests=seconds_between_requests, attempts=attempts)
-	def fetch(output_path: Optional[str] = None, /, progress_handler: Optional[Callable[[int, int], None]] = None) -> int:
+	def fetch(output_path: Optional[str] = None, /, progress_handler: Optional[Callable[[int, int], None]] = None):
 		if not output_path:
 			temporary_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path("temp")
 			output_path = join(temporary_directory, name_to_identifier(placeholder, "-"))
@@ -111,10 +111,10 @@ def create_download_request(url: str, data: Optional[bytes] = None, /, placehold
 			elif file_size != content_size:
 				warn(f"* File {placeholder!r} already exists, but is not fully downloaded/has changed on remote.")
 			else:
-				return content_size
+				return output_path, content_size
 			os.remove(output_path)
 		with open(output_path, "wb") as output:
-			return retrieve_stream(responce, output, progress_handler=lambda received: progress_handler(received, content_size) if progress_handler else None)
+			return output_path, retrieve_stream(responce, output, progress_handler=lambda received: progress_handler(received, content_size) if progress_handler else None)
 	return content_size, fetch
 
 def create_download_github_repository_request(repository: str, branch: str = "master", /, placeholder: Optional[str] = None, timeout: float = 10, seconds_between_requests: float = 0.5, attempts: int = 8):
@@ -122,15 +122,17 @@ def create_download_github_repository_request(repository: str, branch: str = "ma
 		placeholder = f"{repository}#{branch}"
 	return create_download_request(f"https://codeload.github.com/{repository}/zip/{branch}", placeholder=placeholder, timeout=timeout, seconds_between_requests=seconds_between_requests, attempts=attempts)
 
-def queue_download_request(url: str, data: Optional[bytes] = None, output_path: Optional[str] = None, /, placeholder: Optional[str] = None, timeout: float = 10, seconds_between_requests: float = 0.5, attempts: int = 2):
+def queue_download_request(url: str, data: Optional[bytes] = None, output_path: Optional[str] = None, *, placeholder: Optional[str] = None, timeout: float = 10, seconds_between_requests: float = 0.5, attempts: int = 2):
 	if not placeholder:
 		placeholder = url.rsplit("/", 1)[-1]
 	from .shell import InteractiveSession, Progress
 	with InteractiveSession(progress=Progress(text=placeholder)) as session:
 		try:
-			_, fetch = create_download_request(url, data, placeholder=placeholder, timeout=timeout, seconds_between_requests=seconds_between_requests, attempts=attempts)
-			fetch(output_path, lambda received, size: session["progress"].update(received / size, f"{placeholder} ({received / size / 1048576:.1f}%)"))
+			retrieve_size, fetch = create_download_request(url, data, placeholder=placeholder, timeout=timeout, seconds_between_requests=seconds_between_requests, attempts=attempts)
+			file_path, file_size = fetch(output_path, lambda received, size: session["progress"].update(received / size, f"{placeholder} ({received / 1048576:.1f} of {size / 1048576:.1f} MiB)"))
 			session["progress"].update(1.0, placeholder)
+			pretty_print_success(f"File {placeholder} ({file_size / 1048576:.1f} MiB) has been downloaded.")
+			return file_path
 		except URLError as exc:
 			pretty_print_failure(f"#{exc.errno}: {exc.strerror}")
 			session["progress"].update(1.0, "Check your network connection!")
