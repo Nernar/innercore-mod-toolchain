@@ -134,4 +134,4 @@ def queue_download_request(url: str, data: Optional[bytes] = None, output_path: 
 		except URLError as exc:
 			pretty_print_failure(f"#{exc.errno}: {exc.strerror}")
 			session["progress"].update(1.0, "Check your network connection!")
-			session["progress"].style = "class:interrupted"
+			session["progress"].style = "class:raised"

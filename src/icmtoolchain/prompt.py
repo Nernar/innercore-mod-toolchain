@@ -251,6 +251,7 @@ class Select(Feedback):
 		default_variant: Optional[Union[int, str]] = None,
 		returns_what: bool = False,
 		explanation: AnyFormattedText = None,
+		choose_hint: Optional[AnyFormattedText] = None,
 		on_focus: Optional[Callable[['Select', int, str, Interactable], None]] = None,
 		on_accept: Optional[Callable[['Select', int, str, Interactable], Optional[bool]]] = None,
 	):
@@ -262,6 +263,8 @@ class Select(Feedback):
 		self.explanation = explanation
 		self.on_focus = on_focus
 		self.on_accept = on_accept
+		self.choose_hint = choose_hint
+		self.explanation_prompt = lambda: merge_formatted_text((self.prompt, self.choose_hint))
 		self.use_space_as_accept = True
 
 	def create_content(self) -> AnyContainer:
@@ -279,7 +282,7 @@ class Select(Feedback):
 		self.explanation_control = Interactable(text=lambda: self.explanation, style="class:editable.hint")
 
 		return HSplit([
-			Interactable(self.prompt),
+			Interactable(self.explanation_prompt),
 			ScrollablePane(
 				HSplit(self.choice_variants),
 				scroll_offsets=ScrollOffsets(3, 3),
@@ -365,11 +368,12 @@ class Checkbox(Select):
 		allow_to_choose_nothing: bool = False,
 		explanation: AnyFormattedText = None,
 		fallback: Optional[Iterable[Union[int, str]]] = None,
+		choose_hint: Optional[AnyFormattedText] = [("class:editable.hint", " <Use Space/Y/N to choose>")],
 		on_focus: Optional[Callable[['Checkbox', int, str, Selectable], None]] = None,
 		on_checked: Optional[Callable[['Checkbox', int, str, bool, Selectable], Optional[bool]]] = None,
 		on_accept: Optional[Callable[['Checkbox', List[int], List[str], Selectable], Optional[bool]]] = None,
 	):
-		Select.__init__(self, prompt=prompt, variants=variants, default_variant=default_variant, returns_what=returns_what, explanation=explanation)
+		Select.__init__(self, prompt=prompt, variants=variants, default_variant=default_variant, returns_what=returns_what, explanation=explanation, choose_hint=choose_hint)
 		self.on_focus = on_focus
 		self.on_checked = on_checked
 		self.on_accept = on_accept

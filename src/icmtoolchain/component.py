@@ -115,14 +115,7 @@ def get_script_directory() -> str:
 def startup() -> None:
 	pretty_print("Welcome to Inner Core Mod Toolchain! Today we will finalize setup of your own modding environment.")
 	tsc_available = request_typescript(only_check=True) is not None
-	from .prompt import Confirm, Input, Review
-	welcome_review = Review(
-		username=Input("Who are you?", hint=get_username(), use_hint_as_fallback=False, explanation="This username, or alias, will be used when creating a project. Author name identifies you on Inner Core Mods."),
-		use_typescript=Confirm("Do you plan to use Node.js for compilation?", default_value=tsc_available, explanation="This will allow your code to be transpiled by TypeScript Compiler to use ESNext's features, but may increase reassembly time."),
-		import_location=Input("Where should we look for projects?", explanation="If you have used Inner Core Mod Toolchain earlier, you may choose where to search for projects. Either import an obsolete project or modification for Inner Core.")
-	)
 
-	# TODO: Reuse someday...
 	preffered_components = which_installed()
 	if not "declarations" in preffered_components:
 		preffered_components.append("declarations")
@@ -132,6 +125,23 @@ def startup() -> None:
 			preffered_components.append("adb")
 	except BaseException:
 		pass
+	component_keys = []
+	component_variants = []
+	for key in COMPONENTS:
+		name = COMPONENTS[key].name
+		if key in preffered_components:
+			preffered_components.remove(key)
+			preffered_components.append(name)
+		component_keys.append(key)
+		component_variants.append(name)
+
+	from .prompt import Checkbox, Confirm, Input, Review
+	welcome_review = Review(
+		username=Input("Who are you?", hint=get_username(), use_hint_as_fallback=False, explanation="This username, or alias, will be used when creating a project. Author name identifies you on Inner Core Mods."),
+		components=Checkbox("What will be used for development?", variants=component_variants, selected_variants=preffered_components, allow_to_choose_nothing=True, explanation="If you don't know what you need, toolchain will offer to install component when necessary."),
+		use_typescript=Confirm("Do you plan to use Node.js for compilation?", default_value=tsc_available, explanation="This will allow your code to be transpiled by TypeScript Compiler to use ESNext's features, but may increase reassembly time."),
+		import_location=Input("Where should we look for projects?", explanation="If you have used Inner Core Mod Toolchain earlier, you may choose where to search for projects. Either import an obsolete project or modification for Inner Core.")
+	)
 
 	try:
 		results = welcome_review.request(returns_empty_properties=True)
@@ -142,6 +152,10 @@ def startup() -> None:
 	username = ensure_not_whitespace(results["username"])
 	if username:
 		GLOBALS.TOOLCHAIN_CONFIG.set_value("template.author", username)
+
+	components = results["components"]
+	if components and len(components) > 0:
+		install_components(*[component_keys[index] for index in components])
 
 	use_typescript = results["use_typescript"]
 	if use_typescript:

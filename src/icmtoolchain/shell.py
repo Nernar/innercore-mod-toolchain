@@ -58,7 +58,7 @@ TOOLCHAIN_STYLE = {
 
 	# interactables styling
 	"checkbox.inactive": "fg:ansibrightblack",
-	"checkbox.active": "",
+	"checkbox.active": "fg:ansibrightgreen",
 	"editable.hint": "fg:ansibrightblack",
 	"progress.percentage": "",
 	"progress.filled": "reverse",
@@ -371,6 +371,23 @@ class Selectable(Interactable):
 			to_formatted_text(self.render_checkbox(), self.style),
 			to_formatted_text(text, self.style),
 		))
+
+	def add_interact_key_bindings(self) -> None:
+		Interactable.add_interact_key_bindings(self)
+		bindings = self.interact_key_bindings
+		assert bindings is not None
+
+		@bindings.add("y")
+		@bindings.add("Y")
+		def _(event: KeyPressEvent) -> None:
+			if not self.checked:
+				self.interact(event)
+
+		@bindings.add("n")
+		@bindings.add("N")
+		def _(event: KeyPressEvent) -> None:
+			if self.checked:
+				self.interact(event)
 
 	def interact(self, event: Optional[KeyPressEvent] = None) -> None:
 		self.checked = not self.checked
