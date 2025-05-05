@@ -1,9 +1,9 @@
 from json import JSONDecodeError
 from json import dump as dump_json
 from json import load as load_json
-from os.path import basename, dirname, isfile
-from typing import (Any, Iterable, MutableSequence, Optional, Protocol, Union,
-                    override)
+from os.path import abspath, basename, dirname, exists, isfile, join, normpath
+from typing import (Any, Iterable, MutableMapping, MutableSequence, Optional,
+                    Protocol, Union, override)
 
 from .utils import ensure_file
 
@@ -27,7 +27,7 @@ class Config(dict[str, Any]):
 			or isinstance(value, bool) \
 			or isinstance(value, str) \
 			or isinstance(value, MutableSequence) \
-			or isinstance(value, Config)
+			or isinstance(value, MutableMapping)
 
 	def get_value(self, key: str, fallback: Any = None, *, allow_prototype: bool = True) -> Any:
 		try:
@@ -52,14 +52,14 @@ class Config(dict[str, Any]):
 	def __getitem__(self, key: str, /) -> Any:
 		return self.get_value_unsafe(key)
 
-	def set_value(self, key: str, value: Any) -> None:
-		self.set_value_unsafe(key, value, replace_mismatched_types=True)
+	def set_value(self, key: str, value: Any, strip_none_from_lists: bool = False) -> None:
+		self.set_value_unsafe(key, value, replace_mismatched_types=True, strip_none_from_lists=strip_none_from_lists)
 
-	def set_value_unsafe(self, key: str, value: Any, *, replace_mismatched_types: bool = False):
+	def set_value_unsafe(self, key: str, value: Any, *, replace_mismatched_types: bool = False, strip_none_from_lists: bool = False):
 		if not self.is_supported_value(value):
 			raise ValueError(f"Config value should be primitive, array or nested config, got {key!r}: {type(value)}!")
 		if not "." in key:
-			super().__setitem__(key, value)
+			super().__setitem__(key, self.replace_value(value, strip_none_from_lists=strip_none_from_lists))
 			return
 
 		namespace_keys = key.partition(".")
@@ -72,25 +72,38 @@ class Config(dict[str, Any]):
 
 		namespace.set_value_unsafe(namespace_keys[2], value, replace_mismatched_types=replace_mismatched_types)
 
+	def replace_value(self, obj: Any, strip_none_from_lists: bool = False) -> Any:
+		if not self.is_supported_value(obj):
+			return None
+		if isinstance(obj, MutableMapping) and not isinstance(obj, Config):
+			return Config(map=obj)
+		if isinstance(obj, MutableSequence):
+			for offset, value in enumerate(obj):
+				obj[offset] = self.replace_value(value, strip_none_from_lists=strip_none_from_lists)
+			if strip_none_from_lists:
+				while None in obj:
+					obj.remove(None)
+		return obj
+
 	@override
 	def __setitem__(self, key: str, value: Any, /) -> None:
 		self.set_value_unsafe(key, value, replace_mismatched_types=True)
 
-	def merge_config(self, config: Union[dict, 'Config'], *, replace_configs: bool = False, extend_lists: bool = False) -> None:
+	def merge_config(self, config: Union[dict, 'Config'], *, replace_configs: bool = False, extend_lists: bool = False, strip_none_from_lists: bool = False) -> None:
 		for key, value in config.items():
 			if not key in self:
-				super().__setitem__(key, value)
+				super().__setitem__(key, self.replace_value(value, strip_none_from_lists=strip_none_from_lists))
 				continue
 
 			current_value = super().__getitem__(key)
 			if not replace_configs and isinstance(value, Config) and isinstance(current_value, Config):
-				current_value.merge_config(value, extend_lists=extend_lists)
+				current_value.merge_config(value, extend_lists=extend_lists, strip_none_from_lists=strip_none_from_lists)
 				continue
 			if extend_lists and isinstance(value, MutableSequence) and isinstance(current_value, MutableSequence):
 				current_value.extend(value)
 				continue
 
-			super().__setitem__(key, value)
+			super().__setitem__(key, self.replace_value(value, strip_none_from_lists=strip_none_from_lists))
 
 	def delete_value(self, key: str, *, remove_when_empty: bool = True) -> None:
 		self.delete_value_unsafe(key, remove_mismatched_types=True, remove_when_empty=remove_when_empty)
@@ -129,6 +142,11 @@ class Config(dict[str, Any]):
 				strip_none and value is None
 			):
 				continue
+			if isinstance(value, MutableSequence):
+				value = [
+					obj.as_json(strip_none=strip_none) if isinstance(obj, Config) \
+						else obj for obj in value if not strip_none or obj is not None
+				]
 			json[key] = value
 		return json
 
@@ -138,6 +156,14 @@ class FileConfig(Config):
 		self.path = path
 		self.directory = dirname(path)
 		self.read_from_file()
+
+	def get_relative_path(self, path_from_config: str) -> str:
+		return abspath(join(self.directory, normpath(path_from_config)))
+
+	def get_path(self, path_from_config: str) -> str:
+		relative_path = self.get_relative_path(path_from_config)
+		absolute_path = abspath(path_from_config)
+		return absolute_path if exists(absolute_path) and not exists(relative_path) else relative_path
 
 	def read_from_file(self, *, merge_with_existing: bool = False) -> None:
 		if not isfile(self.path):
