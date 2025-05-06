@@ -1,7 +1,8 @@
 from json import JSONDecodeError
 from json import dump as dump_json
 from json import load as load_json
-from os.path import abspath, basename, dirname, exists, isfile, join, normpath
+from os.path import (abspath, basename, dirname, exists, isfile, join,
+                     normpath, relpath)
 from typing import (Any, Iterable, MutableMapping, MutableSequence, Optional,
                     Protocol, Union, override)
 
@@ -204,3 +205,7 @@ class FileConfig(Config):
 		relative_path = self.get_relative_path(path_from_config)
 		absolute_path = abspath(path_from_config)
 		return absolute_path if not exists(relative_path) and exists(absolute_path) else relative_path
+
+	def get_path_to_config(self, path_from_config: str) -> str:
+		absolute_path = self.get_path(path_from_config)
+		return relpath(absolute_path, self.directory)
