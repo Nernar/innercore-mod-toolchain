@@ -5,7 +5,7 @@ from os.path import basename, exists, isdir, isfile, join, relpath
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import GLOBALS
-from .base_config import BaseConfig
+from .config import Config
 from .hglob import glob
 from .shell import abort, confirm_prompt, debug, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory,
@@ -43,7 +43,7 @@ def load_build_config(make_obj: Dict[Any, Any], source: str, destination: str) -
 
 	with open(build_config, "r", encoding="utf-8") as build_config_file:
 		build_config_obj = json.loads(build_config_file.read())
-		config = BaseConfig(build_config_obj)
+		config = Config(build_config_obj)
 
 		default_config_api = config.get_value("defaultConfig.api")
 		if default_config_api or not "api" in make_obj:

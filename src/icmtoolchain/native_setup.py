@@ -115,7 +115,7 @@ def read_ndk_source_version(ndk_path: str) -> Optional[str]:
 def get_ndk_path(ndk_version: Optional[str] = None) -> Optional[str]:
 	path_from_config = GLOBALS.TOOLCHAIN_CONFIG.get_value("native.ndkPath", GLOBALS.TOOLCHAIN_CONFIG.get_value("ndkPath"))
 	if path_from_config:
-		path_from_config = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(path_from_config)
+		path_from_config = GLOBALS.TOOLCHAIN_CONFIG.get_path(path_from_config)
 		if isdir(path_from_config):
 			return path_from_config
 	try:
@@ -137,7 +137,7 @@ def search_for_gcc_executable(ndk_directory: str) -> Optional[str]:
 		pretty_print(f"Searching GCC in {search_directory} with {len(files)} files...")
 
 def require_compiler_executable(arch: str, install_if_required: bool = False) -> Optional[str]:
-	ndk_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path("ndk/" + str(arch))
+	ndk_directory = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("ndk/" + str(arch))
 	file = search_for_gcc_executable(ndk_directory)
 	if install_if_required:
 		install_gcc(arches=arch, reinstall=False)
@@ -167,7 +167,7 @@ def check_installation(arches: Union[str, List[str]]) -> bool:
 	if not isinstance(arches, list):
 		arches = [arches]
 	return len(list(filter(
-		lambda arch: not isfile(GLOBALS.TOOLCHAIN_CONFIG.get_path("ndk/.installed-" + str(arch))),
+		lambda arch: not isfile(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("ndk/.installed-" + str(arch))),
 		arches
 	))) == 0
 
@@ -199,13 +199,13 @@ def get_download_ndk_url(revision: str) -> str:
 def download_gcc(ndk_version: Optional[str] = None) -> Optional[str]:
 	revision = ndk_version_to_revision(ndk_version) if ndk_version else "r16b"
 
-	archive_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(f"temp/ndk-{revision}.zip")
+	archive_path = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(f"temp/ndk-{revision}.zip")
 	archive_path = queue_download_request(get_download_ndk_url(revision), output_path=archive_path)
 	if archive_path is None:
 		return None
 
 	with InteractiveSession(progress=Progress("Extracting NDK/GCC")) as session:
-		extract_path = GLOBALS.TOOLCHAIN_CONFIG.get_path("temp")
+		extract_path = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("temp")
 		makedirs(extract_path, exist_ok=True)
 		try:
 			with AttributeZipFile(archive_path, "r") as archive:
@@ -214,12 +214,12 @@ def download_gcc(ndk_version: Optional[str] = None) -> Optional[str]:
 		except OSError as exc:
 			pretty_print_failure(f"#{exc.errno}: {basename(exc.filename)}")
 			try:
-				remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path("temp"))
+				remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("temp"))
 			except OSError:
 				pretty_print_failure(f"#{exc.errno}: {basename(exc.filename)} (security fail)")
 		except zipfile.BadZipFile as exc:
 			try:
-				remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path("temp"))
+				remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("temp"))
 				return download_gcc(revision)
 			except OSError as exc:
 				pretty_print_failure(f"#{exc.errno}: {basename(exc.filename)} (security fail)")
@@ -276,7 +276,7 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False) -
 			join(ndk_path, "build", "tools", "make_standalone_toolchain.py"),
 			"--arch", arch,
 			"--api", "21" if "64" in arch else "19",
-			"--install-dir", GLOBALS.TOOLCHAIN_CONFIG.get_path("ndk/" + arch),
+			"--install-dir", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("ndk/" + arch),
 			"--force"
 		], capture_output=True, text=True)
 		if output.returncode != 0:
@@ -284,7 +284,7 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False) -
 			pretty_print_failure(f"Failed to make a standalone toolchain for {abi} architecture with code {output.returncode}!")
 			return output.returncode
 		else:
-			ensure_file(GLOBALS.TOOLCHAIN_CONFIG.get_path(f"ndk/.installed-{arch}"))
+			ensure_file(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(f"ndk/.installed-{arch}"))
 			pretty_print_success(f"Now native builds are available for {arch} architecture.")
 	return output.returncode
 
@@ -304,7 +304,7 @@ def install_gcc(arches: Union[str, List[str]] = "arm", reinstall: bool = False) 
 
 	try:
 		if result == 0:
-			remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path("temp"))
+			remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("temp"))
 	except OSError as exc:
 		pass
 

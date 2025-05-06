@@ -82,7 +82,7 @@ def assure_task(name: str) -> Task:
 				return TASKS[task]
 
 def lock_task(name: str, silent: bool = True) -> None:
-	path = GLOBALS.TOOLCHAIN_CONFIG.get_path(f"temp/lock/{name}.lock")
+	path = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(f"temp/lock/{name}.lock")
 	ensure_file_directory(path)
 	await_message = False
 
@@ -112,7 +112,7 @@ def unlock_task(name: str) -> None:
 		except IOError:
 			pass
 		del LOCKS[name]
-	path = GLOBALS.TOOLCHAIN_CONFIG.get_path(f"temp/lock/{name}.lock")
+	path = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(f"temp/lock/{name}.lock")
 	if isfile(path):
 		os.remove(path)
 
@@ -194,7 +194,7 @@ def task_compile_java(tool: Optional[str] = None) -> int:
 	description="Recompiles scripts using simple file concatenation or tsc."
 )
 def task_build_scripts() -> int:
-	if not GLOBALS.MAKE_CONFIG.has_value("manifest"):
+	if not "manifest" in GLOBALS.MAKE_CONFIG:
 		from .script_build import build_all_scripts
 		return build_all_scripts()
 	return 0
@@ -205,7 +205,7 @@ def task_build_scripts() -> int:
 	description="Recompiles changed scripts instantly using tsc, interruption will end watching."
 )
 def task_watch_scripts() -> int:
-	if not GLOBALS.MAKE_CONFIG.has_value("manifest"):
+	if not "manifest" in GLOBALS.MAKE_CONFIG:
 		from .script_build import build_all_scripts
 		return build_all_scripts(watch=True)
 	error("* You cannot have scripts to watch because pack structure is being used.")
@@ -216,7 +216,7 @@ def task_watch_scripts() -> int:
 	description="Overrides the contents of 'tsconfig.json' based on script files."
 )
 def task_update_includes() -> int:
-	if not GLOBALS.MAKE_CONFIG.has_value("manifest"):
+	if not "manifest" in GLOBALS.MAKE_CONFIG:
 		from .script_build import compute_and_capture_changed_scripts
 		compute_and_capture_changed_scripts()
 		GLOBALS.WORKSPACE_COMPOSITE.flush()
@@ -232,7 +232,7 @@ def task_update_includes() -> int:
 def task_resources() -> int:
 	from .resources import (build_additional_resources, build_pack_graphics,
 	                        build_resources)
-	if not GLOBALS.MAKE_CONFIG.has_value("manifest"):
+	if not "manifest" in GLOBALS.MAKE_CONFIG:
 		overall_result = build_resources()
 	else:
 		overall_result = build_pack_graphics()
@@ -248,8 +248,8 @@ def task_resources() -> int:
 	description="Writes the description file 'mod.info' to output folder for display in mod browser."
 )
 def task_build_info() -> int:
-	requires_manifest = GLOBALS.MAKE_CONFIG.has_value("manifest")
-	requires_mod_info = GLOBALS.MAKE_CONFIG.has_value("info")
+	requires_manifest = "manifest" in GLOBALS.MAKE_CONFIG
+	requires_mod_info = "info" in GLOBALS.MAKE_CONFIG
 	if requires_manifest and requires_mod_info:
 		error("Properties `info` and `manifest` cannot exist in your 'make.json' at same time!")
 		return 1
@@ -421,7 +421,7 @@ def task_remove_project() -> int:
 		return 0
 
 	try:
-		location = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(who)
+		location = GLOBALS.TOOLCHAIN_CONFIG.get_path(who)
 		GLOBALS.PROJECT_MANAGER.remove_project(folder=who)
 		from .make_config import MakeConfig
 		from .package import cleanup_relative_directory
@@ -438,7 +438,7 @@ def task_remove_project() -> int:
 )
 def task_select_project(path: str = "") -> int:
 	if len(path) > 0:
-		where = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(path)
+		where = GLOBALS.TOOLCHAIN_CONFIG.get_path(path)
 		if isfile(where) and basename(where) == "make.json":
 			where = dirname(where)
 		if isdir(where):
@@ -494,40 +494,40 @@ def task_configure_ide() -> int:
 	from .workspace import (flush_compound_tasks, flush_shell_tasks,
 	                        flush_vscode_compound_task, flush_vscode_shell_task)
 
-	flush_shell_tasks("Select Project", "folder-opened", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/select-project"), focus=True)
-	flush_vscode_shell_task("Select Project by Active File", "repo-force-push", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/select-project"), hidden=True, globbing="**/*", options=("${fileWorkspaceFolder}", ))
-	flush_shell_tasks("Push", "rocket", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/push"))
-	flush_shell_tasks("Assemble Mod for Release", "archive", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/assemble-release"))
+	flush_shell_tasks("Select Project", "folder-opened", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/select-project"), focus=True)
+	flush_vscode_shell_task("Select Project by Active File", "repo-force-push", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/select-project"), hidden=True, globbing="**/*", options=("${fileWorkspaceFolder}", ))
+	flush_shell_tasks("Push", "rocket", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/push"))
+	flush_shell_tasks("Assemble Mod for Release", "archive", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/assemble-release"))
 
-	flush_shell_tasks("Build (No push)", "debug-all", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/build-all"), hidden=True)
+	flush_shell_tasks("Build (No push)", "debug-all", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/build-all"), hidden=True)
 	flush_compound_tasks("Build", "debug-all", ("Build (No push)", "Push"))
 	flush_vscode_compound_task("Build by Active File", "debug-all", ("Select Project by Active File", "Build"), hidden=True, globbing="**/*")
 
-	flush_shell_tasks("Build Scripts and Resources (No push)", "debug-alt", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/build-scripts-and-resources"), hidden=True)
+	flush_shell_tasks("Build Scripts and Resources (No push)", "debug-alt", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/build-scripts-and-resources"), hidden=True)
 	flush_compound_tasks("Build Scripts and Resources", "debug-alt", ("Build Scripts and Resources (No push)", "Push"))
 	flush_vscode_compound_task("Build Scripts and Resources by Active File", "debug-alt", ("Select Project by Active File", "Build Scripts and Resources"), hidden=True, globbing="**/*")
 
-	flush_shell_tasks("Build Java (No push)", "run-above", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/compile-java"), hidden=True)
+	flush_shell_tasks("Build Java (No push)", "run-above", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/compile-java"), hidden=True)
 	flush_compound_tasks("Build Java", "run-above", ("Build Java (No push)", "Push"))
 	flush_vscode_compound_task("Build Java by Active File", "run-above", ("Select Project by Active File", "Build Java"), hidden=True, globbing="**/*")
 
-	flush_shell_tasks("Build Native (No push)", "run", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/compile-native"), hidden=True)
+	flush_shell_tasks("Build Native (No push)", "run", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/compile-native"), hidden=True)
 	flush_compound_tasks("Build Native", "run", ("Build Native (No push)", "Push"))
 	flush_vscode_compound_task("Build Native by Active File", "run", ("Select Project by Active File", "Build Native"), hidden=True, globbing="**/*")
 
-	flush_shell_tasks("Watch Scripts (No push)", "debug-coverage", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/watch-scripts"), hidden=True)
+	flush_shell_tasks("Watch Scripts (No push)", "debug-coverage", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/watch-scripts"), hidden=True)
 	flush_compound_tasks("Watch Scripts", "debug-coverage", ("Watch Scripts (No push)", "Push"))
 	flush_vscode_compound_task("Watch Scripts by Active File", "debug-coverage", ("Select Project by Active File", "Watch Scripts"), hidden=True, globbing="**/*")
 
-	flush_shell_tasks("Configure ADB", "device-mobile", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/configure-adb"), focus=True)
-	flush_shell_tasks("New Project", "new-folder", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/new-project"), focus=True)
-	flush_shell_tasks("Import Project", "repo-pull", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/import-project"), focus=True)
-	flush_shell_tasks("Remove Project", "root-folder-opened", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/remove-project"), focus=True)
-	flush_shell_tasks("Rebuild Declarations", "milestone", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/rebuild-declarations"), hidden=True)
+	flush_shell_tasks("Configure ADB", "device-mobile", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/configure-adb"), focus=True)
+	flush_shell_tasks("New Project", "new-folder", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/new-project"), focus=True)
+	flush_shell_tasks("Import Project", "repo-pull", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/import-project"), focus=True)
+	flush_shell_tasks("Remove Project", "root-folder-opened", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/remove-project"), focus=True)
+	flush_shell_tasks("Rebuild Declarations", "milestone", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/rebuild-declarations"), hidden=True)
 	flush_vscode_compound_task("Rebuild Declarations by Active File", "milestone", ("Select Project by Active File", "Rebuild Declarations"), hidden=True, globbing="**/*")
-	flush_shell_tasks("Check for Updates", "cloud", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/update-toolchain"), focus=True)
-	flush_shell_tasks("Reinstall Components", "package", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/component-integrity"), focus=True)
-	flush_shell_tasks("Invalidate Caches", "flame", GLOBALS.TOOLCHAIN_CONFIG.get_path("python/cleanup"), focus=True)
+	flush_shell_tasks("Check for Updates", "cloud", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/update-toolchain"), focus=True)
+	flush_shell_tasks("Reinstall Components", "package", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/component-integrity"), focus=True)
+	flush_shell_tasks("Invalidate Caches", "flame", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/cleanup"), focus=True)
 
 	return 0
 

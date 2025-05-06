@@ -2,7 +2,7 @@ import os
 from copy import deepcopy
 from os.path import isfile, join, realpath
 
-from .base_config import BaseConfig
+from .config import Config
 
 
 def find_configuration(path: str, filename: str):
@@ -16,7 +16,7 @@ def find_configuration(path: str, filename: str):
 def request_make_config(toolchain_config):
 	selected_project = toolchain_config.get_value("currentProject")
 	if selected_project:
-		preffered_config = toolchain_config.get_absolute_path(join(selected_project, "make.json"))
+		preffered_config = toolchain_config.get_path(join(selected_project, "make.json"))
 	else:
 		preffered_config = find_configuration(os.getcwd(), "make.json")
 	if not preffered_config or not isfile(preffered_config):
@@ -67,7 +67,7 @@ class Globals:
 				from .make_config import ToolchainConfig
 				self.toolchain_config = ToolchainConfig(toolchain_config)
 			elif hasattr(self, "make_config"):
-				self.toolchain_config = self.MAKE_CONFIG.prototype
+				self.toolchain_config = self.MAKE_CONFIG.defaults
 		if not hasattr(self, "toolchain_config") or not self.toolchain_config:
 			from .make_config import ToolchainConfig
 			self.toolchain_config = ToolchainConfig(join(realpath(join(__file__, "..")), "toolchain.json"))
@@ -135,14 +135,14 @@ class Globals:
 	def CODE_WORKSPACE(self):
 		if not hasattr(self, "code_workspace"):
 			from .workspace import CodeWorkspace
-			self.code_workspace = CodeWorkspace(self.TOOLCHAIN_CONFIG.get_absolute_path(self.TOOLCHAIN_CONFIG.get_value("workspaceFile", "toolchain.code-workspace")))
+			self.code_workspace = CodeWorkspace(self.TOOLCHAIN_CONFIG.get_path(self.TOOLCHAIN_CONFIG.get_value("workspaceFile", "toolchain.code-workspace")))
 		return self.code_workspace
 
 	@property
 	def CODE_SETTINGS(self):
 		if not hasattr(self, "code_settings"):
 			from .workspace import CodeWorkspace
-			self.code_settings = CodeWorkspace(self.TOOLCHAIN_CONFIG.get_path(".vscode/settings.json"))
+			self.code_settings = CodeWorkspace(self.TOOLCHAIN_CONFIG.get_relative_path(".vscode/settings.json"))
 		return self.code_settings
 
 	@property
@@ -200,4 +200,4 @@ PARAMETERS = {
 	"release": bool
 }
 
-PROPERTIES = BaseConfig()
+PROPERTIES = Config()

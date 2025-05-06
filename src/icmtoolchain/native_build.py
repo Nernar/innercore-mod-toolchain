@@ -6,8 +6,9 @@ from os.path import abspath, basename, exists, isdir, isfile, join, relpath
 from typing import Collection, Dict, List, Optional
 
 from . import GLOBALS, PROPERTIES
+from .config import Config
 from .language import get_language_directories
-from .make_config import BaseConfig, ToolchainConfig
+from .make_config import ToolchainConfig
 from .native_setup import arch_to_abi, prepare_compiler_executable
 from .shell import abort, debug, error, info, pretty_print, warn
 from .utils import (RuntimeCodeError, copy_directory, copy_file,
@@ -29,9 +30,9 @@ def collect_stdincludes_directories(directories: Optional[Collection[str]]) -> L
 	if not directories:
 		return stdincludes
 	for directory in directories:
-		stdincludes_directory = GLOBALS.MAKE_CONFIG.get_absolute_path(directory)
+		stdincludes_directory = GLOBALS.MAKE_CONFIG.get_path(directory)
 		if not isdir(stdincludes_directory):
-			stdincludes_directory = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(directory)
+			stdincludes_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path(directory)
 		if not isdir(stdincludes_directory):
 			warn(f"* Skipped non-existing stdincludes directory {directory!r}, please make sure that them exist!")
 			continue
@@ -62,7 +63,7 @@ def search_in_directory(parent: str, name: str) -> Optional[str]:
 				return path
 
 def get_fake_so_directory(abi: str) -> str:
-	fake_so_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path(join("ndk", "fakeso", abi))
+	fake_so_directory = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(join("ndk", "fakeso", abi))
 	ensure_directory(fake_so_directory)
 	return fake_so_directory
 
@@ -71,7 +72,7 @@ def add_fake_so(executable: str, abi: str, name: str) -> None:
 	if not isfile(file):
 		result = subprocess.call([
 			executable, "-std=c++11",
-			GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/fakeso.cpp"),
+			GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("bin/fakeso.cpp"),
 			"-shared", "-o", file
 		])
 		if result == 0:
@@ -115,15 +116,15 @@ def is_relevant_configuration(configuration: str, *properties: str) -> bool:
 		return False
 	return rule_match_abi != False
 
-def merge_relevant_configurations(configurations: BaseConfig, *properties: str) -> BaseConfig:
-	relevant = BaseConfig()
-	for key, _ in configurations.iterate_entries(recursive=False):
-		config = configurations.get_config(key)
-		if config and is_relevant_configuration(key, *properties):
+def merge_relevant_configurations(configurations: Config, *properties: str) -> Config:
+	relevant = Config()
+	for key, _ in configurations.items():
+		config = configurations.get_value(key)
+		if isinstance(config, Config) and is_relevant_configuration(key, *properties):
 			relevant.merge_config(config)
 	return relevant
 
-def get_native_build_targets(directories: Dict[str, BaseConfig]) -> List[BuildTarget]:
+def get_native_build_targets(directories: Dict[str, Config]) -> List[BuildTarget]:
 	targets = list()
 
 	for directory, config in directories.items():
@@ -132,18 +133,18 @@ def get_native_build_targets(directories: Dict[str, BaseConfig]) -> List[BuildTa
 		ensure_directory(output_directory)
 
 		# Apply global configurations to preserve keepIncludes, etc. in builds.
-		configurations = config.get_config("configurations")
-		if configurations:
-			config.merge_config(merge_relevant_configurations(configurations))
+		optional_config = config.get_value("configurations")
+		if isinstance(optional_config, Config):
+			config.merge_config(merge_relevant_configurations(optional_config))
 
 		with open(join(directory, "manifest"), encoding="utf-8") as manifest:
 			try:
-				manifest = BaseConfig(json.load(manifest))
-				manifest.remove_value("directory")
+				manifest = Config(json.load(manifest))
+				manifest.delete_value("directory")
 				# Obtain deprecated `rules` property to being merged.
-				if manifest.has_value("rules"):
-					rules_config = manifest.get_config("rules")
-					if rules_config:
+				if "rules" in manifest:
+					rules_config = manifest.get_value("rules")
+					if isinstance(rules_config, Config):
 						config.merge_config(rules_config)
 				config.merge_config(manifest)
 			except json.JSONDecodeError as exc:
@@ -155,8 +156,8 @@ def get_native_build_targets(directories: Dict[str, BaseConfig]) -> List[BuildTa
 
 	return targets
 
-def build_native_with_ndk(directory: str, output_directory: str, target_directory: str, abis: Collection[str], stdincludes: Collection[str], manifest: BaseConfig) -> int:
-	configurations = manifest.get_config("configurations")
+def build_native_with_ndk(directory: str, output_directory: str, target_directory: str, abis: Collection[str], stdincludes: Collection[str], manifest: Config) -> int:
+	configurations = manifest.get_value("configurations")
 	library_name = manifest.get_value("shared.name", basename(directory))
 	if len(library_name) == 0 or library_name.isspace() or (manifest.get_value("shared") and library_name == "unnamed"):
 		abort(f"Library directory {directory} uses illegal name {library_name!r}!", code=CODE_FAILED_INVALID_MANIFEST)
@@ -231,13 +232,13 @@ def build_native_with_ndk(directory: str, output_directory: str, target_director
 		manifest_abi = manifest
 		options = manifest_abi.get_value("options")
 		displayed_configuration = False
-		if configurations:
+		if isinstance(configuration, Config):
 			configuration = merge_relevant_configurations(configurations, abi)
 			configuration_options = configuration.get_value("options")
 			if configuration_options and len(configuration_options) != 0:
 				debug(f"{', '.join(options)} (architecture configuration: {', '.join(configuration_options)})")
 				displayed_configuration = True
-			manifest_abi = BaseConfig()
+			manifest_abi = Config()
 			manifest_abi.merge_config(manifest)
 			manifest_abi.merge_config(configuration)
 			options = manifest_abi.get_value("options")
@@ -337,7 +338,7 @@ def build_native_with_ndk(directory: str, output_directory: str, target_director
 		debug(f"Recompiled {recompiled_count}/{total_count} files with result {overall_result} ({'OK' if overall_result == 0 else 'ERROR'}){' ' * 48}")
 
 		for link in manifest_abi.get_list("linkStatic"):
-			link_path = GLOBALS.MAKE_CONFIG.get_path(join("static_libs", abi, link))
+			link_path = GLOBALS.MAKE_CONFIG.get_relative_path(join("static_libs", abi, link))
 			if isdir(link_path):
 				for object_file in get_all_files(link_path):
 					object_files.append(object_file)
@@ -372,7 +373,7 @@ def build_native_with_ndk(directory: str, output_directory: str, target_director
 
 	return overall_result
 
-def build_native_directories(abis: Collection[str], directories: Dict[str, BaseConfig], target_directory: str) -> int:
+def build_native_directories(abis: Collection[str], directories: Dict[str, Config], target_directory: str) -> int:
 	targets = get_native_build_targets(directories)
 
 	for target in targets:
@@ -392,22 +393,20 @@ def compile_native(abis: Collection[str]) -> int:
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("native")
 
 	stdincludes_directories = list()
-	stdincludes_toolchain = GLOBALS.TOOLCHAIN_CONFIG.get_path("stdincludes")
+	stdincludes_toolchain = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("stdincludes")
 	if isdir(stdincludes_toolchain):
 		stdincludes_directories.append(stdincludes_toolchain)
-	stdincludes_custom = GLOBALS.MAKE_CONFIG.get_path("stdincludes")
+	stdincludes_custom = GLOBALS.MAKE_CONFIG.get_relative_path("stdincludes")
 	if exists(stdincludes_custom):
 		stdincludes_directories.append(stdincludes_custom)
 
 	try:
-		native_config = GLOBALS.MAKE_CONFIG.get_config("native")
-		if not native_config:
-			# Obtain deprecated config `linkNative` property.
-			native_config = BaseConfig()
-			if GLOBALS.MAKE_CONFIG.has_value("linkNative"):
-				native_config.set_value("link", GLOBALS.MAKE_CONFIG.get_value("linkNative"))
+		native_config = GLOBALS.MAKE_CONFIG.obtain_config("native")
+		# Obtain deprecated config `linkNative` property.
+		if not "native" in GLOBALS.MAKE_CONFIG and "linkNative" in GLOBALS.MAKE_CONFIG:
+			native_config.set_value("link", GLOBALS.MAKE_CONFIG.get_value("linkNative"))
 		if len(stdincludes_directories) > 0:
-			additional_config = BaseConfig()
+			additional_config = Config()
 			additional_config.set_value("stdincludes", stdincludes_directories)
 			native_config.merge_config(additional_config, exclusive_lists=True)
 		directories = get_language_directories("native", native_config)
@@ -434,7 +433,7 @@ def compile_native(abis: Collection[str]) -> int:
 def copy_shared_objects(abis: Collection[str]) -> int:
 	shared_objects = GLOBALS.MAKE_CONFIG.get_list("native.sharedObjects")
 	shared_objects_count = len(shared_objects)
-	if shared_objects_count == 0 or not GLOBALS.MAKE_CONFIG.has_value("manifest"):
+	if shared_objects_count == 0 or not "manifest" in GLOBALS.MAKE_CONFIG:
 		return 0
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("shared_object")
 	order = set()

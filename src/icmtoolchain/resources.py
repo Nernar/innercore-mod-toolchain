@@ -4,7 +4,7 @@ from os.path import basename, exists, isdir, isfile, join
 from shutil import make_archive
 
 from . import GLOBALS
-from .base_config import BaseConfig
+from .config import FileConfig
 from .make_config import ToolchainConfig
 from .shell import debug, error, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory,
@@ -60,7 +60,7 @@ def build_resources() -> int:
 					}
 				)
 
-			relative_path = GLOBALS.MAKE_CONFIG.get_relative_path(source_path)
+			relative_path = GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)
 			output_path = GLOBALS.MOD_STRUCTURE.build_targets[resource_type].directory + "/" + target["name"]
 			GLOBALS.LINKED_RESOURCE_STORAGE.append_resource(relative_path, output_path, push_unchanged=push_unchanged, cleanup_remote=cleanup_remote)
 
@@ -113,7 +113,7 @@ def build_additional_resources() -> int:
 		cleanup_remote = additional_dir["cleanupRemote"] if "cleanupRemote" in additional_dir else False
 
 		for additional_path in additional_files:
-			relative_path = GLOBALS.MAKE_CONFIG.get_relative_path(additional_path)
+			relative_path = GLOBALS.MAKE_CONFIG.get_path_to_config(additional_path)
 			output_relative_filename = additional_dir["targetFile"] if "targetFile" in additional_dir else basename(additional_path)
 			output_path = f"{additional_dir['targetDir']}/{output_relative_filename}"
 			debug(f"Referencing {additional_dir['source']!r} to {output_path!r} on remote")
@@ -123,19 +123,19 @@ def build_additional_resources() -> int:
 
 def write_mod_info_file() -> int:
 	info_file = join(GLOBALS.MOD_STRUCTURE.directory, "mod.info")
-	with open(GLOBALS.MAKE_CONFIG.get_path(info_file), "w", encoding="utf-8") as info_file:
-		info = GLOBALS.MAKE_CONFIG.get_config("info") or BaseConfig()
-		if info.has_value("name"):
+	with open(GLOBALS.MAKE_CONFIG.get_relative_path(info_file), "w", encoding="utf-8") as info_file:
+		info = GLOBALS.MAKE_CONFIG.obtain_config("info")
+		if "name" in info:
 			info.set_value("name", shortcodes(info.get_value("name")))
-		if info.has_value("version"):
+		if "version" in info:
 			info.set_value("version", shortcodes(info.get_value("version")))
-		if info.has_value("description"):
+		if "description" in info:
 			info.set_value("description", shortcodes(info.get_value("description")))
-		info.remove_value("icon")
-		info_file.write(json.dumps(info.json, indent="\t", ensure_ascii=False) + "\n")
+		info.delete_value("icon")
+		info_file.write(json.dumps(info.as_json(), indent="\t", ensure_ascii=False) + "\n")
 
 	optional_icon_path = GLOBALS.MAKE_CONFIG.get_value("info.icon")
-	icon_path = GLOBALS.MAKE_CONFIG.get_absolute_path(optional_icon_path or "mod_icon.png")
+	icon_path = GLOBALS.MAKE_CONFIG.get_path(optional_icon_path or "mod_icon.png")
 	if isfile(icon_path):
 		output_info_path = join(GLOBALS.MOD_STRUCTURE.directory, "mod_icon.png")
 		copy_file(icon_path, output_info_path)
@@ -145,16 +145,16 @@ def write_mod_info_file() -> int:
 
 def write_manifest_file() -> int:
 	manifest_relative_path = GLOBALS.MAKE_CONFIG.get_value("manifest")
-	manifest_file = GLOBALS.MAKE_CONFIG.get_path(manifest_relative_path)
+	manifest_file = GLOBALS.MAKE_CONFIG.get_relative_path(manifest_relative_path)
 	if not isfile(manifest_file):
 		error(f"Manifest file {manifest_relative_path} does not exist, aborting!")
 		return 1
-	manifest = ToolchainConfig(manifest_file)
-	if manifest.has_value("pack"):
+	manifest = FileConfig(manifest_file)
+	if "pack" in manifest:
 		manifest.set_value("pack", shortcodes(manifest.get_value("pack")))
-	if manifest.has_value("packVersion"):
+	if "packVersion" in manifest:
 		manifest.set_value("packVersion", shortcodes(manifest.get_value("packVersion")))
-	if manifest.has_value("description"):
+	if "description" in manifest:
 		description = manifest.get_value("description")
 		if isinstance(description, dict):
 			for key, value in description.items():
@@ -162,12 +162,11 @@ def write_manifest_file() -> int:
 		else:
 			manifest.set_value("description", shortcodes(description))
 	output_manifest_path = join(GLOBALS.MOD_STRUCTURE.directory, "manifest.json")
-	with open(output_manifest_path, "w", encoding="utf-8") as manifest_file:
-		manifest_file.write(json.dumps(manifest.json, indent="\t", ensure_ascii=False) + "\n")
+	manifest.save_as_file(output_manifest_path)
 	return 0
 
 def build_package() -> int:
-	requires_manifest = GLOBALS.MAKE_CONFIG.has_value("manifest")
+	requires_manifest = "manifest" in GLOBALS.MAKE_CONFIG
 	name = basename(GLOBALS.MAKE_CONFIG.current_project)
 	output_directory = GLOBALS.MAKE_CONFIG.get_build_path("package")
 
@@ -177,13 +176,13 @@ def build_package() -> int:
 	output_temporary_file = join(output_directory, "package.zip")
 	ensure_file_directory(output_temporary_file)
 	remove_tree(output_temporary_file)
-	output_file = GLOBALS.MAKE_CONFIG.get_path(name + ".zip" if requires_manifest else name + ".icmod")
+	output_file = GLOBALS.MAKE_CONFIG.get_relative_path(name + ".zip" if requires_manifest else name + ".icmod")
 	ensure_file_directory(output_file)
 	remove_tree(output_file)
 
 	copy_directory(GLOBALS.MOD_STRUCTURE.directory, output_package_directory)
 	for linked_resource in GLOBALS.LINKED_RESOURCE_STORAGE.iterate_resources():
-		input_resource = GLOBALS.MAKE_CONFIG.get_path(linked_resource["relative_path"])
+		input_resource = GLOBALS.MAKE_CONFIG.get_relative_path(linked_resource["relative_path"])
 		output_package_resource = join(output_package_directory, linked_resource["output_path"])
 		if isfile(input_resource):
 			copy_file(input_resource, output_package_resource)

@@ -18,7 +18,7 @@ class ModStructure:
 	build_config: Optional[Dict] = None
 
 	def __init__(self, output_directory: str) -> None:
-		self.directory = GLOBALS.MAKE_CONFIG.get_absolute_path(output_directory)
+		self.directory = GLOBALS.MAKE_CONFIG.get_path(output_directory)
 		self.targets = dict()
 		self.setup_build_targets()
 
@@ -129,7 +129,7 @@ class ModStructure:
 			remove_tree(build_config_path)
 			os.remove(build_config_path)
 		ensure_file_directory(build_config_path)
-		if not GLOBALS.MAKE_CONFIG.has_value("manifest"):
+		if not "manifest" in GLOBALS.MAKE_CONFIG:
 			with open(build_config_path, "w", encoding="utf-8") as file:
 				file.write(json.dumps(self.build_config, indent=" " * 2, ensure_ascii=False))
 
@@ -141,11 +141,11 @@ class ModStructure:
 			self.build_config["defaultConfig"] = dict()
 		default_config = self.build_config["defaultConfig"]
 		default_config["readme"] = "this build config is generated automatically by mod development toolchain"
-		default_config["api"] = GLOBALS.MAKE_CONFIG.get_value("api", fallback="CoreEngine", accept_prototype=False)
-		optimization_level = GLOBALS.MAKE_CONFIG.get_value("optimizationLevel", accept_prototype=False)
+		default_config["api"] = GLOBALS.MAKE_CONFIG.get_value("api", fallback="CoreEngine", allow_prototype=False)
+		optimization_level = GLOBALS.MAKE_CONFIG.get_value("optimizationLevel", allow_prototype=False)
 		if optimization_level is not None:
 			default_config["optimizationLevel"] = min(max(int(optimization_level), -1), 9)
-		setup_script = GLOBALS.MAKE_CONFIG.get_value("setupScript", accept_prototype=False)
+		setup_script = GLOBALS.MAKE_CONFIG.get_value("setupScript", allow_prototype=False)
 		if setup_script:
 			default_config["setupScript"] = setup_script
 		default_config["buildType"] = "develop"

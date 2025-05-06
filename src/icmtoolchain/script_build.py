@@ -15,7 +15,7 @@ def build_all_scripts(watch: bool = False) -> int:
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("script_source")
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("script_library")
 
-	if request_typescript(only_check=True) and not exists(GLOBALS.TOOLCHAIN_CONFIG.get_path("declarations")):
+	if request_typescript(only_check=True) and not exists(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("declarations")):
 		warn("Not found 'declarations', in most cases build will be failed, please install it via tasks.")
 
 	overall_result = 0
@@ -75,7 +75,7 @@ def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], L
 
 		for source_path in GLOBALS.MAKE_CONFIG.get_paths(source["source"]):
 			if not exists(source_path):
-				warn(f"* Skipped non-existing source {GLOBALS.MAKE_CONFIG.get_relative_path(source_path)!r}!")
+				warn(f"* Skipped non-existing source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r}!")
 				continue
 
 			# Supports assembling directories, JavaScript and TypeScript
@@ -83,7 +83,7 @@ def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], L
 			if not isdir(source_path):
 				preffered_typescript = source_path.endswith(".ts")
 				if not preffered_typescript and not source_path.endswith(".js"):
-					warn(f"* Unsupported script {GLOBALS.MAKE_CONFIG.get_relative_path(source_path)!r}, it should be directory with includes or Java/TypeScript file!")
+					warn(f"* Unsupported script {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r}, it should be directory with includes or Java/TypeScript file!")
 					continue
 			else:
 				try:
@@ -97,8 +97,8 @@ def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], L
 			language = preffered_language or ("typescript" if preffered_typescript else "javascript")
 			if language == "typescript" and not request_typescript():
 				if preffered_typescript:
-					raise RuntimeCodeError(255, f"We cannot compile source {GLOBALS.MAKE_CONFIG.get_relative_path(source_path)!r} without you having Node.js, despite `denyTypeScript` property of your 'toolchain.json' being active. Please disable it and install Node.js to compile TypeScript sources.")
-				warn(f"* Source {GLOBALS.MAKE_CONFIG.get_relative_path(source_path)!r} specifies target language as TypeScript, so this script probably uses ESNext capabilities. Build as normal JavaScript files, since `denyTypeScript` property of your 'toolchain.json' is active.")
+					raise RuntimeCodeError(255, f"We cannot compile source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r} without you having Node.js, despite `denyTypeScript` property of your 'toolchain.json' being active. Please disable it and install Node.js to compile TypeScript sources.")
+				warn(f"* Source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r} specifies target language as TypeScript, so this script probably uses ESNext capabilities. Build as normal JavaScript files, since `denyTypeScript` property of your 'toolchain.json' is active.")
 				language = "javascript"
 
 			# Using template <sourceName>.<extension> -> <sourceName>, e.g. main.js -> main

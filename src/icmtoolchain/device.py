@@ -15,7 +15,7 @@ from .utils import DEVNULL
 
 
 def get_modpack_push_directory() -> Optional[str]:
-	directory = GLOBALS.PREFERRED_CONFIG.get_value("pushTo", accept_prototype=False)
+	directory = GLOBALS.PREFERRED_CONFIG.get_value("pushTo", allow_prototype=False)
 	if not directory:
 		directory = GLOBALS.TOOLCHAIN_CONFIG.get_value("pushTo")
 		if directory:
@@ -28,7 +28,7 @@ def get_modpack_push_directory() -> Optional[str]:
 		GLOBALS.TOOLCHAIN_CONFIG.set_value("pushTo", setup_modpack_directory())
 		if not GLOBALS.PREFERRED_CONFIG.get_value("pushTo"):
 			abort("Not found any modpacks, nothing to do.")
-		GLOBALS.TOOLCHAIN_CONFIG.save()
+		GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 		return get_modpack_push_directory()
 
 	if "/horizon/packs/" not in directory and not GLOBALS.PREFERRED_CONFIG.get_value("adb.pushAnyLocation", False):
@@ -45,13 +45,13 @@ def get_modpack_push_directory() -> Optional[str]:
 		)
 
 		if which == 0:
-			GLOBALS.TOOLCHAIN_CONFIG.remove_value("pushTo")
+			GLOBALS.TOOLCHAIN_CONFIG.delete_value("pushTo")
 			if GLOBALS.TOOLCHAIN_CONFIG != GLOBALS.PREFERRED_CONFIG:
-				GLOBALS.PREFERRED_CONFIG.remove_value("pushTo")
+				GLOBALS.PREFERRED_CONFIG.delete_value("pushTo")
 			return get_modpack_push_directory()
 		elif which == 2:
 			GLOBALS.TOOLCHAIN_CONFIG.set_value("adb.pushAnyLocation", True)
-			GLOBALS.TOOLCHAIN_CONFIG.save()
+			GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 			pretty_print("This may be changed in your 'toolchain.json' config.")
 		elif which == 3:
 			pretty_print("Pushing aborted.")
@@ -161,7 +161,7 @@ def push_everything(push_unchanged: bool = True, cleanup_remote: bool = True) ->
 	if result > 0:
 		return result
 	for linked_resource in GLOBALS.LINKED_RESOURCE_STORAGE.iterate_resources():
-		project_path = GLOBALS.MAKE_CONFIG.get_path(linked_resource["relative_path"])
+		project_path = GLOBALS.MAKE_CONFIG.get_relative_path(linked_resource["relative_path"])
 		remote_path = destination_directory + "/" + linked_resource["output_path"]
 		remote_push_unchanged = linked_resource["push_unchanged"] if "push_unchanged" in linked_resource else push_unchanged
 		remote_cleanup_remote = linked_resource["cleanup_remote"] if "cleanup_remote" in linked_resource else cleanup_remote
@@ -426,7 +426,7 @@ def get_adb_command_by_serial(serial: str) -> List[str]:
 		except ValueError:
 			devices.append(serial)
 			GLOBALS.TOOLCHAIN_CONFIG.set_value("devices", devices)
-			GLOBALS.TOOLCHAIN_CONFIG.save()
+			GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 	return [
 		GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
 		"-s", serial
@@ -446,7 +446,7 @@ def get_adb_command_by_tcp(ip: str, port: Optional[int] = None, skip_error: bool
 	if not device in devices:
 		devices.append(device)
 		GLOBALS.TOOLCHAIN_CONFIG.set_value("devices", devices)
-		GLOBALS.TOOLCHAIN_CONFIG.save()
+		GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 	return [
 		GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
 		"-e"

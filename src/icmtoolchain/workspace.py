@@ -9,7 +9,7 @@ from re import sub
 from typing import Any, Callable, Collection, Dict, List, Optional
 
 from . import GLOBALS, PROPERTIES
-from .base_config import BaseConfig
+from .config import FileConfig
 from .hglob import glob
 from .utils import ensure_directory, ensure_file_directory, request_typescript
 
@@ -163,43 +163,33 @@ class WorkspaceNotAvailable(RuntimeError):
 	def __init__(self, *args: object) -> None:
 		RuntimeError.__init__(self, "Workspace is not available", *args)
 
-class CodeWorkspace(BaseConfig):
+class CodeWorkspace(FileConfig):
 	def __init__(self, path: str) -> None:
-		if not isfile(path):
-			return BaseConfig.__init__(self, dict())
-		config = None
-		with open(path, encoding="utf-8") as file:
-			try:
-				config = json.load(file)
-			except json.JSONDecodeError as exc:
-				from .shell import warn
-				warn(f"* Malformed {basename(path)!r}, ignoring it: {exc.msg}.")
-		if config is None:
-			return BaseConfig.__init__(self, dict())
-		self.json = config
-		self.path = path
-		self.directory = abspath(join(self.path, ".."))
-		BaseConfig.__init__(self, self.json)
+		try:
+			super().__init__(path)
+			self.valid = True
+		except ValueError as exc:
+			from .shell import warn
+			warn(f"* Malformed {basename(path)!r}, ignoring it: {exc}.")
+			self.valid = False
 
 	def available(self) -> bool:
-		return hasattr(self, "path") and isfile(self.path)
+		return self.valid and isfile(self.path)
 
-	def get_path(self, relative_path: str) -> str:
+	def get_relative_path(self, path_from_config: str) -> str:
 		if not self.available():
 			raise WorkspaceNotAvailable()
-		return abspath(join(self.directory, relative_path))
+		return super().get_relative_path(path_from_config=path_from_config)
 
 	def get_toolchain_path(self, relative_path: str = "") -> str:
 		if not self.available():
 			raise WorkspaceNotAvailable()
-		return relpath(GLOBALS.TOOLCHAIN_CONFIG.get_path(relative_path), self.directory)
+		return relpath(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(relative_path), self.directory)
 
-	def save(self) -> None:
+	def save_as_file(self, output_path: Optional[str] = None) -> None:
 		if not self.available():
 			raise WorkspaceNotAvailable()
-		with open(self.path, "w", encoding="utf-8") as workspace_file:
-			workspace_file.write(json.dumps(self.json, indent="\t", ensure_ascii=False) + "\n")
-
+		super().save_as_file(output_path=output_path)
 
 class WorkspaceComposite:
 	references: List[Dict[str, Any]]
@@ -210,7 +200,7 @@ class WorkspaceComposite:
 		self.reset()
 
 	def get_tsconfig(self) -> str:
-		return GLOBALS.MAKE_CONFIG.get_path(self.path)
+		return GLOBALS.MAKE_CONFIG.get_relative_path(self.path)
 
 	def coerce(self, path: str) -> None:
 		path = relpath(path, GLOBALS.MAKE_CONFIG.directory)
@@ -239,15 +229,15 @@ class WorkspaceComposite:
 		])
 		declarations = list()
 		for filepath in [
-			GLOBALS.MAKE_CONFIG.get_absolute_path(include) for include in includes
+			GLOBALS.MAKE_CONFIG.get_path(include) for include in includes
 		]:
 			if exists(filepath):
 				if isdir(filepath):
 					filepath = f"{filepath}/**/*.d.ts"
 				declarations.extend(glob(filepath, recursive=True))
-		if exists(GLOBALS.TOOLCHAIN_CONFIG.get_path("declarations")):
+		if exists(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("declarations")):
 			declarations.extend(glob(
-				GLOBALS.TOOLCHAIN_CONFIG.get_path("declarations/**/*.d.ts"),
+				GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("declarations/**/*.d.ts"),
 				recursive=True
 			))
 		if not PROPERTIES.get_value("release"):
@@ -257,7 +247,7 @@ class WorkspaceComposite:
 						if declaration in declarations:
 							declarations.remove(declaration)
 				else:
-					for declaration in glob(GLOBALS.TOOLCHAIN_CONFIG.get_path(excluded), recursive=True):
+					for declaration in glob(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(excluded), recursive=True):
 						if declaration in declarations:
 							declarations.remove(declaration)
 		return list(set(declarations))
@@ -346,7 +336,7 @@ class WorkspaceBuildConfiguration:
 	@staticmethod
 	def get_vscode_shell_task(name: str, icon: str, path: str, **kwargs):
 		task = WorkspaceBuildConfiguration.get_vscode_task(name, icon, **kwargs)
-		absolute_path = GLOBALS.PREFERRED_CONFIG.get_relative_path(path).replace("\\", "/")
+		absolute_path = GLOBALS.PREFERRED_CONFIG.get_path_to_config(path).replace("\\", "/")
 		absolute_path = absolute_path if absolute_path.startswith("..") else "./" + absolute_path
 		task.update({
 			"type": "shell",
@@ -382,7 +372,7 @@ class WorkspaceBuildConfiguration:
 
 	@staticmethod
 	def flush_vscode_task(name: str, icon: str, method: Callable, *args, **kwargs):
-		tasks_path = GLOBALS.PREFERRED_CONFIG.get_path(join(".vscode", "tasks.json"))
+		tasks_path = GLOBALS.PREFERRED_CONFIG.get_relative_path(join(".vscode", "tasks.json"))
 		ensure_file_directory(tasks_path)
 		configuration: dict = method(name, icon, *args, **kwargs)
 
@@ -434,7 +424,7 @@ class WorkspaceBuildConfiguration:
 		configuration: minidom.Node = component.childNodes[0]
 		assert component.ownerDocument is not None
 		document: minidom.Document = component.ownerDocument
-		relative_path = GLOBALS.PREFERRED_CONFIG.get_relative_path(path)
+		relative_path = GLOBALS.PREFERRED_CONFIG.get_path_to_config(path)
 		relative_path = "$PROJECT_DIR$/" + relative_path.replace("\\", "/")
 
 		script_path = document.createElement("option")
@@ -493,7 +483,7 @@ class WorkspaceBuildConfiguration:
 	@staticmethod
 	def flush_idea_task(name: str, method: Callable, *args, **kwargs):
 		from xml.dom import minidom
-		configurations_path = GLOBALS.PREFERRED_CONFIG.get_path(join(".idea", "runConfigurations"))
+		configurations_path = GLOBALS.PREFERRED_CONFIG.get_relative_path(join(".idea", "runConfigurations"))
 		ensure_directory(configurations_path)
 		component: minidom.Node = method(name, *args, **kwargs)
 		unescaped_name = sub(r"\W", "_", name) + ".xml"

@@ -252,7 +252,7 @@ def shortcodes(source: str) -> str:
 def request_tool(name: str) -> Optional[str]:
 	path = GLOBALS.TOOLCHAIN_CONFIG.get_value(f"tools.{name}")
 	if path:
-		path = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(path)
+		path = GLOBALS.TOOLCHAIN_CONFIG.get_path(path)
 		if exists(path):
 			return path
 	path = shutil.which(name)

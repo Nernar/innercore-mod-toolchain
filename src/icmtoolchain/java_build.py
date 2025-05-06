@@ -9,8 +9,8 @@ from typing import Collection, Dict, List, Optional
 from zipfile import ZipFile
 
 from . import GLOBALS, PROPERTIES
-from .base_config import BaseConfig
 from .component import install_components
+from .config import Config
 from .language import get_language_directories
 from .shell import abort, debug, error, info, pretty_print, warn
 from .utils import (RuntimeCodeError, copy_directory, copy_file,
@@ -25,9 +25,9 @@ TOOLCHAIN_CLASSPATH = None
 def collect_classpath_files(directories: Collection[str]) -> List[str]:
 	classpath = list()
 	for directory in directories:
-		classpath_directory = GLOBALS.MAKE_CONFIG.get_absolute_path(directory)
+		classpath_directory = GLOBALS.MAKE_CONFIG.get_path(directory)
 		if not isdir(classpath_directory):
-			classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(directory)
+			classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path(directory)
 		if not isdir(classpath_directory):
 			warn(f"* Skipped non-existing classpath directory {directory!r}, please make sure that it exist!")
 			continue
@@ -35,9 +35,9 @@ def collect_classpath_files(directories: Collection[str]) -> List[str]:
 		classpath.extend(libraries)
 	global TOOLCHAIN_CLASSPATH
 	if not TOOLCHAIN_CLASSPATH:
-		classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path("classpath")
+		classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("classpath")
 		if isdir(classpath_directory):
-			requires_manifest = GLOBALS.MAKE_CONFIG.has_value("manifest")
+			requires_manifest = "manifest" in GLOBALS.MAKE_CONFIG
 			TOOLCHAIN_CLASSPATH = get_all_files(classpath_directory, (".jar"))
 			if requires_manifest:
 				innercore_test = join(classpath_directory, "innercore-test.jar")
@@ -151,7 +151,7 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 	debug("Dexing libraries")
 	result = subprocess.run([
 		java_executable,
-		"-classpath", GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/r8/r8.jar"),
+		"-classpath", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("bin/r8/r8.jar"),
 		"com.android.tools.r8.D8",
 		f"@{modified_libraries}"
 	] + classpath_targets + libraries + [
@@ -167,7 +167,7 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 	debug("Dexing classes")
 	result = subprocess.run([
 		java_executable,
-		"-classpath", GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/r8/r8.jar"),
+		"-classpath", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("bin/r8/r8.jar"),
 		"com.android.tools.r8.D8",
 		f"@{modified_classes}"
 	] + classpath_targets + libraries + [
@@ -200,7 +200,7 @@ def merge_compressed_dexes(target: BuildTarget, target_directory: str) -> int:
 	debug("Merging dex")
 	result = subprocess.run([
 		java_executable,
-		"-classpath", GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/r8/r8.jar"),
+		"-classpath", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("bin/r8/r8.jar"),
 		"com.android.tools.r8.D8",
 		compressed_target,
 		"--min-api", "19",
@@ -376,7 +376,7 @@ def build_java_with_ecj(targets: Collection[BuildTarget], target_directory: str)
 def build_java_with_gradle(targets: Collection[BuildTarget], target_directory: str) -> int:
 	setup_gradle_project(targets, target_directory, flatten_classpath_files(targets))
 	if len(targets) != 0:
-		gradle_executable = GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/gradlew")
+		gradle_executable = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("bin/gradlew")
 		if platform.system() == "Windows":
 			gradle_executable += ".bat"
 
@@ -462,7 +462,7 @@ def cleanup_gradle_scripts(targets: Collection[BuildTarget]) -> None:
 
 ### TASKS
 
-def get_java_build_targets(directories: Dict[str, BaseConfig]) -> List[BuildTarget]:
+def get_java_build_targets(directories: Dict[str, Config]) -> List[BuildTarget]:
 	targets = list()
 
 	for directory, config in directories.items():
@@ -472,8 +472,8 @@ def get_java_build_targets(directories: Dict[str, BaseConfig]) -> List[BuildTarg
 
 		with open(join(directory, "manifest"), encoding="utf-8") as manifest:
 			try:
-				manifest = BaseConfig(json.load(manifest))
-				manifest.remove_value("directory")
+				manifest = Config(json.load(manifest))
+				manifest.delete_value("directory")
 				config.merge_config(manifest, exclusive_lists=True)
 			except json.JSONDecodeError as exc:
 				raise RuntimeCodeError(2, f"* Malformed java directory {directory!r} manifest, you should fix it: {exc.msg}.")
@@ -484,7 +484,7 @@ def get_java_build_targets(directories: Dict[str, BaseConfig]) -> List[BuildTarg
 
 	return targets
 
-def build_java_directories(tool: str, directories: Dict[str, BaseConfig], target_directory: str) -> int:
+def build_java_directories(tool: str, directories: Dict[str, Config], target_directory: str) -> int:
 	targets = get_java_build_targets(directories)
 
 	if tool == "gradle":
@@ -530,7 +530,7 @@ def build_java_directories(tool: str, directories: Dict[str, BaseConfig], target
 		if not built_successfully:
 			warn(f"* Directory {target.relative_directory!r} is empty.")
 
-	if GLOBALS.MAKE_CONFIG.has_value("manifest"):
+	if "manifest" in GLOBALS.MAKE_CONFIG:
 		target_output_path = GLOBALS.MOD_STRUCTURE.get_target_output_directory("java")
 		order = [relpath(target.output_directory, target_output_path) for target in targets]
 		order_path = join(target_output_path, "order.txt")
@@ -554,26 +554,26 @@ def compile_java(tool: str = "gradle") -> int:
 	ensure_directory(target_directory)
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("java")
 
-	if not exists(GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/r8")):
+	if not exists(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("bin/r8")):
 		install_components("java")
-		if not exists(GLOBALS.TOOLCHAIN_CONFIG.get_path("bin/r8")):
+		if not exists(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("bin/r8")):
 			abort("Component 'java' is required for compilation, nothing to do.")
 
 	classpath_directories = list()
-	classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path("classpath")
+	classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("classpath")
 	if not isdir(classpath_directory):
 		warn("Not found 'classpath', in most cases build will be failed, please install it via tasks.")
-	project_classpath_directory = GLOBALS.MAKE_CONFIG.get_path("classpath")
+	project_classpath_directory = GLOBALS.MAKE_CONFIG.get_relative_path("classpath")
 	if exists(project_classpath_directory):
 		classpath_directories.append(project_classpath_directory)
 
 	try:
-		java_config = GLOBALS.MAKE_CONFIG.get_config("java")
-		if not java_config:
+		java_config = GLOBALS.MAKE_CONFIG.get_value("java")
+		if not java_config or not isinstance(java_config, Config):
 			# Obtain properties from deprecated `gradle` config.
-			java_config = GLOBALS.MAKE_CONFIG.get_or_create_config("gradle")
+			java_config = GLOBALS.MAKE_CONFIG.obtain_config("gradle")
 		if len(classpath_directories) > 0:
-			additional_config = BaseConfig()
+			additional_config = Config()
 			additional_config.set_value("classpath", classpath_directories)
 			java_config.merge_config(additional_config, exclusive_lists=True)
 		directories = get_language_directories("java", java_config)

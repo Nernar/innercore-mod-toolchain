@@ -17,7 +17,7 @@ class ProjectManager:
 		self.templates = list()
 		locations = GLOBALS.PREFERRED_CONFIG.get_value("projectLocations", list())
 		for location in ["", *locations]:
-			path = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(location)
+			path = GLOBALS.TOOLCHAIN_CONFIG.get_path(location)
 			if not exists(path) or not isdir(path):
 				warn(f"* Not found project location {location}!")
 				continue
@@ -31,13 +31,13 @@ class ProjectManager:
 					self.templates.append(join(location, entry))
 
 	def create_project(self, template: str, folder: str, name: Optional[str] = None, author: Optional[str] = None, version: Optional[str] = None, description: Optional[str] = None, clientOnly: bool = False)-> int:
-		location = GLOBALS.TOOLCHAIN_CONFIG.get_path(folder)
+		location = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(folder)
 		if exists(location):
 			abort(f"Folder {folder!r} already exists!")
-		template_path = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(template)
+		template_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(template)
 		if not exists(template_path):
 			abort(f"Not found {template!r} template, nothing to do.")
-		template_make_path = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(join(template, "template.json"))
+		template_make_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(join(template, "template.json"))
 		if not isfile(template_make_path):
 			abort(f"Not found 'template.json' in template {template!r}, nothing to do.")
 
@@ -111,7 +111,7 @@ class ProjectManager:
 				GLOBALS.CODE_SETTINGS.json["files.exclude"] = exclude
 				GLOBALS.CODE_SETTINGS.save()
 
-		remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(folder))
+		remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path(folder))
 		if index != -1:
 			del self.projects[index]
 
@@ -135,10 +135,10 @@ class ProjectManager:
 			return
 
 		if not folder:
-			GLOBALS.TOOLCHAIN_CONFIG.remove_value("currentProject")
+			GLOBALS.TOOLCHAIN_CONFIG.delete_value("currentProject")
 		else:
 			GLOBALS.TOOLCHAIN_CONFIG.set_value("currentProject", folder)
-		GLOBALS.TOOLCHAIN_CONFIG.save()
+		GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 
 		GLOBALS.shutdown_project()
 
@@ -148,7 +148,7 @@ class ProjectManager:
 		if folder and GLOBALS.CODE_WORKSPACE.available():
 			location = GLOBALS.CODE_WORKSPACE.get_toolchain_path(folder).replace("\\", "/")
 			if len(GLOBALS.CODE_WORKSPACE.get_filtered_list("folders", "path", location)) == 0:
-				make_path = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(join(folder, "make.json"))
+				make_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(join(folder, "make.json"))
 				if not isfile(make_path):
 					abort(f"Not found 'make.json' in project {folder!r}, nothing to do.")
 				with open(make_path, "r", encoding="utf-8") as make_file:
@@ -176,7 +176,7 @@ class ProjectManager:
 	def resolve_mod_name(self, path: str, make_obj: Optional[Dict[Any, Any]] = None) -> str:
 		if not make_obj:
 			try:
-				make_path = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(path + "/make.json")
+				make_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(path + "/make.json")
 				if isfile(make_path):
 					with open(make_path, "r", encoding="utf-8") as make_file:
 						make_obj = json.loads(make_file.read())

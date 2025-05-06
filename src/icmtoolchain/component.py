@@ -38,7 +38,7 @@ def which_installed() -> List[str]:
 	installed = list()
 	for componentname in COMPONENTS:
 		component = COMPONENTS[componentname]
-		path = GLOBALS.TOOLCHAIN_CONFIG.get_path(component.location)
+		path = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(component.location)
 		if not isdir(path):
 			continue
 		if component.keyword == "cpp":
@@ -159,12 +159,12 @@ def startup() -> None:
 	use_typescript = results["use_typescript"]
 	if use_typescript:
 		if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
-			GLOBALS.TOOLCHAIN_CONFIG.remove_value("denyTypeScript")
+			GLOBALS.TOOLCHAIN_CONFIG.delete_value("denyTypeScript")
 		request_typescript()
 	elif tsc_available:
 		GLOBALS.TOOLCHAIN_CONFIG.set_value("denyTypeScript", True)
 
-	GLOBALS.TOOLCHAIN_CONFIG.save()
+	GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 
 	pretty_print(f"* Setup procedure is completed, Inner Core Mod Toolchain has been installed to {get_script_directory()!r} directory. Execute `icmtoolchain --help` to obtain a list of available commands. You may need to restart your console to be able to access any commands.")
 

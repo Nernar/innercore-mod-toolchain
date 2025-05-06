@@ -162,11 +162,11 @@ class Config(dict[str, Any]):
 		return json
 
 class FileConfig(Config):
-	def __init__(self, path: str, defaults: Optional['Config'] = None):
+	def __init__(self, path: str, defaults: Optional['Config'] = None, *, raise_non_existing: bool = False):
 		super().__init__(defaults=defaults)
 		self.path = path
-		self.directory = dirname(path)
-		self.read_from_file(raise_non_existing=False)
+		self.directory = dirname(abspath(path))
+		self.read_from_file(raise_non_existing=raise_non_existing)
 
 	def read_from_file(self, *, raise_non_existing: bool = True, merge_with_existing: bool = False) -> None:
 		non_existing = not isfile(self.path)
@@ -187,16 +187,17 @@ class FileConfig(Config):
 			except JSONDecodeError as exc:
 				raise ValueError(f"Malformed {basename(self.path)!r}, you should fix it! {exc.msg}")
 
-	def save_as_file(self) -> None:
-		if not isfile(self.path):
-			ensure_file(self.path)
+	def save_as_file(self, output_path: Optional[str] = None) -> None:
+		path_to_save = output_path or self.path
+		if not isfile(path_to_save):
+			ensure_file(path_to_save)
 
-		with open(self.path, "w", encoding="utf-8") as file:
+		with open(path_to_save, "w", encoding="utf-8") as file:
 			try:
 				dump_json(self.as_json(), file)
 				file.write("\n")
 			except TypeError as exc:
-				raise ValueError(f"Malformed config {self.path!r} due to internal error! {exc}")
+				raise ValueError(f"Malformed config {path_to_save!r} due to internal error! {exc}")
 
 	def get_relative_path(self, path_from_config: str) -> str:
 		return abspath(join(self.directory, normpath(path_from_config)))

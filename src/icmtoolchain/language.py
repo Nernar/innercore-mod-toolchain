@@ -2,12 +2,12 @@ from copy import deepcopy
 from os.path import isdir
 from typing import Callable, Dict, Optional
 
-from .base_config import BaseConfig
+from .config import Config
 from .shell import warn
 from .utils import RuntimeCodeError
 
 
-def get_language_directories(compile_type: str, language_config: BaseConfig, properties_merger: Optional[Callable] = None) -> Dict[str, BaseConfig]:
+def get_language_directories(compile_type: str, language_config: Config, properties_merger: Optional[Callable] = None) -> Dict[str, Config]:
 	from . import GLOBALS
 
 	directories = language_config.get_list("directories", config=True)
@@ -17,23 +17,23 @@ def get_language_directories(compile_type: str, language_config: BaseConfig, pro
 	configurables = dict()
 	if len(directories) == 0:
 		return configurables
-	language_config.remove_value("directories")
+	language_config.delete_value("directories")
 
 	for directory in directories:
 		config = None
 
-		if isinstance(directory, BaseConfig):
-			directory.prototype = config
+		if isinstance(directory, Config):
+			directory.defaults = config
 			config = directory
-			if directory.has_value("path"):
+			if "path" in directory:
 				directory = directory.get_value("path")
-			elif directory.has_value("source"):
+			elif "source" in directory:
 				directory = directory.get_value("source")
 		if not isinstance(directory, str):
 			raise RuntimeCodeError(1, f"Wrong declared {compile_type} directory {directory!r}, it should be path string or object with `path` property!")
 
 		for flattened_directory in GLOBALS.MAKE_CONFIG.get_paths(directory):
-			absolute_directory = GLOBALS.MAKE_CONFIG.get_absolute_path(flattened_directory)
+			absolute_directory = GLOBALS.MAKE_CONFIG.get_path(flattened_directory)
 			if not isdir(absolute_directory):
 				warn(f"* Skipped non-existing {compile_type} directory {directory!r}!")
 				continue
@@ -43,11 +43,11 @@ def get_language_directories(compile_type: str, language_config: BaseConfig, pro
 			if properties_merger:
 				config = properties_merger(config, language_config)
 			else:
-				temporary_config = BaseConfig(deepcopy(language_config.json))
+				temporary_config = Config(deepcopy(language_config.as_json()))
 				if config:
 					temporary_config.merge_config(config, exclusive_lists=True)
 				config = temporary_config
-			config.set_value("directory", GLOBALS.MAKE_CONFIG.get_relative_path(flattened_directory))
+			config.set_value("directory", GLOBALS.MAKE_CONFIG.get_path_to_config(flattened_directory))
 			configurables[absolute_directory] = config
 
 	return configurables

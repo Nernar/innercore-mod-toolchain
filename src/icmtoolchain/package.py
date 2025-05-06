@@ -5,7 +5,7 @@ from os.path import basename, exists, isdir, join, relpath
 from typing import Any, Dict, List, Optional, cast
 
 from . import GLOBALS
-from .base_config import BaseConfig
+from .config import Config, FileConfig
 from .shell import (abort, error, pretty_print, pretty_print_attention,
                     select_prompt, warn)
 from .utils import (copy_file, ensure_not_whitespace, get_all_files,
@@ -29,11 +29,11 @@ def get_path_set(locations: List[str], error_sensitive: bool = False) -> Optiona
 
 def cleanup_relative_directory(path: str, absolute: bool = False) -> None:
 	start_time = time.time()
-	remove_tree(path if absolute else GLOBALS.TOOLCHAIN_CONFIG.get_path(path))
+	remove_tree(path if absolute else GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(path))
 	pretty_print(f"Completed {basename(path)} cleanup in {int((time.time() - start_time) * 100) / 100}s")
 
 def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
-	have_template = GLOBALS.TOOLCHAIN_CONFIG.has_value("template")
+	have_template = "template" in GLOBALS.TOOLCHAIN_CONFIG
 	always_skip_description = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.skipDescription", False)
 	output_directory = None
 
@@ -41,23 +41,22 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	from .prompt import Confirm, Feedback, Input, Review, Select
 
 	def on_validate_template(template: str, select: Optional[Select] = None) -> bool:
-		template_make_path = GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(template + "/template.json")
+		template_make_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(template + "/template.json")
 		try:
-			with open(template_make_path, encoding="utf-8") as template_make:
-				template_config = BaseConfig(json.loads(template_make.read()))
+			template_config = FileConfig(template_make_path, raise_non_existing=True)
 		except BaseException as exc:
 			if select is not None:
 				select.explanation = f"Malformed '{template}/template.json', nothing to do."
 				return False
 			if len(GLOBALS.PROJECT_MANAGER.templates) == 0 or template == GLOBALS.PROJECT_MANAGER.templates[0]:
 				abort(f"Malformed '{template}/template.json', nothing to do.", cause=exc)
-			template_config = BaseConfig()
+			template_config = Config()
 		update_template_defaults(template_config)
 		return True
 
 	def create_template_chooser() -> Optional[Select]:
 		nonlocal template
-		if template and exists(GLOBALS.TOOLCHAIN_CONFIG.get_absolute_path(template)):
+		if template and exists(GLOBALS.TOOLCHAIN_CONFIG.get_path(template)):
 			on_validate_template(template)
 		elif len(GLOBALS.PROJECT_MANAGER.templates) <= 1:
 			if len(GLOBALS.PROJECT_MANAGER.templates) == 0:
@@ -101,7 +100,7 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 		client_side=Confirm("Is this mod client-side (without server requirement)?", default_value=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.clientOnly", False))
 	)
 
-	def update_template_defaults(template_config: BaseConfig) -> None:
+	def update_template_defaults(template_config: Config) -> None:
 		name = cast(Input, create_review.require_feedback("name"))
 		name.hint = template_config.get_value("info.name", "Template Mod")
 		author = cast(Input, create_review.require_feedback("author"))
