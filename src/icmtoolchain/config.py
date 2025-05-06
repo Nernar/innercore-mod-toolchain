@@ -52,6 +52,16 @@ class Config(dict[str, Any]):
 	def __getitem__(self, key: str, /) -> Any:
 		return self.get_value_unsafe(key)
 
+	def obtain_config(self, key: str, *, allow_prototype: bool = True) -> 'Config':
+		value = self.get_value(key, allow_prototype=allow_prototype)
+		if isinstance(value, Config):
+			return value
+		value = self.replace_value(value)
+		if not isinstance(value, Config):
+			value = Config()
+		self.set_value(key, value)
+		return value
+
 	def set_value(self, key: str, value: Any, strip_none_from_lists: bool = False) -> None:
 		self.set_value_unsafe(key, value, replace_mismatched_types=True, strip_none_from_lists=strip_none_from_lists)
 
@@ -155,21 +165,16 @@ class FileConfig(Config):
 		super().__init__(defaults=defaults)
 		self.path = path
 		self.directory = dirname(path)
-		self.read_from_file()
+		self.read_from_file(raise_non_existing=False)
 
-	def get_relative_path(self, path_from_config: str) -> str:
-		return abspath(join(self.directory, normpath(path_from_config)))
-
-	def get_path(self, path_from_config: str) -> str:
-		relative_path = self.get_relative_path(path_from_config)
-		absolute_path = abspath(path_from_config)
-		return absolute_path if exists(absolute_path) and not exists(relative_path) else relative_path
-
-	def read_from_file(self, *, merge_with_existing: bool = False) -> None:
-		if not isfile(self.path):
+	def read_from_file(self, *, raise_non_existing: bool = True, merge_with_existing: bool = False) -> None:
+		non_existing = not isfile(self.path)
+		if raise_non_existing and non_existing:
 			raise ValueError(f"{self.path} does not exist!")
 		if not merge_with_existing:
 			self.clear()
+		if non_existing:
+			return
 
 		with open(self.path, encoding="utf-8") as file:
 			try:
@@ -191,3 +196,11 @@ class FileConfig(Config):
 				file.write("\n")
 			except TypeError as exc:
 				raise ValueError(f"Malformed config {self.path!r} due to internal error! {exc}")
+
+	def get_relative_path(self, path_from_config: str) -> str:
+		return abspath(join(self.directory, normpath(path_from_config)))
+
+	def get_path(self, path_from_config: str) -> str:
+		relative_path = self.get_relative_path(path_from_config)
+		absolute_path = abspath(path_from_config)
+		return absolute_path if not exists(relative_path) and exists(absolute_path) else relative_path
