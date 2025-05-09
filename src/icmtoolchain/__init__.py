@@ -1,8 +1,9 @@
 import os
 from copy import deepcopy
-from os.path import isfile, join, realpath
+from os.path import abspath, dirname, isfile, join
+from typing import Optional
 
-from .config import Config
+from .config import Config, FileConfig
 
 
 def find_configuration(path: str, filename: str):
@@ -62,15 +63,13 @@ class Globals:
 		if not hasattr(self, "toolchain_config"):
 			toolchain_config = find_configuration(os.getcwd(), "toolchain.json")
 			if not toolchain_config:
-				toolchain_config = find_configuration(realpath(join(__file__, "..")), "toolchain.json")
+				toolchain_config = find_configuration(dirname(abspath(__file__)), "toolchain.json")
 			if toolchain_config:
-				from .make_config import ToolchainConfig
-				self.toolchain_config = ToolchainConfig(toolchain_config)
+				self.toolchain_config = FileConfig(toolchain_config)
 			elif hasattr(self, "make_config"):
 				self.toolchain_config = self.MAKE_CONFIG.defaults
 		if not hasattr(self, "toolchain_config") or not self.toolchain_config:
-			from .make_config import ToolchainConfig
-			self.toolchain_config = ToolchainConfig(join(realpath(join(__file__, "..")), "toolchain.json"))
+			self.toolchain_config = FileConfig(join(dirname(abspath(__file__)), "toolchain.json"))
 		return self.toolchain_config
 
 	@property
@@ -162,6 +161,12 @@ class Globals:
 			parameters.append(inspect.Parameter("kwargs", inspect.Parameter.VAR_KEYWORD))
 			self.parameter_signature = inspect.Signature(parameters, return_annotation=int)
 		return self.parameter_signature
+
+	def is_project_available(self, which_project: Optional[str] = None) -> bool:
+		from .make_config import MakeConfig
+		if not isinstance(self.PREFERRED_CONFIG, MakeConfig):
+			return False
+		return which_project is None or which_project == self.MAKE_CONFIG.current_project
 
 	def shutdown(self):
 		self.shutdown_project()

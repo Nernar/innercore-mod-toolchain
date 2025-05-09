@@ -5,7 +5,6 @@ from os.path import basename, dirname, exists, isdir, isfile, join, relpath
 from typing import Any, Callable, Dict, Final, List, Optional
 
 from . import GLOBALS, PROPERTIES
-from .make_config import MakeConfig
 from .shell import (abort, confirm_prompt, error, pretty_print,
                     pretty_print_success, warn)
 from .utils import DEVNULL, ensure_file_directory, remove_tree
@@ -469,7 +468,7 @@ def task_select_project(path: str = "") -> int:
 	description="Ensures that selected project is opened and exists."
 )
 def task_ensure_project_exists() -> int:
-	if isinstance(GLOBALS.PREFERRED_CONFIG, MakeConfig):
+	if GLOBALS.is_project_available():
 		return 0
 	if GLOBALS.PROJECT_MANAGER.how_much() == 0:
 		abort("Not found any project to choice.")
@@ -555,7 +554,7 @@ def task_component_integrity(startup: bool = False) -> int:
 )
 def task_cleanup() -> int:
 	from .package import cleanup_relative_directory
-	if isinstance(GLOBALS.PREFERRED_CONFIG, MakeConfig):
+	if GLOBALS.is_project_available():
 		if confirm_prompt("Do you want to clear selected project cache?", True):
 			cleanup_relative_directory("build/" + GLOBALS.MAKE_CONFIG.project_unique_name)
 			cleanup_relative_directory(GLOBALS.MOD_STRUCTURE.directory, True)

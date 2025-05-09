@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from . import GLOBALS
 from .hglob import glob
-from .make_config import MakeConfig
 from .shell import (InteractiveSession, Progress, abort, confirm_prompt, error,
                     pretty_print, pretty_print_attention, pretty_print_failure,
                     pretty_print_success, select_prompt, warn)
@@ -30,7 +29,7 @@ def get_modpack_push_directory() -> Optional[str]:
 	if not directory:
 		directory = GLOBALS.TOOLCHAIN_CONFIG.get_value("pushTo")
 		if directory:
-			if not isinstance(GLOBALS.PREFERRED_CONFIG, MakeConfig) or not GLOBALS.MAKE_CONFIG.current_project:
+			if not GLOBALS.is_project_available() or not GLOBALS.MAKE_CONFIG.current_project:
 				return None
 			directory = join(directory, "mods", basename(GLOBALS.MAKE_CONFIG.current_project)) if "/horizon/packs/" in directory \
 				else join(directory, basename(GLOBALS.MAKE_CONFIG.current_project))

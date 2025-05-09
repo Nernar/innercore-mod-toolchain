@@ -5,7 +5,6 @@ from typing import Any, Dict, Final, List, Optional, Tuple
 
 from . import GLOBALS
 from .config import Config
-from .make_config import MakeConfig
 from .shell import abort, confirm_prompt, pretty_print, warn
 from .utils import ensure_not_whitespace, remove_tree
 
@@ -92,7 +91,7 @@ class ProjectManager:
 
 		index, folder = self.get_folder(index, folder)
 
-		if isinstance(GLOBALS.PREFERRED_CONFIG, MakeConfig) and folder == GLOBALS.MAKE_CONFIG.current_project:
+		if GLOBALS.is_project_available(which_project=folder):
 			self.unselect_project(silent=True)
 
 		if GLOBALS.CODE_WORKSPACE.available():
@@ -132,7 +131,7 @@ class ProjectManager:
 			GLOBALS.CODE_WORKSPACE.save_as_file()
 
 	def select_project_folder(self, folder: Optional[str] = None) -> None:
-		if isinstance(GLOBALS.PREFERRED_CONFIG, MakeConfig) and GLOBALS.MAKE_CONFIG.current_project == folder:
+		if GLOBALS.is_project_available(which_project=folder):
 			return
 
 		if not folder:
@@ -158,7 +157,7 @@ class ProjectManager:
 
 		if folder and GLOBALS.CODE_SETTINGS.available():
 			exclude = GLOBALS.CODE_SETTINGS.get_value("files.exclude", dict())
-			if isinstance(GLOBALS.PREFERRED_CONFIG, MakeConfig):
+			if GLOBALS.is_project_available():
 				if not GLOBALS.MAKE_CONFIG.current_project.startswith("../") and not exists(abspath(GLOBALS.MAKE_CONFIG.current_project)):
 					exclude[GLOBALS.MAKE_CONFIG.current_project] = True
 			if not folder.startswith("../"):
@@ -217,4 +216,4 @@ class ProjectManager:
 				if not confirm_prompt(prompt_when_single.format(self.get_shortcut(itwillbe)), True):
 					return None
 				return itwillbe
-		return select_project(self.projects, prompt, GLOBALS.MAKE_CONFIG.current_project if isinstance(GLOBALS.PREFERRED_CONFIG, MakeConfig) else None, *dont_want_anymore)
+		return select_project(self.projects, prompt, GLOBALS.MAKE_CONFIG.current_project if GLOBALS.is_project_available() else None, *dont_want_anymore)
