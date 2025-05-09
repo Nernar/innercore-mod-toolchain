@@ -1,5 +1,4 @@
 import os
-import platform
 from os.path import basename, exists, isdir, isfile, join
 from typing import Callable, Final, List, Optional
 
@@ -62,17 +61,6 @@ class ToolchainConfig(FileConfig):
 			if exists(path) and (not filter or filter(path)):
 				locations.append(path)
 		return locations
-
-	def get_adb(self) -> str:
-		try:
-			import shutil
-			if shutil.which("adb"):
-				return "adb"
-		except:
-			pass
-		if platform.system() == "Windows":
-			return self.get_relative_path("adb/adb.exe")
-		return self.get_relative_path("adb/adb")
 
 class MakeConfig(ToolchainConfig):
 	defaults: ToolchainConfig

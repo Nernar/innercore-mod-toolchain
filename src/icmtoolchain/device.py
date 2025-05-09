@@ -14,6 +14,17 @@ from .shell import (InteractiveSession, Progress, abort, confirm_prompt, error,
 from .utils import DEVNULL
 
 
+def get_adb_executable() -> str:
+	try:
+		import shutil
+		if shutil.which("adb"):
+			return "adb"
+	except:
+		pass
+	if platform.system() == "Windows":
+		return GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("adb/adb.exe")
+	return GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("adb/adb")
+
 def get_modpack_push_directory() -> Optional[str]:
 	directory = GLOBALS.PREFERRED_CONFIG.get_value("pushTo", allow_prototype=False)
 	if not directory:
@@ -273,7 +284,7 @@ def make_locks(*locks: str) -> int:
 def ensure_server_running(retry: int = 0) -> bool:
 	try:
 		subprocess.run([
-			GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+			get_adb_executable(),
 			"start-server"
 		], check=True, stdout=DEVNULL, stderr=DEVNULL)
 		return True
@@ -304,7 +315,7 @@ def which_state(what: Optional[str] = None) -> int:
 def get_device_state() -> int:
 	try:
 		pipe = subprocess.run([
-			GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+			get_adb_executable(),
 			"get-state"
 		], text=True, timeout=3.0, check=True, capture_output=True)
 	except subprocess.CalledProcessError as err:
@@ -319,7 +330,7 @@ def get_device_state() -> int:
 def get_device_serial() -> Optional[str]:
 	try:
 		pipe = subprocess.run([
-			GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+			get_adb_executable(),
 			"get-serialno"
 		], text=True, check=True, capture_output=True)
 	except subprocess.CalledProcessError as err:
@@ -330,7 +341,7 @@ def get_device_serial() -> Optional[str]:
 def device_list() -> Optional[List[Dict[str, Any]]]:
 	try:
 		pipe = subprocess.run([
-			GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+			get_adb_executable(),
 			"devices", "-l"
 		], text=True, check=True, capture_output=True)
 	except subprocess.CalledProcessError as err:
@@ -383,11 +394,11 @@ def get_ip() -> str:
 def get_adb_command() -> List[str]:
 	ensure_server_running()
 	if get_device_state() == STATE_DEVICE_CONNECTED:
-		return [GLOBALS.TOOLCHAIN_CONFIG.get_adb()]
+		return [get_adb_executable()]
 	devices = GLOBALS.TOOLCHAIN_CONFIG.get_value("devices", list())
 	if len(devices) > 0:
 		subprocess.run([
-			GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+			get_adb_executable(),
 			"disconnect"
 		], stdout=DEVNULL, stderr=DEVNULL)
 	for device in devices:
@@ -395,7 +406,7 @@ def get_adb_command() -> List[str]:
 			target = f"{device['ip']}:{device['port']}" if "port" in device else device["ip"]
 			try:
 				subprocess.run([
-					GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+					get_adb_executable(),
 					"connect", target
 				], timeout=3.0, stdout=DEVNULL, stderr=DEVNULL)
 			except subprocess.TimeoutExpired:
@@ -428,7 +439,7 @@ def get_adb_command_by_serial(serial: str) -> List[str]:
 			GLOBALS.TOOLCHAIN_CONFIG.set_value("devices", devices)
 			GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 	return [
-		GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+		get_adb_executable(),
 		"-s", serial
 	]
 
@@ -448,13 +459,13 @@ def get_adb_command_by_tcp(ip: str, port: Optional[int] = None, skip_error: bool
 		GLOBALS.TOOLCHAIN_CONFIG.set_value("devices", devices)
 		GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 	return [
-		GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+		get_adb_executable(),
 		"-e"
 	]
 
 def get_adb_command_by_serialno_type(which: str, silent: bool = False) -> Optional[List[str]]:
 	serial = subprocess.run([
-		GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+		get_adb_executable(),
 		which, "get-serialno"
 	], text=True, capture_output=True)
 	if serial.returncode != 0:
@@ -489,7 +500,7 @@ def setup_via_usb() -> Optional[List[str]]:
 		pretty_print("Listening device via cable...")
 		pretty_print(f"* Press Ctrl+{'C' if platform.system() == 'Windows' else 'Z'} to leave")
 		subprocess.run([
-			GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+			get_adb_executable(),
 			"wait-for-usb-device"
 		], check=True, timeout=90.0, stdout=DEVNULL, stderr=DEVNULL)
 		command = get_adb_command_by_serialno_type("-d")
@@ -540,7 +551,7 @@ def setup_via_ping_localhost() -> Optional[List[str]]:
 			pretty_print_attention("Not found anything, are you sure that network is connected?")
 			return setup_via_network()
 		subprocess.run([
-			GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+			get_adb_executable(),
 			"disconnect"
 		], stdout=DEVNULL, stderr=DEVNULL)
 		pretty_print("Found connections: " + ", ".join(accepted))
@@ -549,7 +560,7 @@ def setup_via_ping_localhost() -> Optional[List[str]]:
 		for next in accepted:
 			try:
 				subprocess.run([
-					GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+					get_adb_executable(),
 					"connect", next
 				], check=True, timeout=5.0, stdout=DEVNULL, stderr=DEVNULL)
 				command = get_adb_command_by_tcp(next, skip_error=True)
@@ -619,7 +630,7 @@ async def connect(ip: str, port: int, accepted: List[str], progress: Optional[Pr
 		progress.update(port / 65535, f"Connecting to {ip}:{str(port)}")
 	import asyncio
 	coroutine = await asyncio.create_subprocess_shell(
-		GLOBALS.TOOLCHAIN_CONFIG.get_adb() + " connect " + ip + ":" + str(port), stdout=DEVNULL, stderr=DEVNULL
+		get_adb_executable() + " connect " + ip + ":" + str(port), stdout=DEVNULL, stderr=DEVNULL
 	)
 	await coroutine.wait()
 	if coroutine.returncode == 0:
@@ -655,7 +666,7 @@ def setup_via_tcp_network(ip: Optional[str] = None, port: Optional[str] = None, 
 				return setup_via_network()
 		try:
 			subprocess.run([
-				GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+				get_adb_executable(),
 				"pair",
 				f"{ip}:{port}" if port else ip,
 				pairing_code
@@ -665,12 +676,12 @@ def setup_via_tcp_network(ip: Optional[str] = None, port: Optional[str] = None, 
 		except KeyboardInterrupt:
 			pretty_print()
 	subprocess.run([
-		GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+		get_adb_executable(),
 		"disconnect"
 	], stdout=DEVNULL, stderr=DEVNULL)
 	try:
 		subprocess.run([
-			GLOBALS.TOOLCHAIN_CONFIG.get_adb(),
+			get_adb_executable(),
 			"connect",
 			f"{ip}:{port}" if port else ip
 		], check=True, timeout=10.0, stdout=DEVNULL, stderr=DEVNULL)
