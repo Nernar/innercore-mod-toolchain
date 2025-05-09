@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, cast
 
 from . import GLOBALS
 from .config import Config, FileConfig
+from .output_directory import expand_paths
 from .shell import (abort, error, pretty_print, pretty_print_attention,
                     select_prompt, warn)
 from .utils import (copy_file, ensure_not_whitespace, get_all_files,
@@ -16,7 +17,7 @@ from .utils import (copy_file, ensure_not_whitespace, get_all_files,
 def get_path_set(locations: List[str], error_sensitive: bool = False) -> Optional[List[str]]:
 	directories = list()
 	for path in locations:
-		for directory in GLOBALS.MAKE_CONFIG.get_paths(path):
+		for directory in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(path)):
 			if isdir(directory):
 				directories.append(directory)
 			else:

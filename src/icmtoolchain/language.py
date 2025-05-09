@@ -3,6 +3,7 @@ from os.path import isdir
 from typing import Callable, Dict, Optional
 
 from .config import Config
+from .output_directory import expand_paths
 from .shell import warn
 from .utils import RuntimeCodeError
 
@@ -32,7 +33,7 @@ def get_language_directories(compile_type: str, language_config: Config, propert
 		if not isinstance(directory, str):
 			raise RuntimeCodeError(1, f"Wrong declared {compile_type} directory {directory!r}, it should be path string or object with `path` property!")
 
-		for flattened_directory in GLOBALS.MAKE_CONFIG.get_paths(directory):
+		for flattened_directory in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(directory)):
 			absolute_directory = GLOBALS.MAKE_CONFIG.get_path(flattened_directory)
 			if not isdir(absolute_directory):
 				warn(f"* Skipped non-existing {compile_type} directory {directory!r}!")

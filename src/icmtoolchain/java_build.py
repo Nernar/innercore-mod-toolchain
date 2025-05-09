@@ -12,6 +12,7 @@ from . import GLOBALS, PROPERTIES
 from .component import install_components
 from .config import Config
 from .language import get_language_directories
+from .output_directory import expand_paths
 from .shell import abort, debug, error, info, pretty_print, warn
 from .utils import (RuntimeCodeError, copy_directory, copy_file,
                     ensure_directory, ensure_file, get_all_files,
@@ -331,7 +332,10 @@ def build_java_with_ecj(targets: Collection[BuildTarget], target_directory: str)
 			if not java_executable:
 				abort("Executable 'java' is required for compilation, nothing to do.")
 			ecj_pattern = re.compile(r"ecj-(\d+\.)*jar")
-			ecj_executables = GLOBALS.TOOLCHAIN_CONFIG.get_paths("bin/*", lambda filename: isfile(filename) and re.fullmatch(ecj_pattern, basename(filename)) is not None)
+			ecj_executables = expand_paths(
+				GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("bin/*"),
+				lambda filename: isfile(filename) and re.fullmatch(ecj_pattern, basename(filename)) is not None
+			)
 			if len(ecj_executables) == 0:
 				abort("Executable 'ecj-*.jar' is required for compilation, nothing to do.")
 			ecj_executable = list()

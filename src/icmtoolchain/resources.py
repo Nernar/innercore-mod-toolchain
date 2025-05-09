@@ -5,6 +5,7 @@ from shutil import make_archive
 
 from . import GLOBALS
 from .config import FileConfig
+from .output_directory import expand_paths
 from .shell import debug, error, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory,
                     ensure_file_directory, remove_tree, shortcodes)
@@ -31,7 +32,7 @@ def build_resources() -> int:
 			overall_result = 1
 			continue
 
-		resource_files = GLOBALS.MAKE_CONFIG.get_paths(resource["path"])
+		resource_files = expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(resource["path"]))
 		if len(resource_files) == 0:
 			warn(f"* Skipped non-existing resource {resource['path']!r}!")
 			continue
@@ -83,7 +84,7 @@ def build_pack_graphics() -> int:
 		if isinstance(images, str):
 			images = [images]
 		for image_directory in images:
-			for image_path in GLOBALS.MAKE_CONFIG.get_paths(image_directory):
+			for image_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(image_directory)):
 				if not isfile(image_path):
 					warn(f"* Skipping graphics image file {basename(image_path)}, cause it does not exists!")
 					continue
@@ -104,7 +105,7 @@ def build_additional_resources() -> int:
 			overall_result += 1
 			continue
 
-		additional_files = GLOBALS.MAKE_CONFIG.get_paths(additional_dir["source"])
+		additional_files = expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(additional_dir["source"]))
 		if len(additional_files) == 0:
 			warn(f"* Skipped non-existing additional resource {additional_dir['source']!r}!")
 			continue
@@ -190,7 +191,7 @@ def build_package() -> int:
 		else:
 			warn(f"* We cannot copy {linked_resource['relative_path']} resource because we could not determine its type.")
 	for path in GLOBALS.MAKE_CONFIG.obtain_list("excludeFromRelease"):
-		for excluded_path in GLOBALS.MAKE_CONFIG.get_paths(join(output_package_directory, path)):
+		for excluded_path in expand_paths(join(output_package_directory, path)):
 			remove_tree(excluded_path)
 	make_archive(output_temporary_file[:-4], "zip", output_directory, name)
 

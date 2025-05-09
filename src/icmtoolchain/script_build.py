@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Tuple
 
 from . import GLOBALS, PROPERTIES
 from .includes import Includes
+from .output_directory import expand_paths
 from .shell import debug, error, info, pretty_print, warn
 from .utils import (RuntimeCodeError, copy_file, request_typescript,
                     walk_all_files)
@@ -73,7 +74,7 @@ def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], L
 		make = source["includes"] if "includes" in source else ".includes"
 		preffered_language = source["language"] if "language" in source else None
 
-		for source_path in GLOBALS.MAKE_CONFIG.get_paths(source["source"]):
+		for source_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(source["source"])):
 			if not exists(source_path):
 				warn(f"* Skipped non-existing source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r}!")
 				continue

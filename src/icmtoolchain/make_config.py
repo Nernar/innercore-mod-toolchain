@@ -1,6 +1,5 @@
-import os
-from os.path import basename, exists, isdir, isfile, join
-from typing import Callable, Final, List, Optional
+from os.path import basename, isfile, join
+from typing import Final, Optional
 
 from .config import Config, FileConfig
 from .shell import abort
@@ -39,23 +38,6 @@ class ToolchainConfig(FileConfig):
 		if changes:
 			self.save_as_file()
 		return changes
-
-	def get_paths(self, relative_path: str, filter: Optional[Callable[[str], bool]] = None, locations: Optional[List[str]] = None) -> List[str]:
-		if not locations:
-			locations = list()
-		if len(relative_path) > 0 and relative_path[-1] == "*":
-			path = self.get_relative_path(relative_path[:-1])
-			if not isdir(path):
-				return locations
-			for filename in os.listdir(path):
-				file = join(path, filename)
-				if not filter or filter(file):
-					locations.append(file)
-		else:
-			path = self.get_relative_path(relative_path)
-			if exists(path) and (not filter or filter(path)):
-				locations.append(path)
-		return locations
 
 class MakeConfig(ToolchainConfig):
 	defaults: ToolchainConfig

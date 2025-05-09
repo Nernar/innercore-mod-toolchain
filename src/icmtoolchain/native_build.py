@@ -9,6 +9,7 @@ from . import GLOBALS, PROPERTIES
 from .config import Config, FileConfig
 from .language import get_language_directories
 from .native_setup import arch_to_abi, prepare_compiler_executable
+from .output_directory import expand_paths
 from .shell import abort, debug, error, info, pretty_print, warn
 from .utils import (RuntimeCodeError, copy_directory, copy_file,
                     ensure_directory, ensure_file_directory, get_all_files,
@@ -450,7 +451,7 @@ def copy_shared_objects(abis: Collection[str]) -> int:
 				continue
 		for abi in abis:
 			formatted_shared_object = shared_object.format(abi)
-			for shared_object_path in GLOBALS.MAKE_CONFIG.get_paths(formatted_shared_object):
+			for shared_object_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(formatted_shared_object)):
 				shared_object_name = basename(shared_object_path)
 				if shared_object_name in order:
 					warn(f"* Found duplicate shared object {formatted_shared_object}, overriding existing one...")
