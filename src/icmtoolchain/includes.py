@@ -4,9 +4,11 @@ import platform
 import re
 import subprocess
 from os.path import basename, isdir, isfile, join, normpath, relpath
-from typing import Any, Dict, Final, List
+from typing import (Any, Dict, Final, List, MutableMapping, MutableSequence,
+                    Optional)
 
 from . import GLOBALS, PROPERTIES
+from .config import FileConfig
 from .hglob import glob
 from .shell import debug, error, info, pretty_print, warn
 from .utils import ensure_file_directory, request_typescript
@@ -28,18 +30,22 @@ TSCONFIG_DEPENDENTS: Dict[str, Any] = {
 
 
 class Includes:
-	directory: Final[str]; includes: Final[str]; path: Final[str]
-	include: List[str]; exclude: List[str]; params: Dict[str, Any]
+	directory: Final[str]
+	includes: Final[str]
+	path: Final[str]
+	params: MutableMapping[str, Any]
+	include: MutableSequence[str]
+	exclude: MutableSequence[str]
 
-	def __init__(self, directory: str, includes_path: str) -> None:
+	def __init__(self, directory: str, includes_path: str, *, params: Optional[MutableMapping[str, Any]] = None, include: Optional[MutableSequence[str]] = None, exclude: Optional[MutableSequence[str]] = None) -> None:
 		if not isdir(directory):
 			raise NotADirectoryError(directory)
 		self.directory = directory
 		self.includes = includes_path
 		self.path = join(directory, includes_path)
-		self.include = list()
-		self.exclude = list()
-		self.params = dict()
+		self.params = params or dict()
+		self.include = include or list()
+		self.exclude = exclude or list()
 
 	def read(self) -> None:
 		dependents = list()
@@ -128,22 +134,20 @@ class Includes:
 			for filename in filenames:
 				if filename.endswith(".js") or filename.endswith(".ts"):
 					includes.include.append(normpath(join(relpath(dirpath, directory), filename)))
-		includes.parse(); return includes
+		includes.parse()
+		return includes
 
 	@staticmethod
 	def create_from_tsconfig(directory: str, includes_path: str) -> 'Includes':
-		with open(join(directory, "tsconfig.json"), encoding="utf-8") as tsconfig:
-			config = json.load(tsconfig)
-			params = config["compilerOptions"] if "compilerOptions" in config else dict()
-			include = config["include"] if "include" in config else list()
-			exclude = config["exclude"] if "exclude" in config else list()
-			if "outFile" in params: del params["outFile"]
+		config = FileConfig(join(directory, "tsconfig.json"), raise_non_existing=True)
+		params = config.obtain_config("compilerOptions")
+		params.delete_value("outFile")
+		include = config.obtain_list("include")
+		exclude = config.obtain_list("exclude")
 
-		includes = Includes(directory, includes_path)
-		includes.include = include
-		includes.exclude = exclude
-		includes.params = params
-		includes.parse(); return includes
+		includes = Includes(directory, includes_path, params=params, include=include, exclude=exclude)
+		includes.parse()
+		return includes
 
 	@staticmethod
 	def invalidate(directory: str, includes_path: str) -> 'Includes':
@@ -159,6 +163,8 @@ class Includes:
 		return includes
 
 	def get_tsconfig(self) -> str:
+		if not isfile(self.path):
+			return join(self.directory, ".toolchain.tsconfig.json")
 		return join(self.directory, "tsconfig.json")
 
 	def create_tsconfig(self, temporary_path: str) -> None:
@@ -170,9 +176,8 @@ class Includes:
 			"exclude": self.exclude,
 			"include": self.include,
 		}
+		template["compilerOptions"].update(self.params)
 
-		for key, value in self.params.items():
-			template["compilerOptions"][key] = value
 		with open(self.get_tsconfig(), "w", encoding="utf-8") as tsconfig:
 			tsconfig.write(json.dumps(template, indent="\t", ensure_ascii=False) + "\n")
 

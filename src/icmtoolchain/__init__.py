@@ -148,7 +148,7 @@ class Globals:
 	def WORKSPACE_COMPOSITE(self):
 		if not hasattr(self, "workspace_composite"):
 			from .workspace import WorkspaceComposite
-			self.workspace_composite = WorkspaceComposite("tsconfig.json")
+			self.workspace_composite = WorkspaceComposite(".toolchain.tsconfig.json")
 		return self.workspace_composite
 
 	@property

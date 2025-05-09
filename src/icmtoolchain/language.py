@@ -14,7 +14,10 @@ def get_language_directories(compile_type: str, language_config: Config, propert
 	directories = language_config.obtain_list("directories")
 	if not any(directories):
 		# Obtain directories from deprecated `compile` property.
-		directories = list(filter(lambda source: isinstance(source, Config) and compile_type == source.get_value("type"), GLOBALS.MAKE_CONFIG.obtain_list("compile")))
+		directories = list(filter(
+			lambda source: isinstance(source, Config) and compile_type == source.get_value("type"),
+			GLOBALS.MAKE_CONFIG.obtain_list("compile")
+		))
 	configurables = dict()
 	if not any(directories):
 		return configurables
