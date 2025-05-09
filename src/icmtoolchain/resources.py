@@ -5,7 +5,6 @@ from shutil import make_archive
 
 from . import GLOBALS
 from .config import FileConfig
-from .make_config import ToolchainConfig
 from .shell import debug, error, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory,
                     ensure_file_directory, remove_tree, shortcodes)

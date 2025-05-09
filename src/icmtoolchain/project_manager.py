@@ -4,6 +4,7 @@ from os.path import abspath, basename, exists, isdir, isfile, join
 from typing import Any, Dict, Final, List, Optional, Tuple
 
 from . import GLOBALS
+from .config import Config
 from .make_config import MakeConfig
 from .shell import abort, confirm_prompt, pretty_print, warn
 from .utils import ensure_not_whitespace, remove_tree
@@ -72,7 +73,7 @@ class ProjectManager:
 
 		if GLOBALS.CODE_WORKSPACE.available():
 			location = GLOBALS.CODE_WORKSPACE.get_toolchain_path(folder).replace("\\", "/")
-			if len(GLOBALS.CODE_WORKSPACE.get_filtered_list("folders", "path", location)) == 0:
+			if not any(filter(lambda folder: isinstance(folder, Config) and location == folder.get_value("path"), GLOBALS.CODE_WORKSPACE.obtain_list("folders"))):
 				self.append_workspace_folder(folder, template_info["name"])
 
 		if GLOBALS.CODE_SETTINGS.available():
@@ -96,12 +97,12 @@ class ProjectManager:
 
 		if GLOBALS.CODE_WORKSPACE.available():
 			location = GLOBALS.CODE_WORKSPACE.get_toolchain_path(folder).replace("\\", "/")
-			if len(GLOBALS.CODE_WORKSPACE.get_filtered_list("folders", "path", location)) > 0:
-				folders = GLOBALS.CODE_WORKSPACE.get_value("folders", list())
-				for entry in folders:
-					if isinstance(entry, dict) and "path" in entry and entry["path"] == location:
-						folders.remove(entry)
-				GLOBALS.CODE_WORKSPACE.set_value("folders", folders)
+			workspace_directories = GLOBALS.CODE_WORKSPACE.obtain_list("folders")
+			requires_saving = False
+			for directory in filter(lambda folder: isinstance(folder, Config) and location == folder.get_value("path"), workspace_directories[:]):
+				workspace_directories.remove(directory)
+				requires_saving = True
+			if requires_saving:
 				GLOBALS.CODE_WORKSPACE.save_as_file()
 
 		if GLOBALS.CODE_SETTINGS.available():
@@ -147,7 +148,7 @@ class ProjectManager:
 
 		if folder and GLOBALS.CODE_WORKSPACE.available():
 			location = GLOBALS.CODE_WORKSPACE.get_toolchain_path(folder).replace("\\", "/")
-			if len(GLOBALS.CODE_WORKSPACE.get_filtered_list("folders", "path", location)) == 0:
+			if not any(filter(lambda folder: isinstance(folder, Config) and location == folder.get_value("path"), GLOBALS.CODE_WORKSPACE.obtain_list("folders"))):
 				make_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(join(folder, "make.json"))
 				if not isfile(make_path):
 					abort(f"Not found 'make.json' in project {folder!r}, nothing to do.")

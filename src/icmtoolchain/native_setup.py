@@ -7,7 +7,6 @@ import zipfile
 from os import environ, getenv, listdir, makedirs
 from os.path import abspath, basename, exists, isdir, isfile, join, realpath
 from typing import Any, Generator, List, Optional, Union
-from urllib.error import URLError
 
 from . import GLOBALS
 from .fetch import queue_download_request

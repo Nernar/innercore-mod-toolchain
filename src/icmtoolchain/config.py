@@ -121,7 +121,7 @@ class Config(dict[str, Any]):
 	def __setitem__(self, key: str, value: Any, /) -> None:
 		self.set_value_unsafe(key, value, replace_mismatched_types=True)
 
-	def merge_config(self, config: Union[dict, 'Config'], *, replace_configs: bool = False, extend_lists: bool = False, strip_none_from_lists: bool = False) -> None:
+	def merge_config(self, config: Union[dict, 'Config'], *, replace_configs: bool = False, exclusive_lists: bool = False, extend_lists: bool = False, strip_none_from_lists: bool = False) -> None:
 		for key, value in config.items():
 			if not key in self:
 				super().__setitem__(key, self.replace_value(value, strip_none_from_lists=strip_none_from_lists))
@@ -132,7 +132,11 @@ class Config(dict[str, Any]):
 				current_value.merge_config(value, extend_lists=extend_lists, strip_none_from_lists=strip_none_from_lists)
 				continue
 			if extend_lists and isinstance(value, MutableSequence) and isinstance(current_value, MutableSequence):
-				current_value.extend(value)
+				if not exclusive_lists:
+					current_value.extend(value)
+				else:
+					for obj in filter(lambda obj: obj not in current_value, value):
+						current_value.append(obj)
 				continue
 
 			super().__setitem__(key, self.replace_value(value, strip_none_from_lists=strip_none_from_lists))

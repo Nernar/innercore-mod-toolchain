@@ -5,7 +5,7 @@ import re
 import subprocess
 from collections import namedtuple
 from os.path import basename, exists, isdir, isfile, join, relpath, splitext
-from typing import Collection, Dict, List, Optional
+from typing import Collection, Dict, List
 from zipfile import ZipFile
 
 from . import GLOBALS, PROPERTIES

@@ -60,7 +60,7 @@ def load_build_config(make_obj: Dict[Any, Any], source: str, destination: str) -
 		if not "resources" in make_obj:
 			make_obj["resources"] = list()
 
-		for directory in config.get_filtered_list("resources", "resourceType", *("resource", "gui")):
+		for directory in filter(lambda resource: isinstance(resource, Config) and resource.get_value("resourceType") in ("resource", "gui"), config.obtain_list("resources")):
 			if directory["resourceType"] == "resource":
 				directory["resourceType"] = "resource_directory"
 			path_stripped = directory["path"].strip("/")
@@ -86,7 +86,7 @@ def load_build_config(make_obj: Dict[Any, Any], source: str, destination: str) -
 		elif not "sources" in make_obj:
 			make_obj["sources"] = list()
 
-		for directory in config.get_filtered_list("compile", "sourceType", *("mod", "launcher", "preloader", "instant", "custom", "library")):
+		for directory in filter(lambda source: isinstance(source, Config) and source.get_value("sourceType") in ("mod", "launcher", "preloader", "instant", "custom", "library"), config.obtain_list("compile")):
 			if directory["sourceType"] == "mod":
 				directory["sourceType"] = "main"
 			toolchain_source = {
@@ -100,8 +100,8 @@ def load_build_config(make_obj: Dict[Any, Any], source: str, destination: str) -
 			if "sourceName" in directory:
 				toolchain_source["sourceName"] = directory["sourceName"]
 			path_stripped = directory["path"].split("/")
-			build_dirs = config.get_filtered_list("buildDirs", "targetSource", (directory["path"]))
-			if len(build_dirs) > 0:
+			build_dirs = list(filter(lambda directory: isinstance(directory, Config) and directory["path"] == directory["targetSource"], config.obtain_list("buildDirs")))
+			if any(build_dirs):
 				toolchain_source["source"] = build_dirs[0]["dir"].strip("/")
 				build_path_stripped = toolchain_source["source"].split("/")
 				toolchain_source["target"] = directory["path"]

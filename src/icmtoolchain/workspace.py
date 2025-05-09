@@ -3,8 +3,7 @@ import os
 import platform
 import posixpath
 import subprocess
-from os.path import (abspath, basename, dirname, exists, isdir, isfile, join,
-                     relpath, splitext)
+from os.path import basename, dirname, exists, isdir, isfile, join, relpath
 from re import sub
 from typing import Any, Callable, Collection, Dict, List, Optional
 
