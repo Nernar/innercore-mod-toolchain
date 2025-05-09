@@ -5,11 +5,6 @@ from typing import Callable, Final, List, Optional
 from .config import Config, FileConfig
 from .shell import abort
 
-try:
-	from hashlib import blake2s as encode
-except ImportError:
-	from hashlib import md5 as encode
-
 
 class ToolchainConfig(FileConfig):
 	def __init__(self, path: str, defaults: Optional[Config] = None) -> None:
@@ -72,11 +67,8 @@ class MakeConfig(ToolchainConfig):
 			abort(f"Not found {basename(path)!r}, are you sure that selected project exists?")
 		self.current_project = defaults.get_value("currentProject")
 		super().__init__(path, defaults=defaults)
-		self.project_unique_name = self.unique_folder_name(self.directory)
+		from .output_directory import unique_folder_name
+		self.project_unique_name = unique_folder_name(self.directory)
 
 	def get_build_path(self, relative_path: str) -> str:
 		return self.defaults.get_relative_path(join("build", self.project_unique_name, relative_path))
-
-	@staticmethod
-	def unique_folder_name(path: str) -> str:
-		return basename(path) + "-" + encode(bytes(path, "utf-8")).hexdigest()[-5:]

@@ -6,9 +6,8 @@ from os.path import abspath, basename, exists, isdir, isfile, join, relpath
 from typing import Collection, Dict, List, Optional
 
 from . import GLOBALS, PROPERTIES
-from .config import Config
+from .config import Config, FileConfig
 from .language import get_language_directories
-from .make_config import ToolchainConfig
 from .native_setup import arch_to_abi, prepare_compiler_executable
 from .shell import abort, debug, error, info, pretty_print, warn
 from .utils import (RuntimeCodeError, copy_directory, copy_file,
@@ -46,12 +45,12 @@ def collect_stdincludes_directories(directories: Optional[Collection[str]]) -> L
 				warn(f"* Header {filename} should be inside any of stdincludes directory, otherwise it will be ignored.")
 	return stdincludes
 
-def get_manifest(directory: str) -> ToolchainConfig:
-	return ToolchainConfig(join(directory, "manifest"))
+def get_manifest(directory: str) -> FileConfig:
+	return FileConfig(join(directory, "manifest"))
 
 def get_name_from_manifest(directory: str) -> Optional[str]:
 	try:
-		return get_manifest(directory).get_value("shared.name", basename(directory))
+		return get_manifest(directory).get_value("shared.name", lambda: basename(directory))
 	except:
 		return None
 

@@ -423,9 +423,9 @@ def task_remove_project() -> int:
 	try:
 		location = GLOBALS.TOOLCHAIN_CONFIG.get_path(who)
 		GLOBALS.PROJECT_MANAGER.remove_project(folder=who)
-		from .make_config import MakeConfig
+		from .output_directory import unique_folder_name
 		from .package import cleanup_relative_directory
-		cleanup_relative_directory("build/" + MakeConfig.unique_folder_name(location))
+		cleanup_relative_directory("build/" + unique_folder_name(location))
 	except ValueError:
 		abort(f"Folder {who!r} not found!")
 
