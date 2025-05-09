@@ -10,7 +10,7 @@ from .utils import RuntimeCodeError
 def get_language_directories(compile_type: str, language_config: Config, properties_merger: Optional[Callable] = None) -> Dict[str, Config]:
 	from . import GLOBALS
 
-	directories = language_config.get_list("directories", config=True)
+	directories = language_config.obtain_list("directories", config=True)
 	if len(directories) == 0:
 		# Obtain directories from deprecated `compile` property.
 		directories = GLOBALS.MAKE_CONFIG.get_filtered_list("compile", "type", (compile_type), config=True)

@@ -76,11 +76,11 @@ class ProjectManager:
 				self.append_workspace_folder(folder, template_info["name"])
 
 		if GLOBALS.CODE_SETTINGS.available():
-			exclude = GLOBALS.CODE_SETTINGS.json["files.exclude"] if "files.exclude" in GLOBALS.CODE_SETTINGS.json else dict()
+			exclude = GLOBALS.CODE_SETTINGS.get_value("files.exclude", dict())
 			if not folder.startswith("../"):
 				exclude[folder] = True
-				GLOBALS.CODE_SETTINGS.json["files.exclude"] = exclude
-				GLOBALS.CODE_SETTINGS.save()
+				GLOBALS.CODE_SETTINGS.set_value("files.exclude", exclude)
+				GLOBALS.CODE_SETTINGS.save_as_file()
 
 		self.projects.append(folder)
 		return self.how_much() - 1
@@ -102,14 +102,14 @@ class ProjectManager:
 					if isinstance(entry, dict) and "path" in entry and entry["path"] == location:
 						folders.remove(entry)
 				GLOBALS.CODE_WORKSPACE.set_value("folders", folders)
-				GLOBALS.CODE_WORKSPACE.save()
+				GLOBALS.CODE_WORKSPACE.save_as_file()
 
 		if GLOBALS.CODE_SETTINGS.available():
-			exclude = GLOBALS.CODE_SETTINGS.json["files.exclude"] if "files.exclude" in GLOBALS.CODE_SETTINGS.json else dict()
+			exclude = GLOBALS.CODE_SETTINGS.get_value("files.exclude", dict())
 			if folder in exclude:
 				del exclude[folder]
-				GLOBALS.CODE_SETTINGS.json["files.exclude"] = exclude
-				GLOBALS.CODE_SETTINGS.save()
+				GLOBALS.CODE_SETTINGS.set_value("files.exclude", exclude)
+				GLOBALS.CODE_SETTINGS.save_as_file()
 
 		remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path(folder))
 		if index != -1:
@@ -128,7 +128,7 @@ class ProjectManager:
 				"name": str(name)
 			})
 			GLOBALS.CODE_WORKSPACE.set_value("folders", folders)
-			GLOBALS.CODE_WORKSPACE.save()
+			GLOBALS.CODE_WORKSPACE.save_as_file()
 
 	def select_project_folder(self, folder: Optional[str] = None) -> None:
 		if isinstance(GLOBALS.PREFERRED_CONFIG, MakeConfig) and GLOBALS.MAKE_CONFIG.current_project == folder:
@@ -156,14 +156,14 @@ class ProjectManager:
 				self.append_workspace_folder(folder, self.resolve_mod_name(folder, make_obj))
 
 		if folder and GLOBALS.CODE_SETTINGS.available():
-			exclude = GLOBALS.CODE_SETTINGS.json["files.exclude"] if "files.exclude" in GLOBALS.CODE_SETTINGS.json else dict()
+			exclude = GLOBALS.CODE_SETTINGS.get_value("files.exclude", dict())
 			if isinstance(GLOBALS.PREFERRED_CONFIG, MakeConfig):
 				if not GLOBALS.MAKE_CONFIG.current_project.startswith("../") and not exists(abspath(GLOBALS.MAKE_CONFIG.current_project)):
 					exclude[GLOBALS.MAKE_CONFIG.current_project] = True
 			if not folder.startswith("../"):
 				exclude[folder] = False
-			GLOBALS.CODE_SETTINGS.json["files.exclude"] = exclude
-			GLOBALS.CODE_SETTINGS.save()
+			GLOBALS.CODE_SETTINGS.set_value("files.exclude", exclude)
+			GLOBALS.CODE_SETTINGS.save_as_file()
 
 		self.select_project_folder(folder)
 		pretty_print(f"Project {folder!r} selected.")

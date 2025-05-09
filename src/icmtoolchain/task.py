@@ -161,9 +161,9 @@ def task_compile_native() -> int:
 			# TODO: warn("* Property `debugAbi` has been deprecated in favor of configurations, determine your own ABIs via 'debug' rule.")
 			abis = [abi]
 	if not abis:
-		abis = GLOBALS.MAKE_CONFIG.get_list("native.abis")
+		abis = GLOBALS.MAKE_CONFIG.obtain_list("native.abis")
 		if len(abis) == 0:
-			abis = GLOBALS.MAKE_CONFIG.get_list("abis")
+			abis = GLOBALS.MAKE_CONFIG.obtain_list("abis")
 	if len(abis) == 0:
 		abort(f"No `abis` value in 'toolchain.json' config, nothing will happened.")
 	from .native_build import compile_native, copy_shared_objects

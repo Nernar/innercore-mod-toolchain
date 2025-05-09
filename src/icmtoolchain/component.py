@@ -62,9 +62,9 @@ def install_components(*keywords: str) -> None:
 			continue
 		pretty_print_attention(f"What do you expect? We doesn't have {COMPONENTS[keyword].packurl} anymore!")
 	if "cpp" in keywords:
-		abis = GLOBALS.TOOLCHAIN_CONFIG.get_list("native.abis")
+		abis = GLOBALS.TOOLCHAIN_CONFIG.obtain_list("native.abis")
 		if len(abis) == 0:
-			abis = GLOBALS.TOOLCHAIN_CONFIG.get_list("abis")
+			abis = GLOBALS.TOOLCHAIN_CONFIG.obtain_list("abis")
 		abi = GLOBALS.TOOLCHAIN_CONFIG.get_value("native.debugAbi")
 		if not abi:
 			abi = GLOBALS.TOOLCHAIN_CONFIG.get_value("debugAbi")

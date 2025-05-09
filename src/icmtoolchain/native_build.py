@@ -185,7 +185,7 @@ def build_native_with_ndk(directory: str, output_directory: str, target_director
 
 		# Also copy includes if necessary.
 		keep_includes = manifest.get_value("keepIncludes", fallback=False)
-		for include_path in manifest.get_list("shared.include"):
+		for include_path in manifest.obtain_list("shared.include"):
 			output_include_path = join(output_directory, include_path)
 			if keep_includes:
 				src_include_path = join(directory, include_path)
@@ -253,7 +253,7 @@ def build_native_with_ndk(directory: str, output_directory: str, target_director
 		for stdincludes_directory in reversed(list(stdincludes)):
 			includes.append(f"-I{stdincludes_directory}")
 		dependencies = [f"-L{get_fake_so_directory(abi)}", "-landroid", "-lm", "-llog", "-ldl", "-lc"]
-		links = manifest_abi.get_list("link")
+		links = manifest_abi.obtain_list("link")
 		if not "horizon" in links:
 			links.append("horizon")
 		for link in links:
@@ -262,20 +262,20 @@ def build_native_with_ndk(directory: str, output_directory: str, target_director
 
 		# Always search for dependencies in current directory.
 		search_directory = abspath(join(directory, ".."))
-		for dependency in manifest_abi.get_list("depends"):
+		for dependency in manifest_abi.obtain_list("depends"):
 			if dependency:
 				add_fake_so(executable, abi, dependency)
 				dependencies.append("-l" + dependency)
 				dependency_directory = search_in_directory(search_directory, dependency)
 				if dependency_directory:
 					try:
-						for include_directory in get_manifest(dependency_directory).get_list("shared.include"):
+						for include_directory in get_manifest(dependency_directory).obtain_list("shared.include"):
 							includes.append("-I" + join(dependency_directory, include_directory))
 					except KeyError:
 						pass
 			else:
 				warn(f"* Dependency directory {dependency} is not found, it will be skipped.")
-		for include in manifest_abi.get_list("include"):
+		for include in manifest_abi.obtain_list("include"):
 			includes.append("-I" + join(directory, include))
 
 		# Collect files and prepare output cache directories.
@@ -337,7 +337,7 @@ def build_native_with_ndk(directory: str, output_directory: str, target_director
 			return overall_result
 		debug(f"Recompiled {recompiled_count}/{total_count} files with result {overall_result} ({'OK' if overall_result == 0 else 'ERROR'}){' ' * 48}")
 
-		for link in manifest_abi.get_list("linkStatic"):
+		for link in manifest_abi.obtain_list("linkStatic"):
 			link_path = GLOBALS.MAKE_CONFIG.get_relative_path(join("static_libs", abi, link))
 			if isdir(link_path):
 				for object_file in get_all_files(link_path):
@@ -431,7 +431,7 @@ def compile_native(abis: Collection[str]) -> int:
 	return overall_result
 
 def copy_shared_objects(abis: Collection[str]) -> int:
-	shared_objects = GLOBALS.MAKE_CONFIG.get_list("native.sharedObjects")
+	shared_objects = GLOBALS.MAKE_CONFIG.obtain_list("native.sharedObjects")
 	shared_objects_count = len(shared_objects)
 	if shared_objects_count == 0 or not "manifest" in GLOBALS.MAKE_CONFIG:
 		return 0

@@ -3,18 +3,20 @@ from json import dump as dump_json
 from json import load as load_json
 from os.path import (abspath, basename, dirname, exists, isfile, join,
                      normpath, relpath)
-from typing import (Any, Iterable, MutableMapping, MutableSequence, Optional,
-                    Protocol, Union, override)
+from typing import (Any, Callable, Iterable, MutableMapping, MutableSequence,
+                    Optional, Protocol, TypeVar, Union, cast, override)
 
 from .utils import ensure_file
 
 
-class SupportsKeysAndGetItemConfig(Protocol):
+class ConfigSupportsKeysAndGetItem(Protocol):
     def keys(self) -> Iterable[str]: ...
     def __getitem__(self, key: str, /) -> Any: ...
 
+ConfigResultType = TypeVar("ConfigResultType")
+
 class Config(dict[str, Any]):
-	def __init__(self, map: Optional[SupportsKeysAndGetItemConfig] = None, defaults: Optional['Config'] = None):
+	def __init__(self, map: Optional[ConfigSupportsKeysAndGetItem] = None, defaults: Optional['Config'] = None):
 		if map is not None:
 			super().__init__(map)
 		else:
@@ -36,7 +38,7 @@ class Config(dict[str, Any]):
 		except KeyError:
 			if self.defaults is not None and allow_prototype:
 				return self.defaults.get_value(key, fallback)
-		return fallback
+		return fallback() if callable(fallback) else fallback
 
 	def get_value_unsafe(self, key: str) -> Any:
 		if not "." in key:
@@ -53,15 +55,34 @@ class Config(dict[str, Any]):
 	def __getitem__(self, key: str, /) -> Any:
 		return self.get_value_unsafe(key)
 
-	def obtain_config(self, key: str, *, allow_prototype: bool = True) -> 'Config':
+	def obtain(
+		self,
+		key: str,
+		result_type: type[ConfigResultType],
+		fallback: Optional[Union[ConfigResultType, Callable[[], ConfigResultType]]] = None,
+		*,
+		implace_fallback: bool = True,
+		allow_prototype: bool = True
+	) -> ConfigResultType:
 		value = self.get_value(key, allow_prototype=allow_prototype)
-		if isinstance(value, Config):
+		if isinstance(value, result_type):
 			return value
 		value = self.replace_value(value)
-		if not isinstance(value, Config):
-			value = Config()
-		self.set_value(key, value)
+		requires_implace = isinstance(value, result_type)
+		if not requires_implace:
+			if fallback is not None:
+				value = cast(ConfigResultType, fallback() if callable(fallback) else fallback)
+			else:
+				value = result_type()
+		if requires_implace or implace_fallback:
+			self.set_value(key, value)
 		return value
+
+	def obtain_config(self, key: str, *, implace_fallback: bool = False, allow_prototype: bool = True) -> 'Config':
+		return self.obtain(key, Config, implace_fallback=implace_fallback, allow_prototype=allow_prototype)
+
+	def obtain_list(self, key: str, *, implace_fallback: bool = False, allow_prototype: bool = True) -> MutableSequence:
+		return self.obtain(key, MutableSequence, fallback=lambda: list(), implace_fallback=implace_fallback, allow_prototype=allow_prototype)
 
 	def set_value(self, key: str, value: Any, strip_none_from_lists: bool = False) -> None:
 		self.set_value_unsafe(key, value, replace_mismatched_types=True, strip_none_from_lists=strip_none_from_lists)

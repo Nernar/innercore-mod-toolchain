@@ -478,7 +478,7 @@ def get_java_build_targets(directories: Dict[str, Config]) -> List[BuildTarget]:
 			except json.JSONDecodeError as exc:
 				raise RuntimeCodeError(2, f"* Malformed java directory {directory!r} manifest, you should fix it: {exc.msg}.")
 
-		classpath = collect_classpath_files(config.get_list("classpath"))
+		classpath = collect_classpath_files(config.obtain_list("classpath"))
 		target = BuildTarget(directory, relative_directory, output_directory, config, classpath)
 		targets.append(target)
 

@@ -20,7 +20,7 @@ def build_resources() -> int:
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("minecraft_behavior_pack")
 	overall_result = 0
 
-	for resource in GLOBALS.MAKE_CONFIG.get_list("resources"):
+	for resource in GLOBALS.MAKE_CONFIG.obtain_list("resources"):
 		if "path" not in resource or "type" not in resource:
 			error(f"Skipped invalid resource json {resource}, it might contain `path` and `type` properties!")
 			overall_result = 1
@@ -99,7 +99,7 @@ def build_pack_graphics() -> int:
 def build_additional_resources() -> int:
 	overall_result = 0
 
-	for additional_dir in GLOBALS.MAKE_CONFIG.get_list("additional"):
+	for additional_dir in GLOBALS.MAKE_CONFIG.obtain_list("additional"):
 		if "source" not in additional_dir or "targetDir" not in additional_dir:
 			error(f"Skipped invalid additional resource json {additional_dir}, it might contain `source` and `targetDir` properties!")
 			overall_result += 1
@@ -190,7 +190,7 @@ def build_package() -> int:
 			copy_directory(input_resource, output_package_resource)
 		else:
 			warn(f"* We cannot copy {linked_resource['relative_path']} resource because we could not determine its type.")
-	for path in GLOBALS.MAKE_CONFIG.get_list("excludeFromRelease"):
+	for path in GLOBALS.MAKE_CONFIG.obtain_list("excludeFromRelease"):
 		for excluded_path in GLOBALS.MAKE_CONFIG.get_paths(join(output_package_directory, path)):
 			remove_tree(excluded_path)
 	make_archive(output_temporary_file[:-4], "zip", output_directory, name)
