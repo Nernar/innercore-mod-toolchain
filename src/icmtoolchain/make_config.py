@@ -1,7 +1,10 @@
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
+from functools import cmp_to_key
 from os.path import basename, isfile, join
-from typing import Any, Final, Iterable, MutableMapping, Optional, Union
+from posixpath import splitext
+from typing import (Any, Final, Iterable, MutableMapping, Optional, Sequence,
+                    Union, override)
 
 from .config import Config, FileConfig
 from .shell import abort
@@ -13,7 +16,6 @@ class MakeModData:
 	author: str
 	version: str = "1.0"
 	description: str = ""
-	client_only: bool = False
 	icon: Optional[str] = "mod_icon.png"
 
 @dataclass
@@ -25,20 +27,17 @@ class MakePackData:
 
 @dataclass
 class MakeScriptData:
-	name: str
 	relative_path: str
 	output_path: str
 	type: str = "main"
 	language: Optional[str] = None
+	source_name: Optional[str] = None
 	api: str = "CoreEngine"
 	includes_path: str = ".includes"
 	optimization_level: int = -1
-	declarations: Iterable[str] = []
-	is_shared: bool = False
 
 @dataclass
 class MakeJavaData:
-	name: str
 	relative_path: str
 	output_path: str
 	sources: Iterable[str]
@@ -50,7 +49,6 @@ class MakeJavaData:
 
 @dataclass
 class MakeNativeData:
-	name: str
 	relative_path: str
 	output_path: str
 	shared_name: str
@@ -64,13 +62,11 @@ class MakeNativeData:
 
 @dataclass
 class MakeSharedObjectData:
-	name: str
 	relative_path: str
 	output_path: str
 
 @dataclass
 class MakeResourceData:
-	name: str
 	relative_path: str
 	output_path: str
 	type: str = "resource_directory"
@@ -79,13 +75,13 @@ class MakeResourceData:
 
 @dataclass
 class MakeAssetData:
-	name: str
 	relative_path: str
 	output_path: str
+	output_filename: Optional[str] = None
 	push_unchanged_files: bool = True
 	cleanup_remote: bool = True
 
-class AbstractMakeConfig(FileConfig, metaclass=ABCMeta):
+class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 	defaults: FileConfig
 	current_project: Final[str]
 	project_unique_name: Final[str]
@@ -103,13 +99,47 @@ class AbstractMakeConfig(FileConfig, metaclass=ABCMeta):
 
 	@property
 	@abstractmethod
-	def project_data(self) -> Union[MakeModData, MakePackData]:
+	def project_data(self) -> Optional[Union[MakeModData, MakePackData]]:
 		"""Basic data describing this config and project as a whole. They should be provided in any case.
+		If there is no value, no built-in startup configurations are created.
 
 		Returns:
 			Union[MakeModData, MakePackData]: project data on which manifest is based
 		"""
-		return MakeModData("Wholesome Mod", "ICMods")
+		...
+
+	def obtain_mod_data(self, mod_info: Config) -> MakeModData:
+		name = mod_info.get_value("name") or "Wholesome Mod"
+		author = mod_info.get_value("author") or "ICMods"
+		version = mod_info.get_value("version") or "1.0"
+		description = mod_info.get_value("description") or ""
+		icon = mod_info.get_value("icon") or "mod_icon.png"
+
+		from .utils import shortcodes
+		return MakeModData(
+			name=shortcodes(name),
+			author=author,
+			version=shortcodes(version),
+			description=shortcodes(description),
+			icon=icon
+		)
+
+	def obtain_pack_data(self, manifest: Config) -> MakePackData:
+		name = manifest.get_value("pack") or "Wholesome Pack"
+		version = manifest.get_value("packVersion") or "1.0"
+		description = manifest.get_value("description") or ""
+
+		from .utils import shortcodes
+		if isinstance(description, MutableMapping):
+			for key, value in description.items():
+				description[key] = shortcodes(value)
+		else:
+			description = shortcodes(description)
+		return MakePackData(
+			name=shortcodes(name),
+			version=shortcodes(version),
+			description=description
+		)
 
 	@property
 	def supports_scripts(self) -> bool:
@@ -192,13 +222,14 @@ class AbstractMakeConfig(FileConfig, metaclass=ABCMeta):
 		"""
 		...
 
-class MakeConfig(AbstractMakeConfig):
+class MakeConfig(MakeDataConfig):
 	def __init__(self, path: str, defaults: FileConfig) -> None:
 		super().__init__(path, defaults)
 		if "make.json" == basename(path):
 			self.migrate_make_config(self)
 		if "toolchain.json" == basename(defaults.path):
 			self.migrate_make_config(defaults)
+		self.is_pack = "manifest" in self
 
 	def migrate_make_config(self, config: FileConfig, save_then: bool = True) -> bool:
 		changes = False
@@ -227,3 +258,134 @@ class MakeConfig(AbstractMakeConfig):
 		if save_then and changes:
 			config.save_as_file()
 		return changes
+
+	@property
+	@override
+	def project_data(self) -> Optional[Union[MakeModData, MakePackData]]:
+		if not self.is_pack and "info" in self:
+			mod_info = self.obtain_config("info")
+			return self.obtain_mod_data(mod_info)
+		if self.is_pack and "manifest" in self:
+			manifest_relative_path = self.get_value("manifest")
+			manifest_path = self.get_relative_path(manifest_relative_path)
+			manifest = FileConfig(manifest_path, raise_non_existing=True)
+			return self.obtain_pack_data(manifest)
+
+	@property
+	@override
+	def supports_scripts(self) -> bool:
+		return not self.is_pack
+
+	@override
+	def iterate_scripts(self) -> Iterable[MakeScriptData]:
+		sources_list = filter(
+			lambda source: isinstance(source, Config),
+			self.obtain_list("sources")
+		)
+		for source in sorted(sources_list, key=cmp_to_key(
+			lambda a, b: \
+				0 if a.get_value("type") == "library" and b.get_value("type") == "library" \
+					else -1 if a.get_value("type") == "library" else 1
+		)):
+			yield self.obtain_script_data(source)
+
+	def obtain_script_data(self, source: Config) -> MakeScriptData:
+		relative_path = source.get_value_unsafe("source")
+		from .script_build import VALID_SOURCE_TYPES
+		type = source.get_value_unsafe("type")
+		if not type in VALID_SOURCE_TYPES:
+			raise ValueError(f"Script {relative_path!r} has invalid type, it should be one of: {', '.join(VALID_SOURCE_TYPES)}!")
+		language = source.get_value("language")
+		if language and language not in ("javascript", "typescript"):
+			raise ValueError(f"Script {relative_path!r} has invalid language, it should be 'javascript' or 'typescript'!")
+
+		output_path = source.get_value("target")
+		if not output_path:
+			script_path = self.get_relative_path(relative_path)
+			output_path = basename(script_path)
+			if isfile(script_path):
+				output_path = splitext(output_path)[0] + ".js"
+
+		return MakeScriptData(
+			relative_path=relative_path,
+			output_path=output_path,
+			type=type,
+			language=language,
+			source_name=source.get_value("sourceName", lambda: relative_path),
+			api=source.get_value("api"),
+			includes_path=source.get_value("includes"),
+			optimization_level=source.get_value("optimizationLevel")
+		)
+
+	@property
+	@override
+	def supports_java(self) -> bool:
+		return True
+
+	@override
+	def iterate_java(self) -> Iterable[MakeJavaData]:
+		...
+
+	@property
+	@override
+	def supports_native(self) -> bool:
+		return True
+
+	@override
+	def iterate_native(self) -> Iterable[MakeNativeData]:
+		...
+
+	@property
+	@override
+	def supports_shared_objects(self) -> bool:
+		return self.is_pack
+
+	@override
+	def iterate_shared_objects(self) -> Iterable[MakeSharedObjectData]:
+		...
+
+	@property
+	@override
+	def supports_resources(self) -> bool:
+		return not self.is_pack
+
+	@override
+	def iterate_resources(self) -> Iterable[MakeResourceData]:
+		for source in self.obtain_list("resources"):
+			if not isinstance(source, Config):
+				continue
+			yield self.obtain_resource_data(source)
+
+	def obtain_resource_data(self, source: Config) -> MakeResourceData:
+		relative_path = source.get_value_unsafe("path")
+		from .resources import VALID_RESOURCE_TYPES
+		type = source.get_value_unsafe("type")
+		if not type in VALID_RESOURCE_TYPES:
+			raise ValueError(f"Resource {relative_path!r} has invalid type, it should be one of: {', '.join(VALID_RESOURCE_TYPES)}!")
+
+		return MakeResourceData(
+			relative_path=relative_path,
+			output_path=basename(relative_path),
+			type=type,
+			push_unchanged_files=source.get_value("pushUnchangedFiles"),
+			cleanup_remote=source.get_value("cleanupRemote")
+		)
+
+	@override
+	def iterate_assets(self) -> Iterable[MakeAssetData]:
+		for source in self.obtain_list("additional"):
+			if not isinstance(source, Config):
+				continue
+			yield self.obtain_asset_data(source)
+
+	def obtain_asset_data(self, source: Config) -> MakeAssetData:
+		relative_path = source.get_value_unsafe("path")
+		output_path = source.get_value_unsafe("targetDir")
+
+		return MakeAssetData(
+			relative_path=relative_path,
+			output_path=output_path,
+			output_filename=source.get_value("targetFile"),
+			push_unchanged_files=source.get_value("pushUnchangedFiles"),
+			cleanup_remote=source.get_value("cleanupRemote")
+		)
