@@ -86,8 +86,20 @@ class MakeAssetData:
 	cleanup_remote: bool = True
 
 class AbstractMakeConfig(FileConfig, metaclass=ABCMeta):
+	defaults: FileConfig
+	current_project: Final[str]
+	project_unique_name: Final[str]
+
 	def __init__(self, path: str, defaults: FileConfig) -> None:
+		if not isfile(path):
+			abort(f"Not found {basename(path)!r}, are you sure that selected project exists?")
+		self.current_project = defaults.get_value("currentProject")
 		super().__init__(path, defaults, raise_non_existing=True)
+		from .output_directory import unique_folder_name
+		self.project_unique_name = unique_folder_name(self.directory)
+
+	def get_build_path(self, relative_path: str) -> str:
+		return self.defaults.get_relative_path(join("build", self.project_unique_name, relative_path))
 
 	@property
 	@abstractmethod
@@ -180,22 +192,13 @@ class AbstractMakeConfig(FileConfig, metaclass=ABCMeta):
 		"""
 		...
 
-class MakeConfig(FileConfig):
-	defaults: FileConfig
-	current_project: Final[str]
-	project_unique_name: Final[str]
-
+class MakeConfig(AbstractMakeConfig):
 	def __init__(self, path: str, defaults: FileConfig) -> None:
-		if not isfile(path):
-			abort(f"Not found {basename(path)!r}, are you sure that selected project exists?")
-		self.current_project = defaults.get_value("currentProject")
-		super().__init__(path, defaults=defaults)
+		super().__init__(path, defaults)
 		if "make.json" == basename(path):
 			self.migrate_make_config(self)
 		if "toolchain.json" == basename(defaults.path):
 			self.migrate_make_config(defaults)
-		from .output_directory import unique_folder_name
-		self.project_unique_name = unique_folder_name(self.directory)
 
 	def migrate_make_config(self, config: FileConfig, save_then: bool = True) -> bool:
 		changes = False
@@ -224,6 +227,3 @@ class MakeConfig(FileConfig):
 		if save_then and changes:
 			config.save_as_file()
 		return changes
-
-	def get_build_path(self, relative_path: str) -> str:
-		return self.defaults.get_relative_path(join("build", self.project_unique_name, relative_path))
