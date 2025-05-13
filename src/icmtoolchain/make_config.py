@@ -112,11 +112,13 @@ class MakeConfig(MakeDataConfig):
 		return True
 
 	@override
-	def iterate_java(self) -> Iterable[MakeJavaData]:
+	def iterate_java(self, defaults: Optional[Config] = None) -> Iterable[MakeJavaData]:
 		java_config = self.get_value("java")
 		# Obtain properties from deprecated `gradle` config.
 		if not isinstance(java_config, Config):
 			java_config = self.obtain_config("gradle")
+		if isinstance(defaults, Config):
+			java_config.merge_config(defaults, exclusive_lists=True, extend_lists=True)
 
 		from .language import get_language_directories
 		directories = get_language_directories("java", java_config, make_config=self)
@@ -151,11 +153,13 @@ class MakeConfig(MakeDataConfig):
 		return True
 
 	@override
-	def iterate_native(self) -> Iterable[MakeNativeData]:
+	def iterate_native(self, defaults: Optional[Config] = None) -> Iterable[MakeNativeData]:
 		native_config = self.obtain_config("native")
 		# Obtain deprecated config `linkNative` property.
 		if not "native" in self and "linkNative" in self:
 			native_config.set_value("link", self.get_value("linkNative"))
+		if isinstance(defaults, Config):
+			native_config.merge_config(defaults, exclusive_lists=True, extend_lists=True)
 
 		from .language import get_language_directories
 		directories = get_language_directories("native", native_config, make_config=self)

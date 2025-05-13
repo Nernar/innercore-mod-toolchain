@@ -3,23 +3,28 @@ import os
 import platform
 import re
 import subprocess
-from collections import namedtuple
 from os.path import basename, exists, isdir, isfile, join, relpath, splitext
-from typing import Collection, Dict, List
+from typing import (Collection, Dict, Iterable, List, MutableSequence,
+                    NamedTuple)
 from zipfile import ZipFile
 
 from . import GLOBALS, PROPERTIES
 from .component import install_components
 from .config import Config
-from .language import get_language_directories
+from .language import MakeJavaData
 from .output_directory import expand_paths
 from .shell import abort, debug, error, info, pretty_print, warn
-from .utils import (RuntimeCodeError, copy_directory, copy_file,
-                    ensure_directory, ensure_file, get_all_files,
-                    get_next_filename, remove_tree, request_executable_version,
-                    request_tool, walk_all_files)
+from .utils import (copy_directory, copy_file, ensure_directory, ensure_file,
+                    get_all_files, get_next_filename, remove_tree,
+                    request_executable_version, request_tool, walk_all_files)
 
-BuildTarget = namedtuple("BuildTarget", "directory relative_directory output_directory manifest classpath")
+
+class BuildTarget(NamedTuple):
+	directory: str
+	relative_directory: str
+	output_directory: str
+	manifest: MakeJavaData
+	classpath: MutableSequence[str]
 
 TOOLCHAIN_CLASSPATH = None
 
@@ -38,9 +43,8 @@ def collect_classpath_files(directories: Collection[str]) -> List[str]:
 	if not TOOLCHAIN_CLASSPATH:
 		classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("classpath")
 		if isdir(classpath_directory):
-			requires_manifest = "manifest" in GLOBALS.MAKE_CONFIG
 			TOOLCHAIN_CLASSPATH = get_all_files(classpath_directory, (".jar"))
-			if requires_manifest:
+			if GLOBALS.MAKE_CONFIG.is_pack:
 				innercore_test = join(classpath_directory, "innercore-test.jar")
 				try:
 					TOOLCHAIN_CLASSPATH.remove(innercore_test)
@@ -81,7 +85,7 @@ def update_modified_targets(targets: Collection[BuildTarget], target_directory: 
 		classes = GLOBALS.BUILD_STORAGE.get_modified_files(classes_directory, (".class")) if isdir(classes_directory) else []
 		libraries = list()
 
-		for library_path in target.manifest.get_value("library-dirs", list()):
+		for library_path in target.manifest.libraries:
 			library_directory = join(target.directory, library_path)
 			if exists(library_directory) and isdir(library_directory):
 				libraries.extend(GLOBALS.BUILD_STORAGE.get_modified_files(library_directory, (".jar")))
@@ -100,24 +104,25 @@ def update_modified_targets(targets: Collection[BuildTarget], target_directory: 
 
 def copy_additional_sources(targets: Collection[BuildTarget]) -> None:
 	for target in targets:
-		if target.manifest.get_value("keepLibraries", False) or GLOBALS.MAKE_CONFIG.get_value("java.keepLibraries", False) or GLOBALS.MAKE_CONFIG.get_value("gradle.keepLibraries", False):
-			library_directories = target.manifest.get_value("library-dirs", list())
-			for relative_directory in library_directories:
+		if target.manifest.keep_libraries:
+			for relative_directory in target.manifest.libraries:
 				directory = join(target.directory, relative_directory)
 				if isdir(directory):
 					copy_directory(directory, join(target.output_directory, relative_directory), clear_destination=True)
-			target.manifest.remove_value("keepLibraries")
 
-		if target.manifest.get_value("keepSources", False) or GLOBALS.MAKE_CONFIG.get_value("java.keepSources", False) or GLOBALS.MAKE_CONFIG.get_value("gradle.keepSources", False):
-			source_directories = target.manifest.get_value("source-dirs", list())
-			for relative_directory in source_directories:
+		if target.manifest.keep_sources:
+			for relative_directory in target.manifest.sources:
 				directory = join(target.directory, relative_directory)
 				if isdir(directory):
 					copy_directory(directory, join(target.output_directory, relative_directory), clear_destination=True)
-			target.manifest.remove_value("keepSources")
 
+		manifest_json = {
+			"source-dirs": list(target.manifest.sources),
+			"library-dirs": list(target.manifest.libraries)
+		}
 		with open(join(target.output_directory, "manifest"), "w", encoding="utf-8") as manifest:
-			manifest.write(json.dumps(target.manifest.json, ensure_ascii=False))
+			manifest.write(json.dumps(manifest_json, ensure_ascii=False))
+			manifest.write("\n")
 
 ### D8/L8/R8
 
@@ -134,7 +139,7 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 	if exists(compressed_libraries):
 		libraries += ["--lib", compressed_libraries]
 	else:
-		walk_all_files((join(target.directory, library) for library in target.manifest.get_value("library-dirs", list())), lambda filename: libraries.extend(("--lib", filename)), (".jar"))
+		walk_all_files((join(target.directory, library) for library in target.manifest.libraries), lambda filename: libraries.extend(("--lib", filename)), (".jar"))
 
 	target_d8_directory = join(target_directory, "d8", target.relative_directory)
 	compressed_target = target_d8_directory + ".zip"
@@ -222,9 +227,9 @@ def build_java_with_javac(targets: Collection[BuildTarget], target_directory: st
 	supports_modules = False
 
 	for target in targets:
-		source_directories = target.manifest.get_value("source-dirs", list())
-		library_directories = target.manifest.get_value("library-dirs", list())
-		if len(source_directories) == 0 and len(library_directories) == 0:
+		source_directories = list(target.manifest.sources)
+		library_directories = list(target.manifest.libraries)
+		if not any(source_directories) and not any(library_directories):
 			continue
 
 		from time import time
@@ -249,7 +254,7 @@ def build_java_with_javac(targets: Collection[BuildTarget], target_directory: st
 			supports_modules = request_executable_version(javac_executable)
 			supports_modules = supports_modules >= 1.9 or supports_modules >= 9
 
-		options = target.manifest.get_value("options", list())
+		options = list(target.manifest.options)
 		if supports_modules:
 			options += ["--release", "8"]
 		else:
@@ -257,7 +262,7 @@ def build_java_with_javac(targets: Collection[BuildTarget], target_directory: st
 				"-source", "8",
 				"-target", "8"
 			]
-		if target.manifest.get_value("verbose", False):
+		if target.manifest.verbose:
 			options.append("-verbose")
 		if len(source_directories) > 0:
 			options += ["-sourcepath", os.pathsep.join(join(target.directory, source) for source in source_directories)]
@@ -309,9 +314,9 @@ def build_java_with_ecj(targets: Collection[BuildTarget], target_directory: str)
 	ecj_executable = None
 
 	for target in targets:
-		source_directories = target.manifest.get_value("source-dirs", list())
-		library_directories = target.manifest.get_value("library-dirs", list())
-		if len(source_directories) == 0 and len(library_directories) == 0:
+		source_directories = list(target.manifest.sources)
+		library_directories = list(target.manifest.libraries)
+		if not any(source_directories) and not any(library_directories):
 			continue
 
 		from time import time
@@ -345,8 +350,8 @@ def build_java_with_ecj(targets: Collection[BuildTarget], target_directory: str)
 					break
 			# TODO: error("Executable 'ecj-*.jar' is not supported, nothing to do.")
 
-		options = target.manifest.get_value("options", list())
-		if target.manifest.get_value("verbose", False):
+		options = list(target.manifest.options)
+		if target.manifest.verbose:
 			options.append("-verbose")
 		if len(source_directories) > 0:
 			options += ["-sourcepath", ":".join(join(target.directory, source) for source in source_directories)]
@@ -386,7 +391,7 @@ def build_java_with_gradle(targets: Collection[BuildTarget], target_directory: s
 
 		options = list()
 		for target in targets:
-			if target.manifest.get_value("verbose", False):
+			if target.manifest.verbose:
 				options += ["--console", "verbose"]
 				break
 
@@ -420,8 +425,8 @@ def setup_gradle_project(targets: Collection[BuildTarget], target_directory: str
 	ensure_directory(target_classes_directory)
 	for target in targets:
 		if not GLOBALS.MAKE_CONFIG.get_value("java.configurable", False) or not exists(join(target.directory, "build.gradle")):
-			source_directories = target.manifest.get_value("source-dirs", list())
-			library_directories = target.manifest.get_value("library-dirs", list())
+			source_directories = list(target.manifest.sources)
+			library_directories = list(target.manifest.libraries)
 			write_build_gradle(target.directory, classpath, target_classes_directory, source_directories, library_directories)
 
 def write_build_gradle(directory: str, classpath: Collection[str], target_classes_directory: str, source_directories: Collection[str], library_directories: Collection[str]) -> None:
@@ -466,29 +471,21 @@ def cleanup_gradle_scripts(targets: Collection[BuildTarget]) -> None:
 
 ### TASKS
 
-def get_java_build_targets(directories: Dict[str, Config]) -> List[BuildTarget]:
+def get_java_build_targets(directories: Iterable[MakeJavaData]) -> List[BuildTarget]:
 	targets = list()
 
-	for directory, config in directories.items():
-		relative_directory = basename(directory)
-		output_directory = GLOBALS.MOD_STRUCTURE.new_build_target("java", relative_directory)
+	for java_data in directories:
+		directory = GLOBALS.MAKE_CONFIG.get_path(java_data.relative_path)
+		output_directory = GLOBALS.MOD_STRUCTURE.new_build_target("java", java_data.output_path)
 		ensure_directory(output_directory)
-
-		with open(join(directory, "manifest"), encoding="utf-8") as manifest:
-			try:
-				manifest = Config(json.load(manifest))
-				manifest.delete_value("directory")
-				config.merge_config(manifest, exclusive_lists=True)
-			except json.JSONDecodeError as exc:
-				raise RuntimeCodeError(2, f"* Malformed java directory {directory!r} manifest, you should fix it: {exc.msg}.")
-
-		classpath = collect_classpath_files(config.obtain_list("classpath"))
-		target = BuildTarget(directory, relative_directory, output_directory, config, classpath)
+		classpath = collect_classpath_files(list(java_data.classpath))
+		# XXX: Probably relative path (second argument) should be relative to project directory.
+		target = BuildTarget(directory, java_data.output_path, output_directory, java_data, classpath)
 		targets.append(target)
 
 	return targets
 
-def build_java_directories(tool: str, directories: Dict[str, Config], target_directory: str) -> int:
+def build_java_directories(tool: str, directories: Iterable[MakeJavaData], target_directory: str) -> int:
 	targets = get_java_build_targets(directories)
 
 	if tool == "gradle":
@@ -534,7 +531,7 @@ def build_java_directories(tool: str, directories: Dict[str, Config], target_dir
 		if not built_successfully:
 			warn(f"* Directory {target.relative_directory!r} is empty.")
 
-	if "manifest" in GLOBALS.MAKE_CONFIG:
+	if GLOBALS.MAKE_CONFIG.is_pack:
 		target_output_path = GLOBALS.MOD_STRUCTURE.get_target_output_directory("java")
 		order = [relpath(target.output_directory, target_output_path) for target in targets]
 		order_path = join(target_output_path, "order.txt")
@@ -571,27 +568,18 @@ def compile_java(tool: str = "gradle") -> int:
 	if exists(project_classpath_directory):
 		classpath_directories.append(project_classpath_directory)
 
-	try:
-		java_config = GLOBALS.MAKE_CONFIG.get_value("java")
-		if not java_config or not isinstance(java_config, Config):
-			# Obtain properties from deprecated `gradle` config.
-			java_config = GLOBALS.MAKE_CONFIG.obtain_config("gradle")
-		if len(classpath_directories) > 0:
-			additional_config = Config()
-			additional_config.set_value("classpath", classpath_directories)
-			java_config.merge_config(additional_config, exclusive_lists=True)
-		directories = get_language_directories("java", java_config)
-	except RuntimeCodeError as exc:
-		error(exc)
-		return exc.code
+	if len(classpath_directories) > 0:
+		defaults = Config()
+		defaults.set_value("classpath", classpath_directories)
 
+	directories = GLOBALS.MAKE_CONFIG.iterate_java(defaults=defaults)
 	overall_result = build_java_directories(tool, directories, target_directory)
 
 	GLOBALS.MOD_STRUCTURE.update_build_config_list("javaDirs")
-	if len(directories) != 0:
+	if overall_result != -1:
 		startup_millis = time() - startup_millis
 		if overall_result == 0:
 			pretty_print(f"Completed java build in {startup_millis:.2f}s!")
 		else:
 			error(f"Failed java build in {startup_millis:.2f}s with result {overall_result}.")
-	return overall_result
+	return max(0, overall_result)
