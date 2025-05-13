@@ -120,7 +120,7 @@ class MakeSharedObjectData:
 @dataclass
 class MakeResourceData:
 	relative_path: str
-	output_path: str
+	output_path: str # XXX: Unused, at least for now.
 	type: str = "resource_directory"
 	push_unchanged_files: bool = True
 	cleanup_remote: bool = True
@@ -154,9 +154,8 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 	def get_build_path(self, relative_path: str) -> str:
 		return self.defaults.get_relative_path(join("build", self.project_unique_name, relative_path))
 
-	@property
 	@abstractmethod
-	def project_data(self) -> Optional[Union[MakeModData, MakePackData]]:
+	def obtain_project_data(self) -> Optional[Union[MakeModData, MakePackData]]:
 		"""Basic data describing this config and project as a whole. They should be provided in any case.
 		If there is no value, no built-in startup configurations are created.
 
@@ -166,11 +165,11 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 		...
 
 	def obtain_mod_data(self, mod_info: Config) -> MakeModData:
-		name = mod_info.get_value("name") or "Wholesome Mod"
-		author = mod_info.get_value("author") or "ICMods"
-		version = mod_info.get_value("version") or "1.0"
+		name = mod_info.get_value("name") or ""
+		author = mod_info.get_value("author") or ""
+		version = mod_info.get_value("version") or ""
 		description = mod_info.get_value("description") or ""
-		icon = mod_info.get_value("icon") or "mod_icon.png"
+		icon = mod_info.get_value("icon")
 
 		from .utils import shortcodes
 		return MakeModData(
@@ -182,20 +181,22 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 		)
 
 	def obtain_pack_data(self, manifest: Config) -> MakePackData:
-		name = manifest.get_value("pack") or "Wholesome Pack"
-		version = manifest.get_value("packVersion") or "1.0"
+		name = manifest.get_value("pack") or ""
+		version = manifest.get_value("packVersion") or ""
 		description = manifest.get_value("description") or ""
 
 		from .utils import shortcodes
 		if isinstance(description, MutableMapping):
 			for key, value in description.items():
 				description[key] = shortcodes(value)
-		else:
+		elif isinstance(description, str):
 			description = shortcodes(description)
+
 		return MakePackData(
 			name=shortcodes(name),
 			version=shortcodes(version),
-			description=description
+			description=description,
+			manifest=manifest
 		)
 
 	@property

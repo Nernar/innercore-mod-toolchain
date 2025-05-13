@@ -151,6 +151,8 @@ def task(name: str, description: Optional[str] = None, locks: Optional[List[str]
 	description="Compiles native folders using NDK and links objects."
 )
 def task_compile_native() -> int:
+	if not GLOBALS.MAKE_CONFIG.supports_native:
+		return 0
 	abis = None
 	if not PROPERTIES.get_value("release"):
 		abi = GLOBALS.MAKE_CONFIG.get_value("native.debugAbi")
@@ -167,7 +169,7 @@ def task_compile_native() -> int:
 		abort(f"No `abis` value in 'toolchain.json' config, nothing will happened.")
 	from .native_build import compile_native, copy_shared_objects
 	result = compile_native(abis)
-	if result == 0:
+	if result == 0 and GLOBALS.MAKE_CONFIG.supports_shared_objects:
 		result = copy_shared_objects(abis)
 	return result
 
@@ -177,6 +179,8 @@ def task_compile_native() -> int:
 	description="Compiles java folders using Gradle, Javac or ECJ."
 )
 def task_compile_java(tool: Optional[str] = None) -> int:
+	if not GLOBALS.MAKE_CONFIG.supports_java:
+		return 0
 	from .java_build import compile_java
 	if not tool:
 		tool = GLOBALS.MAKE_CONFIG.get_value("java.compiler", "gradle")
@@ -193,10 +197,10 @@ def task_compile_java(tool: Optional[str] = None) -> int:
 	description="Recompiles scripts using simple file concatenation or tsc."
 )
 def task_build_scripts() -> int:
-	if not "manifest" in GLOBALS.MAKE_CONFIG:
-		from .script_build import build_all_scripts
-		return build_all_scripts()
-	return 0
+	if not GLOBALS.MAKE_CONFIG.supports_scripts:
+		return 0
+	from .script_build import build_all_scripts
+	return build_all_scripts()
 
 @task(
 	"watchScripts",
@@ -204,21 +208,22 @@ def task_build_scripts() -> int:
 	description="Recompiles changed scripts instantly using tsc, interruption will end watching."
 )
 def task_watch_scripts() -> int:
-	if not "manifest" in GLOBALS.MAKE_CONFIG:
-		from .script_build import build_all_scripts
-		return build_all_scripts(watch=True)
-	error("* You cannot have scripts to watch because pack structure is being used.")
-	return 1
+	if not GLOBALS.MAKE_CONFIG.supports_scripts:
+		error("* You cannot have scripts to watch because your project does not support them.")
+		return 1
+	from .script_build import build_all_scripts
+	return build_all_scripts(watch=True)
 
 @task(
 	"updateIncludes",
 	description="Overrides the contents of 'tsconfig.json' based on script files."
 )
 def task_update_includes() -> int:
-	if not "manifest" in GLOBALS.MAKE_CONFIG:
-		from .script_build import compute_and_capture_changed_scripts
-		compute_and_capture_changed_scripts()
-		GLOBALS.WORKSPACE_COMPOSITE.flush()
+	if not GLOBALS.MAKE_CONFIG.supports_scripts:
+		return 0
+	from .script_build import compute_and_capture_changed_scripts
+	compute_and_capture_changed_scripts()
+	GLOBALS.WORKSPACE_COMPOSITE.flush()
 	return 0
 
 ### RESOURCES & PACKAGE
@@ -231,9 +236,9 @@ def task_update_includes() -> int:
 def task_resources() -> int:
 	from .resources import (build_additional_resources, build_pack_graphics,
 	                        build_resources)
-	if not "manifest" in GLOBALS.MAKE_CONFIG:
+	if GLOBALS.MAKE_CONFIG.supports_resources:
 		overall_result = build_resources()
-	else:
+	if overall_result == 0 and GLOBALS.MAKE_CONFIG.supports_pack_graphics:
 		overall_result = build_pack_graphics()
 	if overall_result == 0:
 		overall_result = build_additional_resources()
@@ -247,16 +252,14 @@ def task_resources() -> int:
 	description="Writes the description file 'mod.info' to output folder for display in mod browser."
 )
 def task_build_info() -> int:
-	requires_manifest = "manifest" in GLOBALS.MAKE_CONFIG
-	requires_mod_info = "info" in GLOBALS.MAKE_CONFIG
-	if requires_manifest and requires_mod_info:
-		error("Properties `info` and `manifest` cannot exist in your 'make.json' at same time!")
-		return 1
+	project_data = GLOBALS.MAKE_CONFIG.obtain_project_data()
+	from .language import MakeModData, MakePackData
 	from .resources import write_manifest_file, write_mod_info_file
-	if requires_manifest:
-		return write_manifest_file()
-	elif requires_mod_info:
-		return write_mod_info_file()
+	if isinstance(project_data, MakeModData):
+		return write_mod_info_file(project_data)
+	elif isinstance(project_data, MakePackData):
+		return write_manifest_file(project_data)
+	warn("* Nothing to write in project configurations, project data does not exist.")
 	return 0
 
 @task(

@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 from collections import namedtuple
+from itertools import tee
 from os.path import abspath, basename, exists, isdir, isfile, join, relpath
 from typing import Collection, Dict, List, Optional
 
@@ -431,41 +432,38 @@ def compile_native(abis: Collection[str]) -> int:
 	return overall_result
 
 def copy_shared_objects(abis: Collection[str]) -> int:
-	shared_objects = GLOBALS.MAKE_CONFIG.obtain_list("native.sharedObjects")
-	shared_objects_count = len(shared_objects)
-	if shared_objects_count == 0 or not "manifest" in GLOBALS.MAKE_CONFIG:
+	shared_objects = GLOBALS.MAKE_CONFIG.iterate_shared_objects()
+	shared_objects, has_anything = tee(shared_objects)
+	try:
+		next(has_anything)
+	except StopIteration:
 		return 0
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("shared_object")
 	order = set()
 
-	debug(f"Including {shared_objects_count} shared objects")
+	debug(f"Copying shared objects")
 	overall_result = 0
 	for shared_object in shared_objects:
-		formatted_shared_object = shared_object.format("")
-		if shared_object == formatted_shared_object:
-			if shared_object[-1] == "*":
-				shared_object = shared_object[0:-1] + "/{}/*"
-			else:
-				error(f"* Shared object path {formatted_shared_object} should contain required architecture or ends with asterisk.")
-				overall_result += 1
-				continue
+		relative_path = shared_object.relative_path
 		for abi in abis:
-			formatted_shared_object = shared_object.format(abi)
-			for shared_object_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(formatted_shared_object)):
+			formatted_relative_path = relative_path.format(abi)
+			for shared_object_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(formatted_relative_path)):
 				shared_object_name = basename(shared_object_path)
 				if shared_object_name in order:
-					warn(f"* Found duplicate shared object {formatted_shared_object}, overriding existing one...")
+					warn(f"* Found duplicate shared object {formatted_relative_path}, overriding existing one...")
 				output_relative_file = join(abi_to_runtime_architecture(abi), shared_object_name)
 				output_file = GLOBALS.MOD_STRUCTURE.new_build_target("shared_object", output_relative_file)
 				copy_file(shared_object_path, output_file)
 				order.add(shared_object_name)
 
-	if len(order) > 0:
+	if any(order):
 		output_directory = GLOBALS.MOD_STRUCTURE.get_target_output_directory("shared_object")
 		with open(join(output_directory, "order.txt"), "w", encoding="utf-8") as order_file:
-			order_file.write("\n".join(order) + "\n")
+			for shared_object in order:
+				order_file.write(shared_object + "\n")
+
 	if overall_result == 0:
-		pretty_print(f"Completed shared objects include!")
+		pretty_print(f"Completed including shared objects!")
 	else:
-		error(f"Failed include shared objects with result {overall_result}.")
+		error(f"Failed to include shared objects with result {overall_result}.")
 	return overall_result

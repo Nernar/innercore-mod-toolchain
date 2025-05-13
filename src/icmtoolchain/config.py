@@ -187,11 +187,12 @@ class Config(dict[str, Any]):
 		return json
 
 class FileConfig(Config):
-	def __init__(self, path: str, defaults: Optional['Config'] = None, *, raise_non_existing: bool = False):
-		super().__init__(defaults=defaults)
+	def __init__(self, path: str, defaults: Optional['Config'] = None, map: Optional[ConfigSupportsKeysAndGetItem] = None, *, do_not_read: bool = False, raise_non_existing: bool = False):
+		super().__init__(map=map, defaults=defaults)
 		self.path = path
 		self.directory = dirname(abspath(path))
-		self.read_from_file(raise_non_existing=raise_non_existing)
+		if not do_not_read:
+			self.read_from_file(raise_non_existing=raise_non_existing)
 
 	def read_from_file(self, *, raise_non_existing: bool = True, merge_with_existing: bool = False) -> None:
 		non_existing = not isfile(self.path)

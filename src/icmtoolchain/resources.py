@@ -1,14 +1,16 @@
-import json
 import os
+from itertools import tee
 from os.path import basename, exists, isdir, isfile, join
 from shutil import make_archive
+from typing import MutableMapping
 
 from . import GLOBALS
 from .config import FileConfig
+from .language import MakeModData, MakePackData
 from .output_directory import expand_paths
-from .shell import debug, error, pretty_print, warn
+from .shell import debug, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory,
-                    ensure_file_directory, remove_tree, shortcodes)
+                    ensure_file_directory, ensure_not_whitespace, remove_tree)
 
 VALID_RESOURCE_TYPES = ("resource_directory", "gui", "minecraft_resource_pack", "minecraft_behavior_pack")
 
@@ -20,38 +22,25 @@ def build_resources() -> int:
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("minecraft_behavior_pack")
 	overall_result = 0
 
-	for resource in GLOBALS.MAKE_CONFIG.obtain_list("resources"):
-		if "path" not in resource or "type" not in resource:
-			error(f"Skipped invalid resource json {resource}, it might contain `path` and `type` properties!")
-			overall_result = 1
-			continue
-
-		resource_type = resource["type"]
-		if resource_type not in VALID_RESOURCE_TYPES:
-			error(f"Invalid resource `type` in resource: {resource_type}, it might be one of {VALID_RESOURCE_TYPES}!")
-			overall_result = 1
-			continue
-
-		resource_files = expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(resource["path"]))
+	for resource in GLOBALS.MAKE_CONFIG.iterate_resources():
+		resource_files = expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(resource.relative_path))
 		if len(resource_files) == 0:
-			warn(f"* Skipped non-existing resource {resource['path']!r}!")
+			warn(f"* Skipped non-existing resource {resource.relative_path!r}!")
 			continue
-		push_unchanged = resource["pushUnchangedFiles"] if "pushUnchangedFiles" in resource else None
-		cleanup_remote = resource["cleanupRemote"] if "cleanupRemote" in resource else None
 
 		for source_path in resource_files:
 			resource_name = basename(source_path)
-			if resource_type in ("resource_directory", "gui"):
+			if resource.type in ("resource_directory", "gui"):
 				target = GLOBALS.MOD_STRUCTURE.create_build_target(
-					resource_type,
+					resource.type,
 					resource_name,
 					declare={
-						"resourceType": "resource" if resource_type == "resource_directory" else resource_type
+						"resourceType": "resource" if resource.type == "resource_directory" else resource.type
 					}
 				)
 			else:
 				target = GLOBALS.MOD_STRUCTURE.create_build_target(
-					resource_type,
+					resource.type,
 					resource_name,
 					exclude=True,
 					declare_default={
@@ -61,8 +50,13 @@ def build_resources() -> int:
 				)
 
 			relative_path = GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)
-			output_path = GLOBALS.MOD_STRUCTURE.build_targets[resource_type].directory + "/" + target["name"]
-			GLOBALS.LINKED_RESOURCE_STORAGE.append_resource(relative_path, output_path, push_unchanged=push_unchanged, cleanup_remote=cleanup_remote)
+			output_path = GLOBALS.MOD_STRUCTURE.build_targets[resource.type].directory + "/" + target["name"]
+			GLOBALS.LINKED_RESOURCE_STORAGE.append_resource(
+				relative_path,
+				output_path,
+				push_unchanged=resource.push_unchanged_files,
+				cleanup_remote=resource.cleanup_remote
+			)
 
 	GLOBALS.MOD_STRUCTURE.update_build_config_list("resources")
 	return overall_result
@@ -71,102 +65,93 @@ def build_pack_graphics() -> int:
 	graphics_archive = join(GLOBALS.MOD_STRUCTURE.directory, "graphics.zip")
 	if exists(graphics_archive):
 		remove_tree(graphics_archive)
-	graphics_groups = GLOBALS.MAKE_CONFIG.get_value("pack.graphics")
-	if not isinstance(graphics_groups, dict):
+	graphics_groups = GLOBALS.MAKE_CONFIG.iterate_pack_graphics()
+	graphics_groups, has_anything = tee(graphics_groups)
+	try:
+		next(has_anything)
+	except StopIteration:
 		return 0
 
 	graphics_directory = GLOBALS.MAKE_CONFIG.get_build_path("graphics")
 	remove_tree(graphics_directory)
 	ensure_directory(graphics_directory)
 
-	for name, images in graphics_groups.items():
+	group_length = 0
+	for graphics in graphics_groups:
 		offset = 1
-		if isinstance(images, str):
-			images = [images]
-		for image_directory in images:
+		for image_directory in graphics.images:
 			for image_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(image_directory)):
 				if not isfile(image_path):
 					warn(f"* Skipping graphics image file {basename(image_path)}, cause it does not exists!")
 					continue
-				copy_file(image_path, join(graphics_directory, f"{name}@{offset}.png"))
+				copy_file(image_path, join(graphics_directory, f"{graphics.group_name}@{offset}.png"))
 				offset += 1
+		group_length += 1
 
 	from shutil import make_archive
 	make_archive(graphics_archive[:-4], "zip", graphics_directory)
-	pretty_print(f"Composed a pack with graphics from {len(graphics_groups.keys())} groups!")
+	pretty_print(f"Composed a pack with graphics from {group_length} groups!")
 	return 0
 
 def build_additional_resources() -> int:
 	overall_result = 0
 
-	for additional_dir in GLOBALS.MAKE_CONFIG.obtain_list("additional"):
-		if "source" not in additional_dir or "targetDir" not in additional_dir:
-			error(f"Skipped invalid additional resource json {additional_dir}, it might contain `source` and `targetDir` properties!")
-			overall_result += 1
-			continue
-
-		additional_files = expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(additional_dir["source"]))
+	for asset in GLOBALS.MAKE_CONFIG.iterate_assets():
+		additional_files = expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(asset.relative_path))
 		if len(additional_files) == 0:
-			warn(f"* Skipped non-existing additional resource {additional_dir['source']!r}!")
+			warn(f"* Skipped non-existing additional resource {asset.relative_path!r}!")
 			continue
-		push_unchanged = additional_dir["pushUnchangedFiles"] if "pushUnchangedFiles" in additional_dir else None
-		cleanup_remote = additional_dir["cleanupRemote"] if "cleanupRemote" in additional_dir else False
 
 		for additional_path in additional_files:
 			relative_path = GLOBALS.MAKE_CONFIG.get_path_to_config(additional_path)
-			output_relative_filename = additional_dir["targetFile"] if "targetFile" in additional_dir else basename(additional_path)
-			output_path = f"{additional_dir['targetDir']}/{output_relative_filename}"
-			debug(f"Referencing {additional_dir['source']!r} to {output_path!r} on remote")
-			GLOBALS.LINKED_RESOURCE_STORAGE.append_resource(relative_path, output_path, push_unchanged=push_unchanged, cleanup_remote=cleanup_remote)
+			output_relative_filename = ensure_not_whitespace(asset.output_filename, basename(additional_path))
+			output_path = f"{asset.output_path}/{output_relative_filename}"
+
+			debug(f"Referencing {asset.relative_path!r} to {output_path!r} on remote")
+			GLOBALS.LINKED_RESOURCE_STORAGE.append_resource(
+				relative_path,
+				output_path,
+				push_unchanged=asset.push_unchanged_files,
+				cleanup_remote=asset.cleanup_remote
+			)
 
 	return overall_result
 
-def write_mod_info_file() -> int:
+def write_mod_info_file(data: MakeModData) -> int:
 	info_file = join(GLOBALS.MOD_STRUCTURE.directory, "mod.info")
-	with open(GLOBALS.MAKE_CONFIG.get_relative_path(info_file), "w", encoding="utf-8") as info_file:
-		info = GLOBALS.MAKE_CONFIG.obtain_config("info")
-		if "name" in info:
-			info.set_value("name", shortcodes(info.get_value("name")))
-		if "version" in info:
-			info.set_value("version", shortcodes(info.get_value("version")))
-		if "description" in info:
-			info.set_value("description", shortcodes(info.get_value("description")))
-		info.delete_value("icon")
-		info_file.write(json.dumps(info.as_json(), indent="\t", ensure_ascii=False) + "\n")
+	info = FileConfig(info_file, do_not_read=True)
+	if not ensure_not_whitespace(data.name):
+		info.set_value("name", data.name)
+	if not ensure_not_whitespace(data.author):
+		info.set_value("author", data.author)
+	if not ensure_not_whitespace(data.version):
+		info.set_value("version", data.version)
+	if not ensure_not_whitespace(data.description):
+		info.set_value("description", data.description)
+	info.save_as_file()
 
-	optional_icon_path = GLOBALS.MAKE_CONFIG.get_value("info.icon")
-	icon_path = GLOBALS.MAKE_CONFIG.get_path(optional_icon_path or "mod_icon.png")
-	if isfile(icon_path):
-		output_info_path = join(GLOBALS.MOD_STRUCTURE.directory, "mod_icon.png")
+	icon_path = GLOBALS.MAKE_CONFIG.get_path(data.icon or "mod_icon.png")
+	output_info_path = join(GLOBALS.MOD_STRUCTURE.directory, "mod_icon.png")
+	if isfile(icon_path) and icon_path != output_info_path:
 		copy_file(icon_path, output_info_path)
-	elif optional_icon_path:
+	elif ensure_not_whitespace(data.icon):
 		warn(f"* Icon {icon_path!r} described in 'make.json' is not found!")
 	return 0
 
-def write_manifest_file() -> int:
-	manifest_relative_path = GLOBALS.MAKE_CONFIG.get_value("manifest")
-	manifest_file = GLOBALS.MAKE_CONFIG.get_relative_path(manifest_relative_path)
-	if not isfile(manifest_file):
-		error(f"Manifest file {manifest_relative_path} does not exist, aborting!")
-		return 1
-	manifest = FileConfig(manifest_file)
-	if "pack" in manifest:
-		manifest.set_value("pack", shortcodes(manifest.get_value("pack")))
-	if "packVersion" in manifest:
-		manifest.set_value("packVersion", shortcodes(manifest.get_value("packVersion")))
-	if "description" in manifest:
-		description = manifest.get_value("description")
-		if isinstance(description, dict):
-			for key, value in description.items():
-				description[key] = shortcodes(value)
-		else:
-			manifest.set_value("description", shortcodes(description))
+def write_manifest_file(data: MakePackData) -> int:
 	output_manifest_path = join(GLOBALS.MOD_STRUCTURE.directory, "manifest.json")
+	manifest = FileConfig(output_manifest_path, map=data.manifest, do_not_read=True)
+	if ensure_not_whitespace(data.name):
+		manifest.set_value("pack", data.name)
+	if ensure_not_whitespace(data.version):
+		manifest.set_value("packVersion", data.version)
+	if isinstance(data.description, MutableMapping) or ensure_not_whitespace(data.description):
+		manifest.set_value("description", data.description)
 	manifest.save_as_file(output_manifest_path)
 	return 0
 
 def build_package() -> int:
-	requires_manifest = "manifest" in GLOBALS.MAKE_CONFIG
+	requires_manifest = GLOBALS.MAKE_CONFIG.is_pack
 	name = basename(GLOBALS.MAKE_CONFIG.current_project)
 	output_directory = GLOBALS.MAKE_CONFIG.get_build_path("package")
 

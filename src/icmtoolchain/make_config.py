@@ -48,9 +48,8 @@ class MakeConfig(MakeDataConfig):
 			config.save_as_file()
 		return changes
 
-	@property
 	@override
-	def project_data(self) -> Optional[Union[MakeModData, MakePackData]]:
+	def obtain_project_data(self) -> Optional[Union[MakeModData, MakePackData]]:
 		if not self.is_pack and "info" in self:
 			mod_info = self.obtain_config("info")
 			return self.obtain_mod_data(mod_info)
@@ -88,6 +87,7 @@ class MakeConfig(MakeDataConfig):
 		if language and language not in ("javascript", "typescript"):
 			raise ValueError(f"Script {relative_path!r} has invalid language, it should be 'javascript' or 'typescript'!")
 
+		# Using template <sourceName>.<extension> -> <sourceName>, e.g. main.js -> main
 		output_path = source.get_value("target")
 		if not output_path:
 			script_path = self.get_relative_path(relative_path)
@@ -103,7 +103,7 @@ class MakeConfig(MakeDataConfig):
 			source_name=source.get_value("sourceName", lambda: relative_path),
 			api=source.get_value("api"),
 			includes_path=source.get_value("includes"),
-			optimization_level=source.get_value("optimizationLevel")
+			optimization_level=source.get_value("optimizationLevel", -1)
 		)
 
 	@property

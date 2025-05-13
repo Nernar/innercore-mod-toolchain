@@ -1,13 +1,14 @@
 from functools import cmp_to_key
 from os.path import basename, exists, isdir, isfile, join, relpath, splitext
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, MutableMapping, Tuple
 
 from . import GLOBALS, PROPERTIES
 from .includes import Includes
+from .language import MakeScriptData
 from .output_directory import expand_paths
 from .shell import debug, error, info, pretty_print, warn
-from .utils import (RuntimeCodeError, copy_file, request_typescript,
-                    walk_all_files)
+from .utils import (RuntimeCodeError, copy_file, ensure_not_whitespace,
+                    request_typescript, walk_all_files)
 
 VALID_SOURCE_TYPES = ("main", "launcher", "preloader", "instant", "custom", "library")
 
@@ -19,50 +20,28 @@ def build_all_scripts(watch: bool = False) -> int:
 	if request_typescript(only_check=True) and not exists(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("declarations")):
 		warn("Not found 'declarations', in most cases build will be failed, please install it via tasks.")
 
-	overall_result = 0
-	for source in GLOBALS.MAKE_CONFIG.get_value("sources", list()):
-		if "source" not in source or "type" not in source:
-			error(f"Invalid source json {source!r}, it might contain `source` and `type` properties!")
-			overall_result = 1
-			continue
-		if source["type"] not in VALID_SOURCE_TYPES:
-			error(f"Invalid script `type` in source: {source['type']}, it might be one of {VALID_SOURCE_TYPES}.")
-			overall_result = 1
-		if "language" in source:
-			if not source["language"] in ("javascript", "typescript"):
-				error(f"Invalid source `language` property: {source['language']}, it should be 'javascript' or 'typescript'!")
-				overall_result = 1
-	if overall_result != 0:
-		return overall_result
+	return build_composite_project() if not watch else watch_composite_project()
 
-	overall_result += build_composite_project() if not watch else watch_composite_project()
-	return overall_result
-
-def rebuild_build_target(source, target_path: str) -> str:
-	declare = {
+def rebuild_build_target(source: MakeScriptData, target_path: str) -> str:
+	declare: MutableMapping[str, Any] = {
 		# make.json source type -> build.config source type
-		"sourceType": "mod" if source["type"] == "main" else "custom" if source["type"] == "instant" else source["type"]
+		"sourceType": "mod" if source.type == "main" else "custom" if source.type == "instant" else source.type
 	}
 
-	if "api" in source and source["type"] != "preloader":
-		declare["api"] = source["api"]
-	if "optimizationLevel" in source:
-		declare["optimizationLevel"] = min(max(int(source["optimizationLevel"]), -1), 9)
-	if "sourceName" in source:
-		declare["sourceName"] = source["sourceName"]
+	if ensure_not_whitespace(source.api) and source.type != "preloader":
+		declare["api"] = source.api
+	if source.optimization_level != -1:
+		declare["optimizationLevel"] = min(max(int(source.optimization_level), -1), 9)
+	if ensure_not_whitespace(source.source_name):
+		declare["sourceName"] = source.source_name
 
-	target_type = "script_library" if source["type"] == "library" else "script_source"
+	target_type = "script_library" if source.type == "library" else "script_source"
 	return GLOBALS.MOD_STRUCTURE.new_build_target(
 		target_type,
 		target_path,
-		source_type=source["type"],
+		source_type=source.type,
 		declare=declare
 	)
-
-def do_sorting(a: Dict[Any, Any], b: Dict[Any, Any]) -> int:
-	la = a["type"] == "library"
-	lb = b["type"] == "library"
-	return 0 if la == lb else -1 if la else 1
 
 def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], List[Tuple[str, str, str]], List[Tuple[Includes, str, str]], List[Tuple[str, str]]]:
 	composite = list()
@@ -70,11 +49,10 @@ def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], L
 	includes = list()
 	computed_includes = list()
 
-	for source in sorted(GLOBALS.MAKE_CONFIG.get_value("sources", list()), key=cmp_to_key(do_sorting)):
-		make = source["includes"] if "includes" in source else ".includes"
-		preffered_language = source["language"] if "language" in source else None
+	for source in GLOBALS.MAKE_CONFIG.iterate_scripts():
+		includes_path = ensure_not_whitespace(source.includes_path, ".includes")
 
-		for source_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(source["source"])):
+		for source_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(source.relative_path)):
 			if not exists(source_path):
 				warn(f"* Skipped non-existing source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r}!")
 				continue
@@ -95,23 +73,15 @@ def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], L
 				except RuntimeError:
 					preffered_typescript = True
 
-			language = preffered_language or ("typescript" if preffered_typescript else "javascript")
+			language = ensure_not_whitespace(source.language, "typescript" if preffered_typescript else "javascript")
 			if language == "typescript" and not request_typescript():
 				if preffered_typescript:
 					raise RuntimeCodeError(255, f"We cannot compile source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r} without you having Node.js, despite `denyTypeScript` property of your 'toolchain.json' being active. Please disable it and install Node.js to compile TypeScript sources.")
 				warn(f"* Source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r} specifies target language as TypeScript, so this script probably uses ESNext capabilities. Build as normal JavaScript files, since `denyTypeScript` property of your 'toolchain.json' is active.")
 				language = "javascript"
 
-			# Using template <sourceName>.<extension> -> <sourceName>, e.g. main.js -> main
-			if "target" not in source:
-				target_path = basename(source_path)
-				if isfile(source_path):
-					target_path = splitext(target_path)[0]
-				target_path += ".js"
-			else:
-				target_path = source["target"]
-
 			# Preserve output target duplication
+			target_path = source.output_path
 			try:
 				dot_index = target_path.rindex(".")
 				target_path = target_path[:dot_index] + "{}" + target_path[dot_index:]
@@ -120,10 +90,10 @@ def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], L
 
 			destination_path = rebuild_build_target(source, target_path)
 			appending_library = GLOBALS.MAKE_CONFIG.get_value("project.compiledLibraries", False) \
-				and source["type"] == "library" and preffered_language == "javascript"
+				and source.type == "library" and source.language == "javascript"
 
 			if isdir(source_path):
-				include = Includes.invalidate(source_path, make)
+				include = Includes.invalidate(source_path, includes_path)
 				# Computing in any case, tsconfig normalises environment usage
 				if include.compute(destination_path, "typescript" if not appending_library else "javascript"):
 					includes.append((
