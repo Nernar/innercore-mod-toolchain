@@ -1,12 +1,14 @@
 from functools import cmp_to_key
-from os.path import basename, isfile
+from os.path import basename, isfile, join
 from posixpath import splitext
-from typing import Iterable, Optional, Union, override
+from typing import Any, Iterable, MutableSequence, Optional, Union, override
 
 from .config import Config, FileConfig
 from .language import (MakeAssetData, MakeDataConfig, MakeJavaData,
                        MakeModData, MakeNativeData, MakePackData,
-                       MakeResourceData, MakeScriptData, MakeSharedObjectData)
+                       MakePackGraphicsData, MakeResourceData, MakeScriptData,
+                       MakeSharedObjectData)
+from .utils import ensure_not_whitespace
 
 
 class MakeConfig(MakeDataConfig):
@@ -111,7 +113,37 @@ class MakeConfig(MakeDataConfig):
 
 	@override
 	def iterate_java(self) -> Iterable[MakeJavaData]:
-		...
+		java_config = self.get_value("java")
+		# Obtain properties from deprecated `gradle` config.
+		if not isinstance(java_config, Config):
+			java_config = self.obtain_config("gradle")
+
+		from .language import get_language_directories
+		directories = get_language_directories("java", java_config, make_config=self)
+		for directory, config in directories.items():
+			yield self.obtain_java_data(config)
+
+	def obtain_java_data(self, config: Config) -> MakeJavaData:
+		relative_path = config.get_value_unsafe("directory")
+		directory = self.get_path(relative_path)
+		output_path = basename(directory)
+
+		manifest_path = join(directory, "manifest")
+		manifest = FileConfig(manifest_path, raise_non_existing=True)
+		manifest.delete_value("directory")
+		config.merge_config(manifest, exclusive_lists=True)
+
+		return MakeJavaData(
+			relative_path=relative_path,
+			output_path=output_path,
+			sources=config.obtain_list("source-dirs"),
+			libraries=config.obtain_list("library-dirs"),
+			classpath=config.obtain_list("classpath"),
+			verbose=config.get_value("verbose", False),
+			keep_libraries=config.get_value("keepLibraries", False),
+			keep_sources=config.get_value("keepSources", False),
+			options=config.obtain_list("options")
+		)
 
 	@property
 	@override
@@ -120,7 +152,50 @@ class MakeConfig(MakeDataConfig):
 
 	@override
 	def iterate_native(self) -> Iterable[MakeNativeData]:
-		...
+		native_config = self.obtain_config("native")
+		# Obtain deprecated config `linkNative` property.
+		if not "native" in self and "linkNative" in self:
+			native_config.set_value("link", self.get_value("linkNative"))
+
+		from .language import get_language_directories
+		directories = get_language_directories("native", native_config, make_config=self)
+		for directory, config in directories.items():
+			yield self.obtain_native_data(config)
+
+	def obtain_native_data(self, config: Config) -> MakeNativeData:
+		relative_path = config.get_value_unsafe("directory")
+		directory = self.get_path(relative_path)
+		output_path = basename(directory)
+
+		manifest_path = join(directory, "manifest")
+		manifest = FileConfig(manifest_path, raise_non_existing=True)
+		manifest.delete_value("directory")
+		# Obtain deprecated `rules` property to being merged.
+		if "rules" in manifest:
+			rules_config = manifest.get_value("rules")
+			if isinstance(rules_config, Config):
+				config.merge_config(rules_config)
+		config.merge_config(manifest, exclusive_lists=True)
+
+		shared_name = config.get_value("shared.name", basename(directory))
+		if not ensure_not_whitespace(shared_name) or ("shared" in config and shared_name == "unnamed"):
+			raise ValueError(f"Library directory {directory} uses illegal name {shared_name!r}!")
+		if config.get_value("library.version", -1) < 0 and "library" in config:
+			raise ValueError(f"Library directory {directory} shared a library with illegal version!")
+
+		return MakeNativeData(
+			relative_path=relative_path,
+			output_path=output_path,
+			shared_name=shared_name,
+			depends=config.obtain_list("depends"),
+			link=config.obtain_list("link"),
+			link_static=config.obtain_list("linkStatic"),
+			include=config.obtain_list("include"),
+			stdincludes=config.obtain_list("stdincludes"),
+			keep_includes=config.get_value("keepIncludes", False),
+			keep_sources=config.get_value("keepSources", False),
+			options=config.obtain_list("options")
+		)
 
 	@property
 	@override
@@ -129,7 +204,21 @@ class MakeConfig(MakeDataConfig):
 
 	@override
 	def iterate_shared_objects(self) -> Iterable[MakeSharedObjectData]:
-		...
+		for shared_object in self.obtain_list("native.sharedObjects"):
+			if not isinstance(shared_object, str):
+				continue
+			yield self.obtain_shared_object_data(shared_object)
+
+	def obtain_shared_object_data(self, shared_object: str) -> MakeSharedObjectData:
+		formatted_shared_object = shared_object.format("")
+		if shared_object == formatted_shared_object:
+			if not shared_object[-1] == "*":
+				raise ValueError(f"Shared object path {formatted_shared_object!r} should contain required architecture or ends with asterisk!")
+			shared_object = shared_object[0:-1] + "/{}/*"
+
+		return MakeSharedObjectData(
+			relative_path=shared_object
+		)
 
 	@property
 	@override
@@ -156,6 +245,27 @@ class MakeConfig(MakeDataConfig):
 			type=type,
 			push_unchanged_files=source.get_value("pushUnchangedFiles"),
 			cleanup_remote=source.get_value("cleanupRemote")
+		)
+
+	@property
+	@override
+	def supports_pack_graphics(self) -> bool:
+		return True
+
+	def iterate_pack_graphics(self) -> Iterable[MakePackGraphicsData]:
+		graphics_groups = self.obtain_config("pack.graphics")
+		for group_name, images in graphics_groups.items():
+			yield self.obtain_pack_graphics_data(group_name, images)
+
+	def obtain_pack_graphics_data(self, group_name: str, data: Any) -> MakePackGraphicsData:
+		if isinstance(data, str):
+			data = [data]
+		if not isinstance(data, MutableSequence):
+			raise ValueError(f"Pack graphics group {group_name!r} should contain graphic directory or list of them, got: {data}!")
+
+		return MakePackGraphicsData(
+			group_name=group_name,
+			images=data
 		)
 
 	@override

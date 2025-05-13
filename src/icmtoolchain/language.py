@@ -11,15 +11,17 @@ from .shell import abort, warn
 from .utils import RuntimeCodeError
 
 
-def get_language_directories(compile_type: str, language_config: Config, properties_merger: Optional[Callable] = None) -> Dict[str, Config]:
-	from . import GLOBALS
+def get_language_directories(compile_type: str, language_config: Config, properties_merger: Optional[Callable] = None, make_config: Optional['MakeDataConfig'] = None) -> Dict[str, Config]:
+	if not make_config:
+		from . import GLOBALS
+		make_config = GLOBALS.MAKE_CONFIG
 
 	directories = language_config.obtain_list("directories")
 	if not any(directories):
 		# Obtain directories from deprecated `compile` property.
 		directories = list(filter(
 			lambda source: isinstance(source, Config) and compile_type == source.get_value("type"),
-			GLOBALS.MAKE_CONFIG.obtain_list("compile")
+			make_config.obtain_list("compile")
 		))
 	configurables = dict()
 	if not any(directories):
@@ -39,13 +41,13 @@ def get_language_directories(compile_type: str, language_config: Config, propert
 		if not isinstance(directory, str):
 			raise RuntimeCodeError(1, f"Wrong declared {compile_type} directory {directory!r}, it should be path string or object with `path` property!")
 
-		for flattened_directory in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(directory)):
-			absolute_directory = GLOBALS.MAKE_CONFIG.get_path(flattened_directory)
+		for flattened_directory in expand_paths(make_config.get_relative_path(directory)):
+			absolute_directory = make_config.get_path(flattened_directory)
 			if not isdir(absolute_directory):
 				warn(f"* Skipped non-existing {compile_type} directory {directory!r}!")
 				continue
 			if absolute_directory in configurables:
-				warn(f"* Duplicated {compile_type} directory {directory!r}, overriding existing properties...")
+				warn(f"* Duplicate {compile_type} directory {directory!r}, overriding existing properties...")
 
 			if properties_merger:
 				config = properties_merger(config, language_config)
@@ -54,7 +56,7 @@ def get_language_directories(compile_type: str, language_config: Config, propert
 				if config:
 					temporary_config.merge_config(config, exclusive_lists=True)
 				config = temporary_config
-			config.set_value("directory", GLOBALS.MAKE_CONFIG.get_path_to_config(flattened_directory))
+			config.set_value("directory", make_config.get_path_to_config(flattened_directory))
 			configurables[absolute_directory] = config
 
 	return configurables
@@ -92,6 +94,7 @@ class MakeJavaData:
 	sources: Iterable[str]
 	libraries: Iterable[str] = []
 	classpath: Iterable[str] = []
+	verbose: bool = False
 	keep_libraries: bool = False
 	keep_sources: bool = False
 	options: Iterable[str] = []
@@ -103,6 +106,7 @@ class MakeNativeData:
 	shared_name: str
 	depends: Iterable[str]
 	link: Iterable[str] = []
+	link_static: Iterable[str] = []
 	include: Iterable[str] = []
 	stdincludes: Iterable[str] = []
 	keep_includes: bool = False
@@ -112,7 +116,6 @@ class MakeNativeData:
 @dataclass
 class MakeSharedObjectData:
 	relative_path: str
-	output_path: str
 
 @dataclass
 class MakeResourceData:
@@ -121,6 +124,11 @@ class MakeResourceData:
 	type: str = "resource_directory"
 	push_unchanged_files: bool = True
 	cleanup_remote: bool = True
+
+@dataclass
+class MakePackGraphicsData:
+	group_name: str
+	images: Iterable[str]
 
 @dataclass
 class MakeAssetData:
@@ -257,6 +265,20 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 
 		Returns:
 			Iterable[MakeResourceData]: iterable which can be used in compilers
+		"""
+		...
+
+	@property
+	def supports_pack_graphics(self) -> bool:
+		return False
+
+	def iterate_pack_graphics(self) -> Iterable[MakePackGraphicsData]:
+		"""Returns iterable pack graphics data that is used in appropriate compilers and handlers.
+		Pack graphics are usually images for interactive window interfaces and backgrounds in pack menus.
+		You are responsible for producing this data, using this config and manifests within a project.
+
+		Returns:
+			Iterable[MakePackGraphicsData]: iterable which can be used in compilers
 		"""
 		...
 
