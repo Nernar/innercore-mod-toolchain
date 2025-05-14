@@ -24,6 +24,14 @@ class BuildConfig(MakeDataConfig):
 
 	@override
 	def iterate_scripts(self) -> Iterable[MakeScriptData]:
+		library_directory = self.get_value("defaultConfig.libraryDir")
+		if library_directory:
+			yield MakeScriptData(
+				relative_path=f"{library_directory}/*",
+				output_path=basename(library_directory),
+				type="library"
+			)
+
 		sources_list = filter(
 			lambda source: isinstance(source, Config),
 			self.obtain_list("compile")
@@ -44,7 +52,7 @@ class BuildConfig(MakeDataConfig):
 
 		build_directory = next(
 			filter(lambda directory: isinstance(directory, Config) \
-		  		and output_path == directory.get_value("targetSource"), self.obtain_list("buildDirs")
+		  		and relative_path == directory.get_value("targetSource"), self.obtain_list("buildDirs")
 			), None)
 		if relative_path and build_directory:
 			relative_path = build_directory.get_value("dir")
@@ -61,8 +69,8 @@ class BuildConfig(MakeDataConfig):
 			output_path=output_path,
 			type=type if type != "mod" else "main",
 			source_name=source.get_value("sourceName", lambda: relative_path),
-			api=source.get_value("api"),
-			optimization_level=source.get_value("optimizationLevel", -1)
+			api=source.get_value("api", lambda: source.get_value("defaultConfig.api")),
+			optimization_level=source.get_value("optimizationLevel", lambda: source.get_value("defaultConfig.optimizationLevel", -1))
 		)
 
 	@property
