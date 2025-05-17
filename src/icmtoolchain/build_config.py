@@ -28,6 +28,11 @@ class BuildConfig(MakeDataConfig):
 
 	@override
 	def iterate_scripts(self) -> Iterable[MakeScriptData]:
+		if self.get_value("defaultConfig.buildType") == "release":
+			# XXX: Perhaps we should do something, but scripts may no longer exist.
+			# It is important to leave a `compile`` field to load them.
+			return
+
 		library_path = self.get_value("defaultConfig.libraryDir")
 		if ensure_not_whitespace(library_path):
 			yield MakeScriptData(
@@ -71,7 +76,7 @@ class BuildConfig(MakeDataConfig):
 			relative_path=relative_path,
 			output_path=output_path,
 			type=type if type != "mod" else "main",
-			source_name=source.get_value("sourceName", lambda: relative_path),
+			source_name=source.get_value("sourceName"),
 			api=source.get_value("api", lambda: source.get_value("defaultConfig.api")),
 			optimization_level=source.get_value("optimizationLevel", lambda: source.get_value("defaultConfig.optimizationLevel", -1))
 		)

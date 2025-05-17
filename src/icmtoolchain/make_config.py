@@ -100,7 +100,7 @@ class MakeConfig(MakeDataConfig):
 			output_path=output_path,
 			type=type,
 			language=language,
-			source_name=source.get_value("sourceName", lambda: relative_path),
+			source_name=source.get_value("sourceName"),
 			api=source.get_value("api"),
 			includes_path=source.get_value("includes"),
 			optimization_level=source.get_value("optimizationLevel", -1)
