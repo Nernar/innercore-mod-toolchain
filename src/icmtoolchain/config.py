@@ -122,6 +122,9 @@ class Config(dict[str, Any]):
 		self.set_value_unsafe(key, value, replace_mismatched_types=True)
 
 	def merge_config(self, config: Union[dict, 'Config'], *, replace_configs: bool = False, exclusive_lists: bool = False, extend_lists: bool = False, strip_none_from_lists: bool = False) -> None:
+		if exclusive_lists:
+			extend_lists = True
+
 		for key, value in config.items():
 			if not key in self:
 				super().__setitem__(key, self.replace_value(value, strip_none_from_lists=strip_none_from_lists))

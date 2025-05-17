@@ -12,8 +12,6 @@ from .shell import debug, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory,
                     ensure_file_directory, ensure_not_whitespace, remove_tree)
 
-VALID_RESOURCE_TYPES = ("resource_directory", "gui", "minecraft_resource_pack", "minecraft_behavior_pack")
-
 
 def build_resources() -> int:
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("resource_directory")

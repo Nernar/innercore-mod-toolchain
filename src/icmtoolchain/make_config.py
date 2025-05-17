@@ -8,8 +8,9 @@ from .language import (MakeAssetData, MakeDataConfig, MakeJavaData,
                        MakeModData, MakeNativeData, MakePackData,
                        MakePackGraphicsData, MakeResourceData, MakeScriptData,
                        MakeSharedObjectData)
-from .utils import ensure_not_whitespace
 
+VALID_SOURCE_TYPES = ("main", "launcher", "preloader", "instant", "custom", "library")
+VALID_RESOURCE_TYPES = ("resource_directory", "gui", "minecraft_resource_pack", "minecraft_behavior_pack")
 
 class MakeConfig(MakeDataConfig):
 	def __init__(self, path: str, defaults: FileConfig) -> None:
@@ -79,7 +80,6 @@ class MakeConfig(MakeDataConfig):
 
 	def obtain_script_data(self, source: Config) -> MakeScriptData:
 		relative_path = source.get_value_unsafe("source")
-		from .script_build import VALID_SOURCE_TYPES
 		type = source.get_value_unsafe("type")
 		if not type in VALID_SOURCE_TYPES:
 			raise ValueError(f"Script {relative_path!r} has invalid type, it should be one of: {', '.join(VALID_SOURCE_TYPES)}!")
@@ -118,7 +118,7 @@ class MakeConfig(MakeDataConfig):
 		if not isinstance(java_config, Config):
 			java_config = self.obtain_config("gradle")
 		if isinstance(defaults, Config):
-			java_config.merge_config(defaults, exclusive_lists=True, extend_lists=True)
+			java_config.merge_config(defaults, exclusive_lists=True)
 
 		from .language import get_language_directories
 		directories = get_language_directories("java", java_config, make_config=self)
@@ -131,21 +131,11 @@ class MakeConfig(MakeDataConfig):
 		output_path = basename(directory)
 
 		manifest_path = join(directory, "manifest")
-		manifest = FileConfig(manifest_path, raise_non_existing=True)
+		manifest = FileConfig(manifest_path)
 		manifest.delete_value("directory")
 		config.merge_config(manifest, exclusive_lists=True)
 
-		return MakeJavaData(
-			relative_path=relative_path,
-			output_path=output_path,
-			sources=config.obtain_list("source-dirs"),
-			libraries=config.obtain_list("library-dirs"),
-			classpath=config.obtain_list("classpath"),
-			verbose=config.get_value("verbose", False),
-			keep_libraries=config.get_value("keepLibraries", False),
-			keep_sources=config.get_value("keepSources", False),
-			options=config.obtain_list("options")
-		)
+		return self.obtain_java_manifest_data(relative_path=relative_path, output_path=output_path, config=config)
 
 	@property
 	@override
@@ -159,7 +149,7 @@ class MakeConfig(MakeDataConfig):
 		if not "native" in self and "linkNative" in self:
 			native_config.set_value("link", self.get_value("linkNative"))
 		if isinstance(defaults, Config):
-			native_config.merge_config(defaults, exclusive_lists=True, extend_lists=True)
+			native_config.merge_config(defaults, exclusive_lists=True)
 
 		from .language import get_language_directories
 		directories = get_language_directories("native", native_config, make_config=self)
@@ -172,34 +162,11 @@ class MakeConfig(MakeDataConfig):
 		output_path = basename(directory)
 
 		manifest_path = join(directory, "manifest")
-		manifest = FileConfig(manifest_path, raise_non_existing=True)
+		manifest = FileConfig(manifest_path)
 		manifest.delete_value("directory")
-		# Obtain deprecated `rules` property to being merged.
-		if "rules" in manifest:
-			rules_config = manifest.get_value("rules")
-			if isinstance(rules_config, Config):
-				config.merge_config(rules_config)
 		config.merge_config(manifest, exclusive_lists=True)
 
-		shared_name = config.get_value("shared.name", basename(directory))
-		if not ensure_not_whitespace(shared_name) or ("shared" in config and shared_name == "unnamed"):
-			raise ValueError(f"Library directory {directory} uses illegal name {shared_name!r}!")
-		if config.get_value("library.version", -1) < 0 and "library" in config:
-			raise ValueError(f"Library directory {directory} shared a library with illegal version!")
-
-		return MakeNativeData(
-			relative_path=relative_path,
-			output_path=output_path,
-			shared_name=shared_name,
-			depends=config.obtain_list("depends"),
-			link=config.obtain_list("link"),
-			link_static=config.obtain_list("linkStatic"),
-			include=config.obtain_list("include"),
-			stdincludes=config.obtain_list("stdincludes"),
-			keep_includes=config.get_value("keepIncludes", False),
-			keep_sources=config.get_value("keepSources", False),
-			options=config.obtain_list("options")
-		)
+		return self.obtain_native_manifest_data(relative_path=relative_path, output_path=output_path, config=config)
 
 	@property
 	@override
@@ -238,7 +205,6 @@ class MakeConfig(MakeDataConfig):
 
 	def obtain_resource_data(self, source: Config) -> MakeResourceData:
 		relative_path = source.get_value_unsafe("path")
-		from .resources import VALID_RESOURCE_TYPES
 		type = source.get_value_unsafe("type")
 		if not type in VALID_RESOURCE_TYPES:
 			raise ValueError(f"Resource {relative_path!r} has invalid type, it should be one of: {', '.join(VALID_RESOURCE_TYPES)}!")

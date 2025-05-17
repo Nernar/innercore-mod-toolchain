@@ -382,7 +382,7 @@ def compile_native(abis: Collection[str]) -> int:
 		toolchain_config = Config()
 		toolchain_config.set_value("stdincludes", stdincludes_directories)
 	if toolchain_config and defaults:
-		defaults.merge_config(toolchain_config, exclusive_lists=True, extend_lists=True)
+		defaults.merge_config(toolchain_config, exclusive_lists=True)
 
 	directories = GLOBALS.MAKE_CONFIG.iterate_native(defaults=defaults)
 	directories, has_anything = tee(directories)
@@ -398,7 +398,7 @@ def compile_native(abis: Collection[str]) -> int:
 		if isinstance(optional_config, Config):
 			optional_defaults = merge_relevant_configurations(optional_config, abi)
 			if toolchain_config:
-				optional_defaults.merge_config(toolchain_config, exclusive_lists=True, extend_lists=True)
+				optional_defaults.merge_config(toolchain_config, exclusive_lists=True)
 		scoped_directories = GLOBALS.MAKE_CONFIG.iterate_native(defaults=optional_defaults)
 		directory_tuples.append((abi, scoped_directories))
 

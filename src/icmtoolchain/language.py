@@ -8,7 +8,7 @@ from typing import (Any, Callable, Dict, Final, Iterable, MutableMapping,
 from .config import Config, FileConfig
 from .output_directory import expand_paths
 from .shell import abort, warn
-from .utils import RuntimeCodeError
+from .utils import RuntimeCodeError, ensure_not_whitespace
 
 
 def get_language_directories(compile_type: str, language_config: Config, properties_merger: Optional[Callable] = None, make_config: Optional['MakeDataConfig'] = None) -> Dict[str, Config]:
@@ -226,6 +226,46 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 			Iterable[MakeJavaData]: iterable which can be used in compilers
 		"""
 		...
+
+	def obtain_java_manifest_data(self, relative_path: str, output_path: str, config: Config) -> MakeJavaData:
+		return MakeJavaData(
+			relative_path=relative_path,
+			output_path=output_path,
+			sources=config.obtain_list("source-dirs"),
+			libraries=config.obtain_list("library-dirs"),
+			classpath=config.obtain_list("classpath"),
+			verbose=config.get_value("verbose", False),
+			keep_libraries=config.get_value("keepLibraries", False),
+			keep_sources=config.get_value("keepSources", False),
+			options=config.obtain_list("options")
+		)
+
+	def obtain_native_manifest_data(self, relative_path: str, output_path: str, config: Config) -> MakeNativeData:
+		# Obtain deprecated `rules` property to being merged.
+		if "rules" in config:
+			rules_config = config.get_value("rules")
+			if isinstance(rules_config, Config):
+				config.merge_config(rules_config)
+
+		shared_name = config.get_value("shared.name", basename(relative_path))
+		if not ensure_not_whitespace(shared_name) or ("shared" in config and shared_name == "unnamed"):
+			raise ValueError(f"Library directory {relative_path!r} uses illegal name {shared_name!r}!")
+		if config.get_value("library.version", -1) < 0 and "library" in config:
+			raise ValueError(f"Library directory {relative_path!r} shared a library with illegal version!")
+
+		return MakeNativeData(
+			relative_path=relative_path,
+			output_path=output_path,
+			shared_name=shared_name,
+			depends=config.obtain_list("depends"),
+			link=config.obtain_list("link"),
+			link_static=config.obtain_list("linkStatic"),
+			include=config.obtain_list("include"),
+			stdincludes=config.obtain_list("stdincludes"),
+			keep_includes=config.get_value("keepIncludes", False),
+			keep_sources=config.get_value("keepSources", False),
+			options=config.obtain_list("options")
+		)
 
 	@property
 	def supports_native(self) -> bool:

@@ -1,6 +1,5 @@
-from functools import cmp_to_key
-from os.path import basename, exists, isdir, isfile, join, relpath, splitext
-from typing import Any, Dict, List, MutableMapping, Tuple
+from os.path import basename, exists, isdir, isfile, join, relpath
+from typing import Any, List, MutableMapping, Tuple
 
 from . import GLOBALS, PROPERTIES
 from .includes import Includes
@@ -9,8 +8,6 @@ from .output_directory import expand_paths
 from .shell import debug, error, info, pretty_print, warn
 from .utils import (RuntimeCodeError, copy_file, ensure_not_whitespace,
                     request_typescript, walk_all_files)
-
-VALID_SOURCE_TYPES = ("main", "launcher", "preloader", "instant", "custom", "library")
 
 
 def build_all_scripts(watch: bool = False) -> int:
