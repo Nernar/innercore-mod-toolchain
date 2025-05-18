@@ -4,7 +4,6 @@ import sys
 from os.path import basename, exists, isdir, isfile, join, relpath
 from typing import Any, Dict, List, Optional, Tuple
 
-from . import GLOBALS
 from .config import Config
 from .hglob import glob
 from .shell import abort, confirm_prompt, debug, pretty_print, warn
@@ -213,6 +212,7 @@ def import_project(path: Optional[str] = None, destination: Optional[str] = None
 	destination_may_changed = not destination
 	toolchain = None
 	if destination_may_changed:
+		from . import GLOBALS
 		toolchain = GLOBALS.TOOLCHAIN_CONFIG.directory
 		destination = get_project_folder_by_name(toolchain, basename(path))
 		if not destination:

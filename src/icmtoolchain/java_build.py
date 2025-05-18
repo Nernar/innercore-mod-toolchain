@@ -9,7 +9,6 @@ from typing import (Collection, Dict, Iterable, List, MutableSequence,
 from zipfile import ZipFile
 
 from . import GLOBALS, PROPERTIES
-from .component import install_components
 from .config import Config
 from .language import MakeJavaData
 from .output_directory import expand_paths
@@ -556,6 +555,7 @@ def compile_java(tool: str = "gradle") -> int:
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("java")
 
 	if not exists(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("bin/r8")):
+		from .component import install_components
 		install_components("java")
 		if not exists(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("bin/r8")):
 			abort("Component 'java' is required for compilation, nothing to do.")

@@ -8,8 +8,6 @@ from typing import (Any, Callable, Dict, Iterable, List, Optional, TextIO,
                     Union, overload)
 from zipfile import ZipFile, ZipInfo
 
-from . import GLOBALS
-
 DEVNULL = open(os.devnull, "w")
 
 
@@ -250,6 +248,7 @@ def shortcodes(source: str) -> str:
 	return source
 
 def request_tool(name: str) -> Optional[str]:
+	from . import GLOBALS
 	path = GLOBALS.TOOLCHAIN_CONFIG.get_value(f"tools.{name}")
 	if path:
 		path = GLOBALS.TOOLCHAIN_CONFIG.get_path(path)
@@ -264,6 +263,7 @@ def request_typescript(only_check: bool = False) -> Optional[str]:
 	"""
 	Utility to check and install tsc with npm.
 	"""
+	from . import GLOBALS
 	if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
 		return None
 	from .shell import confirm_prompt, error, info

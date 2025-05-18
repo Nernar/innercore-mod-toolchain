@@ -7,7 +7,6 @@ from typing import IO, Callable, Optional
 from urllib.error import URLError
 from urllib.response import addinfourl
 
-from . import GLOBALS
 from .shell import pretty_print_failure, pretty_print_success, warn
 from .utils import ensure_file, name_to_identifier
 
@@ -101,6 +100,7 @@ def create_download_request(url: str, data: Optional[bytes] = None, /, placehold
 	content_size, responce = retrieve_fetch_request(url, data, timeout=timeout, seconds_between_requests=seconds_between_requests, attempts=attempts)
 	def fetch(output_path: Optional[str] = None, /, progress_handler: Optional[Callable[[int, int], None]] = None):
 		if not output_path:
+			from . import GLOBALS
 			temporary_directory = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("temp")
 			output_path = join(temporary_directory, name_to_identifier(placeholder, "-"))
 		ensure_file(output_path)

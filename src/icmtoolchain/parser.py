@@ -6,8 +6,7 @@ from types import (BuiltinMethodType, ClassMethodDescriptorType,
                    DynamicClassAttribute)
 from typing import Any, Callable, List, Mapping, Optional, Tuple
 
-from . import GLOBALS, PROPERTIES
-from .shell import pretty_print, stringify
+from .shell import pretty_print, stringify, warn
 from .task import Task
 
 MAGICS = (
@@ -329,7 +328,7 @@ def parse_callable_arguments(argv: List[str], callable: Callable, signature: ins
 def apply_environment_properties(ignore_config: bool = False) -> None:
 	if ignore_config:
 		return
-	from .shell import warn
+	from . import GLOBALS
 	environ = GLOBALS.TOOLCHAIN_CONFIG.get_value("environment", None)
 	if isinstance(environ, dict):
 		for key in environ:
@@ -339,7 +338,7 @@ def apply_environment_properties(ignore_config: bool = False) -> None:
 				warn(f"Environment variable {key!r} expected to be string, please check your 'environment' property in 'toolchain.json'!")
 
 def apply_properties(**kwargs) -> int:
-	global PROPERTIES
+	from . import PROPERTIES
 	for name, value in kwargs.items():
 		if value is not None:
 			PROPERTIES.set_value(name, value)
@@ -347,6 +346,7 @@ def apply_properties(**kwargs) -> int:
 	return 0
 
 def parse_arguments(argv: List[str], mappings: Mapping[str, Task], fallback: Optional[Callable[[str, Callable, List[NamedCallable]], None]] = None) -> List[NamedCallable]:
+	from . import GLOBALS
 	callables = list()
 
 	while True:
