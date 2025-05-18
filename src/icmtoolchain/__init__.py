@@ -14,7 +14,7 @@ def find_configuration(path: str, filename: str):
 			return config_path
 		working_path.pop()
 
-def request_make_config(toolchain_config):
+def request_make_config(toolchain_config: FileConfig):
 	selected_project = toolchain_config.get_value("currentProject")
 	if selected_project:
 		preffered_config = toolchain_config.get_path(join(selected_project, "make.json"))
@@ -162,7 +162,7 @@ class Globals:
 			self.parameter_signature = inspect.Signature(parameters, return_annotation=int)
 		return self.parameter_signature
 
-	def is_project_available(self, which_project: Optional[str] = None) -> bool:
+	def is_project_available(self, which_project: Optional[str] = None):
 		from .make_config import MakeConfig
 		if not isinstance(self.PREFERRED_CONFIG, MakeConfig):
 			return False

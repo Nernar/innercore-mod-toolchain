@@ -28,7 +28,7 @@ def expand_paths(file_or_directory: str, filter: Optional[Callable[[str], bool]]
 			locations.append(file_or_directory)
 	return locations
 
-def get_windows_appdata(csidl: int = 26, env_variable: str = "APPDATA", shell_name: str = "AppData") -> str:
+def get_windows_appdata(csidl: int, env_variable: str, shell_name: str) -> str:
 	try:
 		import ctypes
 	except ImportError:
@@ -59,15 +59,34 @@ def get_windows_appdata(csidl: int = 26, env_variable: str = "APPDATA", shell_na
 		directory, _ = winreg.QueryValueEx(key, shell_name)
 		return str(directory)
 
-@lru_cache
-def get_local_share_directory() -> str:
+@lru_cache(maxsize=2048)
+def get_user_config_directory(*components: str) -> str:
 	if platform.system() == "Windows":
-		return normpath(get_windows_appdata())
+		appdata_path = get_windows_appdata(26, "APPDATA", "AppData")
+		return join(normpath(appdata_path), *components)
 	path = environ.get("XDG_DATA_HOME", "")
-	if ensure_not_whitespace(path):
-		return path
-	if platform.system() == "Darwin":
-		path = expanduser("~/Library/Application Support")
-	else:
-		path = expanduser("~/.local/share")
-	return path
+	if not ensure_not_whitespace(path):
+		if platform.system() == "Darwin":
+			path = expanduser("~/Library/Application Support")
+		else:
+			path = expanduser("~/.config")
+	return join(path, *components)
+
+def get_config_directory() -> str:
+	return get_user_config_directory("icmtoolchain")
+
+@lru_cache(maxsize=2048)
+def get_user_temporary_directory(*components: str) -> str:
+	if platform.system() == "Windows":
+		appdata_path = get_windows_appdata(28, "LOCALAPPDATA", "Local AppData")
+		return join(normpath(appdata_path), *components, "Cache")
+	path = environ.get("XDG_CACHE_HOME", "")
+	if not ensure_not_whitespace(path):
+		if platform.system() == "Darwin":
+			path = expanduser("~/Library/Caches")
+		else:
+			path = expanduser("~/.cache")
+	return join(path, *components)
+
+def get_temporary_directory() -> str:
+	return get_user_temporary_directory("icmtoolchain")
