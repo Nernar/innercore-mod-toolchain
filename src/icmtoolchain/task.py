@@ -399,10 +399,7 @@ def task_new_project() -> int:
 	description="Converts a project for utilization with toolchains or creates a merge of several projects."
 )
 def task_import_project(path: str = "", target: str = "") -> int:
-	from .import_project import import_project
-	path = import_project(path if len(path) > 0 else None, target if len(target) > 0 else None)
 	pretty_print("Project successfully imported!")
-
 	if not confirm_prompt("Select this project?", True):
 		return 0
 	GLOBALS.PROJECT_MANAGER.select_project(folder=relpath(path, GLOBALS.TOOLCHAIN_CONFIG.directory))
