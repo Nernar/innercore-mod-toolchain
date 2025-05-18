@@ -1,4 +1,3 @@
-import os
 import sys
 from os.path import isdir, isfile, join
 from typing import Final, List, Optional
@@ -40,12 +39,14 @@ def which_installed() -> List[str]:
 		component = COMPONENTS[componentname]
 		path = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(component.location)
 		if not isdir(path):
-			continue
-		if component.keyword == "cpp":
-			installed.append("cpp")
-			continue
-		if isfile(join(path, ".commit")) or GLOBALS.TOOLCHAIN_CONFIG.get_value("componentInstallationWithoutCommit", False):
-			installed.append(component.keyword)
+			from .output_directory import get_config_directory
+			path = join(get_config_directory(), component.location)
+		if isdir(path):
+			if component.keyword == "cpp":
+				installed.append("cpp")
+				continue
+			if isfile(join(path, ".commit")) or GLOBALS.TOOLCHAIN_CONFIG.get_value("componentInstallationWithoutCommit", False):
+				installed.append(component.keyword)
 	return installed
 
 def to_megabytes(bytes_count: int) -> str:
@@ -91,25 +92,6 @@ def get_username() -> Optional[str]:
 		return ensure_not_whitespace(getuser())
 	except ImportError:
 		return None
-
-def get_script_directory() -> str:
-    script_directory = None
-    try:
-        script_path = os.path.realpath(__file__)
-        script_directory = os.path.dirname(script_path)
-        return script_directory
-    except (AttributeError, NameError):
-        pass
-    try:
-        if not sys.argv or not sys.argv[0]:
-            raise ValueError("sys.argv[0] is empty")
-        script_path = os.path.realpath(sys.argv[0])
-        if os.path.isfile(script_path):
-            return os.path.dirname(script_path)
-        return script_path
-    except (IndexError, ValueError, OSError):
-        pass
-    return os.getcwd()
 
 def startup() -> None:
 	pretty_print("Welcome to Inner Core Mod Toolchain! Today we will finalize setup of your own modding environment.")
@@ -166,6 +148,7 @@ def startup() -> None:
 
 	GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 
+	from .output_directory import get_script_directory
 	pretty_print(f"* Setup procedure is completed, Inner Core Mod Toolchain has been installed to {get_script_directory()!r} directory. Execute `icmtoolchain --help` to obtain a list of available commands. You may need to restart your console to be able to access any commands.")
 
 def upgrade() -> int:

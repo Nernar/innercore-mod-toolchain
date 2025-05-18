@@ -81,15 +81,16 @@ def assure_task(name: str) -> Task:
 				return TASKS[task]
 
 def lock_task(name: str, silent: bool = True) -> None:
-	path = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(f"temp/lock/{name}.lock")
-	ensure_file_directory(path)
-	await_message = False
+	from .output_directory import get_temporary_directory
+	lock_path = join(get_temporary_directory(), "lock", f"{name}.lock")
+	ensure_file_directory(lock_path)
 
-	if exists(path):
+	await_message = False
+	if exists(lock_path):
 		while True:
 			try:
-				if exists(path):
-					os.remove(path)
+				if exists(lock_path):
+					os.remove(lock_path)
 				break
 			except IOError:
 				if not await_message:
@@ -101,8 +102,8 @@ def lock_task(name: str, silent: bool = True) -> None:
 	if name in LOCKS:
 		error(f"Dead lock {name!r} detected!")
 		unlock_task(name)
-	open(path, "tw").close()
-	LOCKS[name] = open(path, "a")
+	open(lock_path, "tw").close()
+	LOCKS[name] = open(lock_path, "a")
 
 def unlock_task(name: str) -> None:
 	if name in LOCKS:
@@ -111,9 +112,11 @@ def unlock_task(name: str) -> None:
 		except IOError:
 			pass
 		del LOCKS[name]
-	path = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(f"temp/lock/{name}.lock")
-	if isfile(path):
-		os.remove(path)
+
+	from .output_directory import get_temporary_directory
+	lock_path = join(get_temporary_directory(), "lock", f"{name}.lock")
+	if isfile(lock_path):
+		os.remove(lock_path)
 
 def unlock_all_tasks() -> None:
 	tasks = iter(TASKS.values())
@@ -268,11 +271,11 @@ def task_build_info() -> int:
 	description="Optionally deletes the output folder; has no effect by default."
 )
 def task_clear_output(force: bool = False) -> int:
-	if GLOBALS.PREFERRED_CONFIG.get_value("development.clearOutput", False) or force:
+	if GLOBALS.MAKE_CONFIG.get_value("development.clearOutput", False) or force:
 		remove_tree(GLOBALS.MOD_STRUCTURE.directory)
 	if PROPERTIES.get_value("release"):
-		from .package import cleanup_relative_directory
-		cleanup_relative_directory("build/" + GLOBALS.MAKE_CONFIG.project_unique_name)
+		from .package import pretty_cleanup_directory
+		pretty_cleanup_directory(GLOBALS.MAKE_CONFIG.get_build_path())
 	return 0
 
 @task(
@@ -425,9 +428,10 @@ def task_remove_project() -> int:
 	try:
 		location = GLOBALS.TOOLCHAIN_CONFIG.get_path(who)
 		GLOBALS.PROJECT_MANAGER.remove_project(folder=who)
-		from .output_directory import unique_folder_name
-		from .package import cleanup_relative_directory
-		cleanup_relative_directory("build/" + unique_folder_name(location))
+		from .output_directory import get_temporary_directory, unique_folder_name
+		from .package import pretty_cleanup_directory
+		temporary_project_directory = join(get_temporary_directory(), "build", unique_folder_name(location))
+		pretty_cleanup_directory(temporary_project_directory)
 	except ValueError:
 		abort(f"Folder {who!r} not found!")
 
@@ -556,13 +560,14 @@ def task_component_integrity(startup: bool = False) -> int:
 	description="Clears cache of a selected project or all output files from previous builds, forgetting modified files."
 )
 def task_cleanup() -> int:
-	from .package import cleanup_relative_directory
+	from .package import pretty_cleanup_directory
 	if GLOBALS.is_project_available():
 		if confirm_prompt("Do you want to clear selected project cache?", True):
-			cleanup_relative_directory("build/" + GLOBALS.MAKE_CONFIG.project_unique_name)
-			cleanup_relative_directory(GLOBALS.MOD_STRUCTURE.directory, True)
+			pretty_cleanup_directory(GLOBALS.MAKE_CONFIG.get_build_path())
+			pretty_cleanup_directory(GLOBALS.MOD_STRUCTURE.directory)
 		return 0
 	if not confirm_prompt("Do you want to clear all projects cache?", True):
 		return 0
-	cleanup_relative_directory("build")
+	from .output_directory import get_temporary_directory
+	pretty_cleanup_directory(get_temporary_directory())
 	return 0

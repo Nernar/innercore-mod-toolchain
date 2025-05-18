@@ -1,7 +1,9 @@
 import platform
+import sys
 from functools import lru_cache
 from os import environ, listdir
-from os.path import basename, exists, expanduser, isdir, join, normpath
+from os.path import (basename, dirname, exists, expanduser, isdir, isfile,
+                     join, normpath, realpath)
 from typing import Callable, List, Optional
 
 from .utils import ensure_not_whitespace
@@ -27,6 +29,24 @@ def expand_paths(file_or_directory: str, filter: Optional[Callable[[str], bool]]
 		if exists(file_or_directory) and (not filter or filter(file_or_directory)):
 			locations.append(file_or_directory)
 	return locations
+
+@lru_cache
+def get_script_directory() -> str:
+	try:
+		return dirname(realpath(__file__))
+	except (AttributeError, NameError):
+		pass
+	if getattr(sys, "frozen", False):
+		return realpath(getattr(sys, "_MEIPASS") if hasattr(sys, "_MEIPASS") else sys.executable)
+	try:
+		if sys.argv and sys.argv[0] and sys.argv[0] != "-m":
+			script_directory = realpath(sys.argv[0])
+			if isfile(script_directory):
+				return dirname(script_directory)
+			return script_directory
+	except (IndexError, ValueError, OSError):
+		pass
+	raise ValueError("Unable to determine location of icmtoolchain installation!")
 
 def get_windows_appdata(csidl: int, env_variable: str, shell_name: str) -> str:
 	try:

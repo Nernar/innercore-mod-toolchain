@@ -14,8 +14,10 @@ def build_all_scripts(watch: bool = False) -> int:
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("script_source")
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("script_library")
 
-	if request_typescript(only_check=True) and not exists(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("declarations")):
-		warn("Not found 'declarations', in most cases build will be failed, please install it via tasks.")
+	if request_typescript(only_check=True) and not isdir(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("declarations")):
+		from .output_directory import get_config_directory
+		if not isdir(join(get_config_directory(), "declarations")):
+			warn("Not found 'declarations', in most cases build will be failed, please install it via tasks.")
 
 	return build_composite_project() if not watch else watch_composite_project()
 

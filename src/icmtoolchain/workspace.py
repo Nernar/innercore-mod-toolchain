@@ -232,13 +232,16 @@ class WorkspaceComposite:
 		]:
 			if exists(filepath):
 				if isdir(filepath):
-					filepath = f"{filepath}/**/*.d.ts"
+					filepath = join(filepath, "**", "*.d.ts")
 				declarations.extend(glob(filepath, recursive=True))
-		if exists(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("declarations")):
-			declarations.extend(glob(
-				GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("declarations/**/*.d.ts"),
-				recursive=True
-			))
+	
+		toolchain_declarations = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("declarations")
+		if not isdir(toolchain_declarations):
+			from .output_directory import get_config_directory
+			toolchain_declarations = join(get_config_directory(), "declarations")
+		if isdir(toolchain_declarations):
+			declarations.extend(glob(join(toolchain_declarations, "**", "*.d.ts"), recursive=True))
+
 		if not PROPERTIES.get_value("release"):
 			for excluded in GLOBALS.MAKE_CONFIG.get_value("debugIncludesExclude", list()):
 				if exists(str(excluded).lstrip("/").partition("/")[0]):
@@ -246,7 +249,7 @@ class WorkspaceComposite:
 						if declaration in declarations:
 							declarations.remove(declaration)
 				else:
-					for declaration in glob(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(excluded), recursive=True):
+					for declaration in glob(join(toolchain_declarations, excluded), recursive=True):
 						if declaration in declarations:
 							declarations.remove(declaration)
 		return list(set(declarations))

@@ -140,7 +140,8 @@ def search_for_gcc_executable(ndk_directory: str) -> Optional[str]:
 		pretty_print(f"Searching GCC in {search_directory} with {len(files)} files...")
 
 def require_compiler_executable(arch: str, install_if_required: bool = False) -> Optional[str]:
-	ndk_directory = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("ndk/" + str(arch))
+	from .output_directory import get_config_directory
+	ndk_directory = join(get_config_directory(), "ndk", arch)
 	file = search_for_gcc_executable(ndk_directory)
 	if install_if_required:
 		install_gcc(arches=arch, reinstall=False)
@@ -169,8 +170,9 @@ def prepare_compiler_executable(abi: str) -> str:
 def check_installation(arches: Union[str, List[str]]) -> bool:
 	if not isinstance(arches, list):
 		arches = [arches]
+	from .output_directory import get_config_directory
 	return len(list(filter(
-		lambda arch: not isfile(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("ndk/.installed-" + str(arch))),
+		lambda arch: not isfile(join(get_config_directory(), "ndk", f".installed-{arch}")),
 		arches
 	))) == 0
 
@@ -202,13 +204,13 @@ def get_download_ndk_url(revision: str) -> str:
 def download_gcc(ndk_version: Optional[str] = None) -> Optional[str]:
 	revision = ndk_version_to_revision(ndk_version) if ndk_version else "r16b"
 
-	archive_path = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(f"temp/ndk-{revision}.zip")
-	archive_path = queue_download_request(get_download_ndk_url(revision), output_path=archive_path)
+	archive_path = queue_download_request(get_download_ndk_url(revision))
 	if archive_path is None:
 		return None
 
 	with InteractiveSession(progress=Progress("Extracting NDK/GCC")) as session:
-		extract_path = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("temp")
+		from .output_directory import get_temporary_directory
+		extract_path = join(get_temporary_directory(), f"ndk")
 		makedirs(extract_path, exist_ok=True)
 		try:
 			with AttributeZipFile(archive_path, "r") as archive:
@@ -217,12 +219,12 @@ def download_gcc(ndk_version: Optional[str] = None) -> Optional[str]:
 		except OSError as exc:
 			pretty_print_failure(f"#{exc.errno}: {basename(exc.filename)}")
 			try:
-				remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("temp"))
+				remove_tree(extract_path)
 			except OSError:
 				pretty_print_failure(f"#{exc.errno}: {basename(exc.filename)} (security fail)")
 		except zipfile.BadZipFile as exc:
 			try:
-				remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("temp"))
+				remove_tree(extract_path)
 				return download_gcc(revision)
 			except OSError as exc:
 				pretty_print_failure(f"#{exc.errno}: {basename(exc.filename)} (security fail)")
@@ -274,12 +276,13 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False) -
 		return 1
 
 	with InteractiveSession(progress=Progress(f"Making standalone toolchain of {abi}...", percentage=0.5)) as session:
+		from .output_directory import get_config_directory
 		output = subprocess.run([
 			"python3" if platform.system() != "Windows" else "python",
 			join(ndk_path, "build", "tools", "make_standalone_toolchain.py"),
 			"--arch", arch,
 			"--api", "21" if "64" in arch else "19",
-			"--install-dir", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("ndk/" + arch),
+			"--install-dir", join(get_config_directory(), "ndk", arch),
 			"--force"
 		], capture_output=True, text=True)
 		if output.returncode != 0:
@@ -287,7 +290,7 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False) -
 			pretty_print_failure(f"Failed to make a standalone toolchain for {abi} architecture with code {output.returncode}!")
 			return output.returncode
 		else:
-			ensure_file(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(f"ndk/.installed-{arch}"))
+			ensure_file(join(get_config_directory(), "ndk", f".installed-{arch}"))
 			pretty_print_success(f"Now native builds are available for {arch} architecture.")
 	return output.returncode
 
@@ -307,7 +310,8 @@ def install_gcc(arches: Union[str, List[str]] = "arm", reinstall: bool = False) 
 
 	try:
 		if result == 0:
-			remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("temp"))
+			from .output_directory import get_temporary_directory
+			remove_tree(join(get_temporary_directory(), "network"))
 	except OSError as exc:
 		pass
 

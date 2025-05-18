@@ -20,9 +20,10 @@ def get_adb_executable() -> str:
 			return "adb"
 	except:
 		pass
+	from .output_directory import get_config_directory
 	if platform.system() == "Windows":
-		return GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("adb/adb.exe")
-	return GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("adb/adb")
+		return join(get_config_directory(), "adb", "adb.exe")
+	return join(get_config_directory(), "adb", "adb")
 
 def get_modpack_push_directory() -> Optional[str]:
 	directory = GLOBALS.PREFERRED_CONFIG.get_value("pushTo", allow_prototype=False)

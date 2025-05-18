@@ -1,4 +1,3 @@
-import json
 import os
 import time
 from os.path import basename, exists, isdir, join, relpath
@@ -8,7 +7,7 @@ from . import GLOBALS
 from .config import Config, FileConfig
 from .output_directory import expand_paths
 from .shell import (abort, error, pretty_print, pretty_print_attention,
-                    select_prompt, warn)
+                    pretty_print_success, select_prompt, warn)
 from .utils import (copy_file, ensure_not_whitespace, get_all_files,
                     get_project_folder_by_name, name_to_identifier,
                     remove_tree)
@@ -28,10 +27,10 @@ def get_path_set(locations: List[str], error_sensitive: bool = False) -> Optiona
 					warn(f"* Declared invalid directory {path}, it will be skipped.")
 	return directories
 
-def cleanup_relative_directory(path: str, absolute: bool = False) -> None:
+def pretty_cleanup_directory(path: str) -> None:
 	start_time = time.time()
-	remove_tree(path if absolute else GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(path))
-	pretty_print(f"Completed {basename(path)} cleanup in {int((time.time() - start_time) * 100) / 100}s")
+	remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path(path))
+	pretty_print_success(f"Completed {basename(path)} cleanup in {int((time.time() - start_time) * 100) / 100}s")
 
 def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	have_template = "template" in GLOBALS.TOOLCHAIN_CONFIG

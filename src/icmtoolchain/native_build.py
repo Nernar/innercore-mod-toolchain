@@ -70,17 +70,19 @@ def search_in_directory(parent: str, name: str) -> Optional[str]:
 			if get_name_from_manifest(path) == name:
 				return path
 
-def get_fake_so_directory(abi: str) -> str:
-	fake_so_directory = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(join("ndk", "fakeso", abi))
-	ensure_directory(fake_so_directory)
-	return fake_so_directory
+def get_fakeso_directory(abi: str) -> str:
+	from .output_directory import get_temporary_directory
+	fakeso_directory = join(get_temporary_directory(), "ndk", abi, "fakeso")
+	ensure_directory(fakeso_directory)
+	return fakeso_directory
 
 def add_fake_so(executable: str, abi: str, name: str) -> None:
-	file = join(get_fake_so_directory(abi), "lib" + name + ".so")
+	file = join(get_fakeso_directory(abi), "lib" + name + ".so")
 	if not isfile(file):
+		from .output_directory import get_script_directory
 		result = subprocess.call([
 			executable, "-std=c++11",
-			GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("bin/fakeso.cpp"),
+			join(get_script_directory(), "fakeso.cpp"),
 			"-shared", "-o", file
 		])
 		if result == 0:
@@ -158,7 +160,7 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 	includes = list()
 	for stdincludes_directory in reversed(list(stdincludes)):
 		includes.append(f"-I{stdincludes_directory}")
-	dependencies = [f"-L{get_fake_so_directory(abi)}", "-landroid", "-lm", "-llog", "-ldl", "-lc"]
+	dependencies = [f"-L{get_fakeso_directory(abi)}", "-landroid", "-lm", "-llog", "-ldl", "-lc"]
 	links = list(manifest.link)
 	if not "horizon" in links:
 		links.append("horizon")
@@ -366,6 +368,9 @@ def compile_native(abis: Collection[str]) -> int:
 
 	stdincludes_directories = list()
 	stdincludes_toolchain = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("stdincludes")
+	if not isdir(stdincludes_toolchain):
+		from .output_directory import get_config_directory
+		stdincludes_toolchain = join(get_config_directory(), "stdincludes")
 	if isdir(stdincludes_toolchain):
 		stdincludes_directories.append(stdincludes_toolchain)
 	stdincludes_custom = GLOBALS.MAKE_CONFIG.get_relative_path("stdincludes")

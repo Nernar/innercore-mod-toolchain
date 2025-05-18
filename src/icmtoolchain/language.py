@@ -151,9 +151,9 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 		from .output_directory import unique_folder_name
 		self.project_unique_name = unique_folder_name(self.directory)
 
-	def get_build_path(self, relative_path: str) -> str:
+	def get_build_path(self, *components: str) -> str:
 		from .output_directory import get_temporary_directory
-		return join(get_temporary_directory(), "build", self.project_unique_name, relative_path)
+		return join(get_temporary_directory(), "build", self.project_unique_name, *components)
 
 	@abstractmethod
 	def obtain_project_data(self) -> Optional[Union[MakeModData, MakePackData]]:
