@@ -152,7 +152,8 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 		self.project_unique_name = unique_folder_name(self.directory)
 
 	def get_build_path(self, relative_path: str) -> str:
-		return self.defaults.get_relative_path(join("build", self.project_unique_name, relative_path))
+		from .output_directory import get_temporary_directory
+		return join(get_temporary_directory(), "build", self.project_unique_name, relative_path)
 
 	@abstractmethod
 	def obtain_project_data(self) -> Optional[Union[MakeModData, MakePackData]]:
@@ -240,6 +241,20 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 			options=config.obtain_list("options")
 		)
 
+	@property
+	def supports_native(self) -> bool:
+		return False
+
+	def iterate_native(self) -> Iterable[MakeNativeData]:
+		"""Returns iterable native data that is used in appropriate compilers and handlers.
+		Native represents folders that uses C/C++ languages, compiled using GNU GCC.
+		You are responsible for producing this data, using this config and manifests within a project.
+
+		Returns:
+			Iterable[MakeNativeData]: iterable which can be used in compilers
+		"""
+		...
+
 	def obtain_native_manifest_data(self, relative_path: str, output_path: str, config: Config) -> MakeNativeData:
 		# Obtain deprecated `rules` property to being merged.
 		if "rules" in config:
@@ -266,20 +281,6 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 			keep_sources=config.get_value("keepSources", False),
 			options=config.obtain_list("options")
 		)
-
-	@property
-	def supports_native(self) -> bool:
-		return False
-
-	def iterate_native(self) -> Iterable[MakeNativeData]:
-		"""Returns iterable native data that is used in appropriate compilers and handlers.
-		Native represents folders that uses C/C++ languages, compiled using GNU GCC.
-		You are responsible for producing this data, using this config and manifests within a project.
-
-		Returns:
-			Iterable[MakeNativeData]: iterable which can be used in compilers
-		"""
-		...
 
 	@property
 	def supports_shared_objects(self) -> bool:

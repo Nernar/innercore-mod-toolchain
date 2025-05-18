@@ -249,15 +249,18 @@ def shortcodes(source: str) -> str:
 
 def request_tool(name: str) -> Optional[str]:
 	from . import GLOBALS
-	path = GLOBALS.TOOLCHAIN_CONFIG.get_value(f"tools.{name}")
-	if path:
-		path = GLOBALS.TOOLCHAIN_CONFIG.get_path(path)
-		if exists(path):
-			return path
-	path = shutil.which(name)
-	if not path:
+	relative_path = GLOBALS.TOOLCHAIN_CONFIG.get_value(f"tools.{name}")
+	if ensure_not_whitespace(relative_path):
+		tool_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(relative_path)
+		if not exists(tool_path):
+			from .output_directory import get_config_directory
+			tool_path = join(get_config_directory(), relative_path)
+		if exists(tool_path):
+			return tool_path
+	relative_path = shutil.which(name)
+	if not relative_path or not ensure_not_whitespace(relative_path):
 		return None
-	return abspath(path)
+	return abspath(relative_path)
 
 def request_typescript(only_check: bool = False) -> Optional[str]:
 	"""

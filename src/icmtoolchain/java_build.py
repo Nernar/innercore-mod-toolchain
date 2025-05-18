@@ -33,6 +33,9 @@ def collect_classpath_files(directories: Collection[str]) -> List[str]:
 		classpath_directory = GLOBALS.MAKE_CONFIG.get_path(directory)
 		if not isdir(classpath_directory):
 			classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path(directory)
+			if not isdir(classpath_directory):
+				from .output_directory import get_config_directory
+				classpath_directory = join(get_config_directory(), directory)
 		if not isdir(classpath_directory):
 			warn(f"* Skipped non-existing classpath directory {directory!r}, please make sure that it exist!")
 			continue

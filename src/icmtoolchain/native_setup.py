@@ -14,8 +14,8 @@ from .shell import (InteractiveSession, Progress, abort, confirm_prompt, error,
                     info, pretty_print, pretty_print_failure,
                     pretty_print_success, warn)
 from .utils import (AttributeZipFile, RuntimeCodeError, ensure_file,
-                    iterate_subdirectories, read_properties_stream,
-                    remove_tree)
+                    ensure_not_whitespace, iterate_subdirectories,
+                    read_properties_stream, remove_tree)
 
 ABIS = {
 	"armeabi-v7a": "arm",
@@ -112,11 +112,15 @@ def read_ndk_source_version(ndk_path: str) -> Optional[str]:
 		pass
 
 def get_ndk_path(ndk_version: Optional[str] = None) -> Optional[str]:
-	path_from_config = GLOBALS.TOOLCHAIN_CONFIG.get_value("native.ndkPath", GLOBALS.TOOLCHAIN_CONFIG.get_value("ndkPath"))
-	if path_from_config:
-		path_from_config = GLOBALS.TOOLCHAIN_CONFIG.get_path(path_from_config)
-		if isdir(path_from_config):
-			return path_from_config
+	relative_path = GLOBALS.TOOLCHAIN_CONFIG.get_value("native.ndkPath", GLOBALS.TOOLCHAIN_CONFIG.get_value("ndkPath"))
+	if ensure_not_whitespace(relative_path):
+		ndk_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(relative_path)
+		if not isdir(ndk_path):
+			from .output_directory import get_config_directory
+			ndk_path = join(get_config_directory(), relative_path)
+		if isdir(ndk_path):
+			return ndk_path
+	# TODO: Rewrite to output_directory strategy...
 	try:
 		# Unix
 		return search_ndk_path(environ["HOME"], ndk_version=ndk_version)

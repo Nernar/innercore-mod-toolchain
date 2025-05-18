@@ -38,6 +38,9 @@ def collect_stdincludes_directories(directories: Optional[Collection[str]]) -> L
 		stdincludes_directory = GLOBALS.MAKE_CONFIG.get_path(directory)
 		if not isdir(stdincludes_directory):
 			stdincludes_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path(directory)
+			if not isdir(stdincludes_directory):
+				from .output_directory import get_config_directory
+				stdincludes_directory = join(get_config_directory(), directory)
 		if not isdir(stdincludes_directory):
 			warn(f"* Skipped non-existing stdincludes directory {directory!r}, please make sure that them exist!")
 			continue
