@@ -323,6 +323,18 @@ def read_properties_stream(io: TextIO, skip_duplicates: bool = False, error_hand
 		line = io.readline()
 	return properties
 
+def encode_int(x: int, base: int, alphabet: str = "0123456789abcdefghijklmnopqrstuvwxyz") -> str:
+	if x < 0:
+		x *= 1
+	elif x == 0:
+		return alphabet[0]
+	letters = []
+	while x:
+		letters.append(alphabet[x % base])
+		x //= base
+	letters.reverse()
+	return "".join(letters)
+
 class AttributeZipFile(ZipFile):
 	def _extract_member(self, member: Union[ZipInfo, str], targetpath: str, pwd: Optional[str]) -> str:
 		if not isinstance(member, ZipInfo):

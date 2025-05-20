@@ -80,16 +80,21 @@ def get_windows_appdata(csidl: int, env_variable: str, shell_name: str) -> str:
 		return str(directory)
 
 @lru_cache(maxsize=2048)
+def get_user_directory(*components: str) -> str:
+	path = environ.get("XDG_DATA_HOME")
+	if path is None or not ensure_not_whitespace(path):
+		path = expanduser("~")
+	return join(path, *components)
+
+@lru_cache(maxsize=2048)
 def get_user_config_directory(*components: str) -> str:
 	if platform.system() == "Windows":
 		appdata_path = get_windows_appdata(26, "APPDATA", "AppData")
 		return join(normpath(appdata_path), *components)
-	path = environ.get("XDG_DATA_HOME", "")
-	if not ensure_not_whitespace(path):
-		if platform.system() == "Darwin":
-			path = expanduser("~/Library/Application Support")
-		else:
-			path = expanduser("~/.config")
+	if platform.system() == "Darwin":
+		path = get_user_directory("Library", "Application Support")
+	else:
+		path = get_user_directory(".config")
 	return join(path, *components)
 
 def get_config_directory() -> str:
@@ -100,12 +105,10 @@ def get_user_temporary_directory(*components: str) -> str:
 	if platform.system() == "Windows":
 		appdata_path = get_windows_appdata(28, "LOCALAPPDATA", "Local AppData")
 		return join(normpath(appdata_path), *components, "Cache")
-	path = environ.get("XDG_CACHE_HOME", "")
-	if not ensure_not_whitespace(path):
-		if platform.system() == "Darwin":
-			path = expanduser("~/Library/Caches")
-		else:
-			path = expanduser("~/.cache")
+	if platform.system() == "Darwin":
+		path = get_user_directory("Library", "Caches")
+	else:
+		path = get_user_directory(".cache")
 	return join(path, *components)
 
 def get_temporary_directory() -> str:
