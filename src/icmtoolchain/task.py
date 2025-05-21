@@ -1,13 +1,11 @@
-import os
-import time
-from io import TextIOWrapper
-from os.path import basename, dirname, exists, isdir, isfile, join, relpath
+from os.path import basename, dirname, isdir, isfile, join, relpath
 from typing import Any, Callable, Dict, Final, List, Optional
 
 from . import GLOBALS, PROPERTIES
+from .output_directory import get_temporary_directory, lock_file, unlock_file
 from .shell import (abort, confirm_prompt, error, pretty_print,
                     pretty_print_success, warn)
-from .utils import DEVNULL, ensure_file_directory, remove_tree
+from .utils import DEVNULL, remove_tree
 
 
 class Task:
@@ -16,23 +14,33 @@ class Task:
 	callable: Callable
 	locks: Optional[List[str]] = None
 
-	def __init__(self, name: str, description: Optional[str] = None, locks: Optional[List[str]] = None) -> None:
+	def __init__(
+		self,
+		name: str,
+		description: Optional[str] = None,
+		locks: Optional[List[str]] = None,
+		yield_message: Optional[str] = "Task is already running by another process, wait for unlocking.",
+		continue_message: Optional[str] = "Lock is released, resuming task..."
+	) -> None:
 		try:
 			if assure_task(name) == self:
 				return
 		except ValueError:
 			pass
 		else:
-			raise ValueError(f"Task {name!r} already exists.")
+			raise ValueError(f"Task {name!r} is already exists.")
 		self.name = name
 		if description:
 			self.description = description
 		if locks:
 			self.locks = locks
+		self.yield_message = yield_message
+		self.continue_message = continue_message
+		self.locks_directory = join(get_temporary_directory(), "locks")
 
 	def execute(self, silent: bool = True, *args, **kwargs) -> Any:
 		if not self.callable:
-			raise ValueError(f"Task {self.name!r} decorator is not assigned to function yet.")
+			raise ValueError(f"Task {self.name!r} decorator is not assigned to function.")
 		self.lock(silent)
 		if not silent:
 			pretty_print(f"> Executing task: {self.name}", style="class:task.execute")
@@ -43,30 +51,34 @@ class Task:
 	def __call__(self, *args, **kwargs):
 		return self.execute(False, *args, **kwargs)
 
+	def lock_of(self, name: str) -> str:
+		return join(self.locks_directory, f"{name}.lock")
+
 	def lock(self, silent: bool = False) -> None:
-		lock_task(self.name, silent)
+		yield_message = self.yield_message if not silent else None
+		continue_message = self.continue_message if not silent else None
+		lock_file(self.lock_of(self.name), yield_message=yield_message, continue_message=continue_message)
 		if not self.locks:
 			return
 		locks = iter(self.locks)
 		while True:
 			try:
-				lock_task(next(locks), silent)
+				lock_file(self.lock_of(next(locks)), yield_message=yield_message, continue_message=continue_message)
 			except StopIteration:
 				break
 
 	def unlock(self) -> None:
-		unlock_task(self.name)
+		unlock_file(self.lock_of(self.name))
 		if not self.locks:
 			return
 		locks = iter(self.locks)
 		while True:
 			try:
-				unlock_task(next(locks))
+				unlock_file(self.lock_of(next(locks)))
 			except StopIteration:
 				break
 
 TASKS: Dict[str, Task] = dict()
-LOCKS: Dict[str, TextIOWrapper] = dict()
 
 
 def assure_task(name: str) -> Task:
@@ -79,58 +91,6 @@ def assure_task(name: str) -> Task:
 		else:
 			if task == name:
 				return TASKS[task]
-
-def lock_task(name: str, silent: bool = True) -> None:
-	from .output_directory import get_temporary_directory
-	lock_path = join(get_temporary_directory(), "lock", f"{name}.lock")
-	ensure_file_directory(lock_path)
-
-	await_message = False
-	if exists(lock_path):
-		while True:
-			try:
-				if exists(lock_path):
-					os.remove(lock_path)
-				break
-			except IOError:
-				if not await_message:
-					await_message = True
-					if not silent:
-						warn(f"* Task {name!r} is locked by another process, waiting for it to unlock.")
-				time.sleep(1.5)
-
-	if name in LOCKS:
-		error(f"Dead lock {name!r} detected!")
-		unlock_task(name)
-	open(lock_path, "tw").close()
-	LOCKS[name] = open(lock_path, "a")
-
-def unlock_task(name: str) -> None:
-	if name in LOCKS:
-		try:
-			LOCKS[name].close()
-		except IOError:
-			pass
-		del LOCKS[name]
-
-	from .output_directory import get_temporary_directory
-	lock_path = join(get_temporary_directory(), "lock", f"{name}.lock")
-	if isfile(lock_path):
-		os.remove(lock_path)
-
-def unlock_all_tasks() -> None:
-	tasks = iter(TASKS.values())
-	while True:
-		try:
-			task = next(tasks)
-		except StopIteration:
-			break
-		else:
-			task.unlock()
-	if len(LOCKS) > 0:
-		warn(f"* Locks {', '.join(LOCKS)!r} should be unlocked, but they was not found.")
-		for lock in tuple(LOCKS.keys()):
-			unlock_task(lock)
 
 def execute_task(name: str, silent: bool = True, *args, **kwargs) -> Any:
 	return assure_task(name) \

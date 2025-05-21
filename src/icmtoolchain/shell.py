@@ -887,11 +887,12 @@ def abort(*values: object, sep: Optional[str] = " ", code: int = 255, cause: Opt
 		pretty_print(*values, sep=sep, style="class:print.abort-message")
 	elif not cause:
 		pretty_print("Abort.")
-	try:
-		from .task import unlock_all_tasks
-		unlock_all_tasks()
-	except IOError:
-		pass
+	from .task import TASKS
+	for name, task in TASKS.items():
+		try:
+			task.unlock()
+		except IOError:
+			pass
 	exit(code)
 
 if __name__ == "__main__":

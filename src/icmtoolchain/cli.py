@@ -71,9 +71,6 @@ def run(argv: Optional[list[str]] = None):
 		debug("* No tasks to execute.")
 		exit(0)
 
-	from .task import unlock_all_tasks
-	unlock_all_tasks()
-
 	startup_millis = time() - startup_millis
 	debug(f"* Tasks successfully completed in {startup_millis:.2f}s!")
 
@@ -266,7 +263,7 @@ def run_test():
 
 	try:
 		asyncio.run(main())
-	except KeyboardInterrupt or EOFError:
+	except (KeyboardInterrupt, EOFError):
 		pretty_print("Tasks stopped gracefully.")
 
 if __name__ == "__main__":

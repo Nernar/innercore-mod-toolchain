@@ -1,12 +1,14 @@
 import platform
 import sys
 from functools import lru_cache
-from os import environ, listdir
-from os.path import (basename, dirname, exists, expanduser, isdir, isfile,
-                     join, normpath, realpath)
-from typing import Callable, List, Optional
+from io import FileIO
+from os import environ, fsync, listdir, remove
+from os.path import (abspath, basename, dirname, exists, expanduser, getsize,
+                     isdir, isfile, join, normpath, realpath)
+from time import sleep, time
+from typing import Callable, Dict, List, Optional
 
-from .utils import ensure_not_whitespace
+from .utils import ensure_file_directory, ensure_not_whitespace, remove_tree
 
 try:
 	from hashlib import blake2s as encode
@@ -113,3 +115,113 @@ def get_user_temporary_directory(*components: str) -> str:
 
 def get_temporary_directory() -> str:
 	return get_user_temporary_directory("icmtoolchain")
+
+if sys.platform != "win32":
+	import fcntl
+	def lock_file_platform(file: FileIO):
+		if not file.writable():
+			return
+		fcntl.lockf(file, fcntl.LOCK_EX)
+	def unlock_file_platform(file: FileIO):
+		if not file.writable():
+			return
+		fcntl.lockf(file, fcntl.LOCK_UN)
+
+else:
+	import msvcrt
+	def lock_file_platform(file: FileIO):
+		msvcrt.locking(file.fileno(), msvcrt.LK_NBLCK, getsize(realpath(file.name)))
+	def unlock_file_platform(file: FileIO):
+		msvcrt.locking(file.fileno(), msvcrt.LK_UNLCK, getsize(realpath(file.name)))
+
+LOCKS: Dict[str, FileIO] = {}
+
+def lock_file(
+	file: str,
+	*,
+	timeout: float = 30,
+	retry_delay: float = 0.5,
+	yield_message: Optional[str] = "Job is already running by another process, wait for unlocking.",
+	continue_message: Optional[str] = "Lock is released, resuming job..."
+) -> FileIO:
+	assert retry_delay > 0
+	absolute_path = realpath(file)
+	if absolute_path in LOCKS:
+		return LOCKS[absolute_path]
+	requires_locked_message = True
+	timestamp = time()
+
+	lock = None
+	while lock is None:
+		try:
+			if isfile(absolute_path):
+				remove_tree(absolute_path)
+			ensure_file_directory(absolute_path)
+			lock = open(absolute_path, "w+b", 0)
+		except OSError:
+			if timeout >= 0 and time() - timestamp >= timeout:
+				raise TimeoutError(f"Lock {file!r} being blocked too long!")
+			if requires_locked_message and yield_message:
+				requires_locked_message = False
+				from .shell import pretty_print_yield
+				pretty_print_yield(yield_message)
+			sleep(retry_delay)
+
+	try:
+		lock_file_platform(lock)
+	except OSError:
+		pass
+	LOCKS[absolute_path] = lock
+	if not requires_locked_message and continue_message:
+		from .shell import pretty_print_success
+		pretty_print_success(continue_message)
+	return lock
+
+def unlock_file(
+	file: str,
+	*,
+	flush: bool = True,
+	delete: bool = True
+) -> None:
+	absolute_path = realpath(file)
+	if not absolute_path in LOCKS:
+		return
+	lock = LOCKS[absolute_path]
+	if flush:
+		lock.flush()
+		fsync(lock)
+	try:
+		unlock_file_platform(lock)
+	except OSError:
+		pass
+	lock.close()
+	del LOCKS[absolute_path]
+	if delete:
+		remove(file)
+
+class FileLock:
+	def __init__(
+		self,
+		file: str,
+		/,
+		flush: bool = False,
+		delete: bool = True,
+		yield_message: Optional[str] = "Job is already running by another process, wait for unlocking.",
+		continue_message: Optional[str] = "Lock is released, resuming task...",
+		retry_delay: float = 0.5,
+		timeout: float = 30
+	):
+		self.file = file
+		self.do_flush = flush
+		self.do_delete = delete
+		self.yield_message = yield_message
+		self.continue_message = continue_message
+		self.retry_delay = retry_delay
+		self.timeout = timeout
+
+	def __enter__(self) -> FileIO:
+		return lock_file(self.file, timeout=self.timeout, retry_delay=self.retry_delay, yield_message=self.yield_message, continue_message=self.continue_message)
+
+	def __exit__(self, exc_type = None, exc_value = None, traceback = None):
+		unlock_file(self.file, flush=self.do_flush, delete=self.do_delete)
+		return exc_type is None

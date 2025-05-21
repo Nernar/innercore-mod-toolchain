@@ -126,7 +126,7 @@ def startup() -> None:
 
 	try:
 		results = welcome_review.request(returns_empty_properties=True)
-	except KeyboardInterrupt or EOFError:
+	except (KeyboardInterrupt, EOFError):
 		pretty_print("* Preconfiguration was canceled, you can do it later, execute `icmtoolchain --help` for a list of commands.")
 		return None
 
