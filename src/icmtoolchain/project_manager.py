@@ -133,13 +133,8 @@ class ProjectManager:
 	def select_project_folder(self, folder: Optional[str] = None) -> None:
 		if GLOBALS.is_project_available(which_project=folder):
 			return
-
-		if not folder:
-			GLOBALS.TOOLCHAIN_CONFIG.delete_value("currentProject")
-		else:
-			GLOBALS.TOOLCHAIN_CONFIG.set_value("currentProject", folder)
-		GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
-
+		from . import PROPERTIES
+		PROPERTIES.set_value("project", folder)
 		GLOBALS.shutdown_project()
 
 	def select_project(self, index: Optional[int] = None, folder: Optional[str] = None) -> None:

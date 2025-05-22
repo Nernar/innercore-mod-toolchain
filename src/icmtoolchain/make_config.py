@@ -19,7 +19,6 @@ class MakeConfig(MakeDataConfig):
 			self.migrate_make_config(self)
 		if "toolchain.json" == basename(defaults.path):
 			self.migrate_make_config(defaults)
-		self.is_pack = "manifest" in self
 
 	def migrate_make_config(self, config: FileConfig, save_then: bool = True) -> bool:
 		changes = False
@@ -48,6 +47,11 @@ class MakeConfig(MakeDataConfig):
 		if save_then and changes:
 			config.save_as_file()
 		return changes
+
+	@property
+	@override
+	def is_pack(self) -> bool:
+		return "manifest" in self
 
 	@override
 	def obtain_project_data(self) -> Optional[Union[MakeModData, MakePackData]]:

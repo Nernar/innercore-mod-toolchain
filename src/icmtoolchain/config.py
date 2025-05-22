@@ -6,8 +6,6 @@ from os.path import (abspath, basename, dirname, exists, isfile, join,
 from typing import (Any, Callable, Iterable, MutableMapping, MutableSequence,
                     Optional, Protocol, TypeVar, Union, cast, override)
 
-from .utils import ensure_file
-
 
 class ConfigSupportsKeysAndGetItem(Protocol):
     def keys(self) -> Iterable[str]: ...
@@ -219,6 +217,7 @@ class FileConfig(Config):
 	def save_as_file(self, output_path: Optional[str] = None) -> None:
 		path_to_save = output_path or self.path
 		if not isfile(path_to_save):
+			from .utils import ensure_file
 			ensure_file(path_to_save)
 
 		with open(path_to_save, "w", encoding="utf-8") as file:

@@ -3,8 +3,9 @@ from os.path import basename, isfile, join, splitext
 from typing import Iterable, Optional, override
 
 from .config import Config, FileConfig
-from .language import (MakeDataConfig, MakeJavaData, MakeModData,
-                       MakeNativeData, MakeResourceData, MakeScriptData)
+from .language import (MakeAssetData, MakeDataConfig, MakeJavaData,
+                       MakeModData, MakeNativeData, MakeResourceData,
+                       MakeScriptData)
 from .utils import ensure_not_whitespace
 
 VALID_SOURCE_TYPES = ("mod", "launcher", "preloader", "instant", "custom", "library")
@@ -181,3 +182,8 @@ class BuildConfig(MakeDataConfig):
 			push_unchanged_files=source.get_value("pushUnchangedFiles"),
 			cleanup_remote=source.get_value("cleanupRemote")
 		)
+
+	@override
+	def iterate_assets(self) -> Iterable[MakeAssetData]:
+		# TODO: Probably do something like resource copying, probably keep them in place...
+		return []

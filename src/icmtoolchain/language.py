@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass
-from os.path import basename, isdir, isfile, join
+from os.path import abspath, basename, dirname, isdir, isfile, join
 from typing import (Any, Callable, Dict, Final, Iterable, MutableMapping,
                     Optional, Union)
 
@@ -146,7 +146,7 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 	def __init__(self, path: str, defaults: FileConfig) -> None:
 		if not isfile(path):
 			abort(f"Not found {basename(path)!r}, are you sure that selected project exists?")
-		self.current_project = defaults.get_value("currentProject")
+		self.current_project = dirname(abspath(path))
 		super().__init__(path, defaults, raise_non_existing=True)
 		from .output_directory import unique_folder_name
 		self.project_unique_name = unique_folder_name(self.directory)
@@ -154,6 +154,15 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 	def get_build_path(self, *components: str) -> str:
 		from .output_directory import get_temporary_directory
 		return join(get_temporary_directory(), "build", self.project_unique_name, *components)
+
+	@property
+	def is_pack(self) -> bool:
+		"""Packs should describe extra build data through special files that are only available to them.
+
+		Returns:
+			bool: whether or not to create a pack structure
+		"""
+		return False
 
 	@abstractmethod
 	def obtain_project_data(self) -> Optional[Union[MakeModData, MakePackData]]:

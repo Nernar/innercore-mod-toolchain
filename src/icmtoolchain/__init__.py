@@ -1,29 +1,47 @@
 import os
 from copy import deepcopy
-from os.path import abspath, dirname, isfile, join
-from typing import Optional
+from os.path import abspath, dirname, isfile, join, splitdrive
+from typing import Iterable, Optional, Union
 
 from .config import Config, FileConfig
 
 
-def find_configuration(path: str, filename: str):
-	working_path = path.split(os.sep)
-	while len(working_path):
-		config_path = join(os.sep.join(working_path), filename)
+def find_config_directory(path: str, filename: str) -> Optional[str]:
+	working_directory = abspath(path)
+	while splitdrive(working_directory)[1]:
+		config_path = join(working_directory, filename)
 		if isfile(config_path):
 			return config_path
-		working_path.pop()
+		working_directory = dirname(working_directory)
 
-def request_make_config(toolchain_config: FileConfig):
-	selected_project = toolchain_config.get_value("currentProject")
-	if selected_project:
-		preffered_config = toolchain_config.get_path(join(selected_project, "make.json"))
-	else:
-		preffered_config = find_configuration(os.getcwd(), "make.json")
-	if not preffered_config or not isfile(preffered_config):
-		return None
-	from .make_config import MakeConfig
-	return MakeConfig(preffered_config, toolchain_config)
+def iterate_config_directories(path: str, filenames: Union[str, Iterable[str]], max_depth: int = 5) -> Iterable[str]:
+	path = abspath(path)
+	for dirpath, dirnames, filenames in os.walk(path):
+		if max_depth >= 0 and dirpath.count(os.sep, len(path) + 1) > max_depth:
+			break
+
+		for relative_directory in dirnames:
+			working_directory = join(dirpath, relative_directory)
+			if isinstance(filenames, str):
+				config_path = join(working_directory, filenames)
+				if isfile(config_path):
+					yield config_path
+				continue
+
+			for filename in filenames:
+				config_path = join(working_directory, filename)
+				if isfile(config_path):
+					yield config_path
+					break
+
+def get_current_directory() -> str:
+	if "project" in PROPERTIES:
+		relative_path = PROPERTIES.get_value_unsafe("project")
+		project_path = abspath(relative_path)
+		if isfile(project_path):
+			return dirname(project_path)
+		return project_path
+	return os.getcwd()
 
 class Globals:
 	@property
@@ -61,34 +79,49 @@ class Globals:
 	@property
 	def TOOLCHAIN_CONFIG(self):
 		if not hasattr(self, "toolchain_config"):
-			toolchain_config = find_configuration(os.getcwd(), "toolchain.json")
-			if not toolchain_config:
-				toolchain_config = find_configuration(dirname(abspath(__file__)), "toolchain.json")
-			if toolchain_config:
-				self.toolchain_config = FileConfig(toolchain_config)
-			elif hasattr(self, "make_config"):
-				self.toolchain_config = self.MAKE_CONFIG.defaults
-		if not hasattr(self, "toolchain_config") or not self.toolchain_config:
-			self.toolchain_config = FileConfig(join(dirname(abspath(__file__)), "toolchain.json"))
+			from .output_directory import get_config_directory
+			toolchain_config_path = join(get_config_directory(), "toolchain.json")
+			toolchain_config = FileConfig(toolchain_config_path)
+			workspace_config_path = find_config_directory(get_current_directory(), "toolchain.json")
+			from .utils import ensure_not_whitespace
+			if workspace_config_path and ensure_not_whitespace(workspace_config_path):
+				workspace_config = FileConfig(workspace_config_path, defaults=toolchain_config, raise_non_existing=True)
+				self.toolchain_config = workspace_config
+			else:
+				self.toolchain_config = toolchain_config
+			if hasattr(self, "make_config"):
+				self.MAKE_CONFIG.defaults = self.toolchain_config
 		return self.toolchain_config
 
 	@property
 	def MAKE_CONFIG(self):
 		if not hasattr(self, "make_config"):
-			make_config = request_make_config(self.TOOLCHAIN_CONFIG)
-			if not make_config:
-				from .shell import abort
-				abort("Not found any opened project, nothing to do.")
-			self.make_config = make_config
+			make_config_path = find_config_directory(get_current_directory(), "make.json")
+			from .utils import ensure_not_whitespace
+			if make_config_path and ensure_not_whitespace(make_config_path):
+				from .make_config import MakeConfig
+				self.make_config = MakeConfig(make_config_path, defaults=self.TOOLCHAIN_CONFIG)
+			else:
+				make_config_path = find_config_directory(get_current_directory(), "build.config")
+				if make_config_path and ensure_not_whitespace(make_config_path):
+					from .build_config import BuildConfig
+					self.make_config = BuildConfig(make_config_path, defaults=self.TOOLCHAIN_CONFIG)
+		if not hasattr(self, "make_config"):
+			from .shell import abort
+			for directory in iterate_config_directories(get_current_directory(), ("make.json", "build.config")):
+				abort("This directory is not a project per se, but perhaps you would like to create a workspace based on it? Unfortunately, this feature is not yet supported.")
+			abort("Not found any opened project, try running this command in project directory.")
 		return self.make_config
 
 	@property
 	def PREFERRED_CONFIG(self):
 		if hasattr(self, "make_config"):
 			return self.MAKE_CONFIG
-		make_config = request_make_config(self.TOOLCHAIN_CONFIG)
-		if make_config:
-			self.make_config = make_config
+		make_config_path = find_config_directory(get_current_directory(), "make.json")
+		from .utils import ensure_not_whitespace
+		if not make_config_path or not ensure_not_whitespace(make_config_path):
+			make_config_path = find_config_directory(get_current_directory(), "build.config")
+		if make_config_path and ensure_not_whitespace(make_config_path):
 			return self.MAKE_CONFIG
 		return self.TOOLCHAIN_CONFIG
 

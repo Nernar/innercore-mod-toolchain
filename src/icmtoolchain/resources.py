@@ -7,6 +7,7 @@ from typing import MutableMapping
 from . import GLOBALS
 from .config import FileConfig
 from .language import MakeModData, MakePackData
+from .make_config import MakeConfig
 from .output_directory import expand_paths
 from .shell import debug, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory,
@@ -149,7 +150,6 @@ def write_manifest_file(data: MakePackData) -> int:
 	return 0
 
 def build_package() -> int:
-	requires_manifest = GLOBALS.MAKE_CONFIG.is_pack
 	name = basename(GLOBALS.MAKE_CONFIG.current_project)
 	output_directory = GLOBALS.MAKE_CONFIG.get_build_path("package")
 
@@ -159,7 +159,7 @@ def build_package() -> int:
 	output_temporary_file = join(output_directory, "package.zip")
 	ensure_file_directory(output_temporary_file)
 	remove_tree(output_temporary_file)
-	output_file = GLOBALS.MAKE_CONFIG.get_relative_path(name + ".zip" if requires_manifest else name + ".icmod")
+	output_file = GLOBALS.MAKE_CONFIG.get_relative_path(name + ".zip" if GLOBALS.MAKE_CONFIG.is_pack else name + ".icmod")
 	ensure_file_directory(output_file)
 	remove_tree(output_file)
 
