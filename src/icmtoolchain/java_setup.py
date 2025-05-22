@@ -10,7 +10,7 @@ from .utils import AttributeZipFile, encode_int, ensure_directory, remove_tree
 
 # (numeric part, major version, minor version), (stage part, stage, patch number), (commit part, commit/date, timezone)
 GRADLE_VERSION_REGEX = re.compile(r"((\d+)(\.\d+)+)(-([^\W\d_]+)-(\w+))?(-(SNAPSHOT|\d{14}([-+]\d{4})?))?")
-COMPARABLE_VERSION_REGEX = re.compile(r"(\d+)(\.\d+)")
+COMPARABLE_VERSION_REGEX = re.compile(r"(\d+)\.(\d+)")
 
 class GradleVersion(NamedTuple):
 	version: str
