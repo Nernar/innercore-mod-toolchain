@@ -186,7 +186,7 @@ def task_update_includes() -> int:
 		return 0
 	from .script_build import compute_and_capture_changed_scripts
 	compute_and_capture_changed_scripts()
-	GLOBALS.WORKSPACE_COMPOSITE.flush()
+	GLOBALS.TSC_COMPOSITE.flush()
 	return 0
 
 ### RESOURCES & PACKAGE

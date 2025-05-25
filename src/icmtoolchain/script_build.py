@@ -101,7 +101,7 @@ def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], L
 						"javascript" if appending_library else language
 					))
 				if not appending_library and GLOBALS.MAKE_CONFIG.get_value("project.useReferences", False) and language == "typescript":
-					GLOBALS.WORKSPACE_COMPOSITE.reference(source_path)
+					GLOBALS.TSC_COMPOSITE.reference(source_path)
 				computed_includes.append((
 					source_path, destination_path
 				))
@@ -109,7 +109,7 @@ def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], L
 			elif isfile(source_path):
 				if not appending_library:
 					if GLOBALS.MAKE_CONFIG.get_value("project.composite", True) and language == "typescript":
-						GLOBALS.WORKSPACE_COMPOSITE.coerce(source_path)
+						GLOBALS.TSC_COMPOSITE.coerce(source_path)
 					if GLOBALS.BUILD_STORAGE.is_path_changed(source_path) or (
 						language == "typescript" and not isfile(
 							join(GLOBALS.MAKE_CONFIG.get_build_path("sources"), relpath(source_path, GLOBALS.MAKE_CONFIG.directory))
@@ -167,7 +167,7 @@ def build_composite_project() -> int:
 	composite, computed_composite, includes, computed_includes = compute_and_capture_changed_scripts()
 
 	if request_typescript(only_check=True):
-		GLOBALS.WORKSPACE_COMPOSITE.flush()
+		GLOBALS.TSC_COMPOSITE.flush()
 	for included in includes:
 		if not GLOBALS.MAKE_CONFIG.get_value("project.useReferences", False) or included[2] == "javascript":
 			overall_result += included[0].build(included[1], included[2])
@@ -202,7 +202,7 @@ def build_composite_project() -> int:
 
 			from time import time
 			startup_millis = time()
-			overall_result += GLOBALS.WORKSPACE_COMPOSITE.build(*(
+			overall_result += GLOBALS.TSC_COMPOSITE.build(*(
 				["--force"] if PROPERTIES.get_value("release") else list()
 			))
 
@@ -228,11 +228,11 @@ def watch_composite_project() -> int:
 	# Recomputing existing changes before watching, changes here doesn't make sence
 	# since it will be recomputed after watching interruption
 	compute_and_capture_changed_scripts()
-	GLOBALS.WORKSPACE_COMPOSITE.flush()
-	GLOBALS.WORKSPACE_COMPOSITE.watch()
+	GLOBALS.TSC_COMPOSITE.flush()
+	GLOBALS.TSC_COMPOSITE.watch()
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("script_source")
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("script_library")
-	GLOBALS.WORKSPACE_COMPOSITE.reset()
+	GLOBALS.TSC_COMPOSITE.reset()
 
 	composite, computed_composite, includes, computed_includes = compute_and_capture_changed_scripts()
 

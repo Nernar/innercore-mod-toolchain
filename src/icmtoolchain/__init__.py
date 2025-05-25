@@ -142,7 +142,7 @@ class Globals:
 	@property
 	def TSCONFIG_DEPENDENTS(self):
 		if not hasattr(self, "tsconfig_dependents"):
-			from .includes import TSCONFIG_DEPENDENTS
+			from .tsconfig import TSCONFIG_DEPENDENTS
 			tsconfig = deepcopy(TSCONFIG_DEPENDENTS)
 			for key in self.TSCONFIG_TOOLCHAIN:
 				if key in tsconfig:
@@ -153,9 +153,9 @@ class Globals:
 	@property
 	def TSCONFIG_TOOLCHAIN(self):
 		if not hasattr(self, "tsconfig_toolchain"):
-			from .workspace import TSCONFIG_TOOLCHAIN
+			from .tsconfig import TSCONFIG_TOOLCHAIN
 			tsconfig = deepcopy(TSCONFIG_TOOLCHAIN)
-			for key, value in self.MAKE_CONFIG.get_value("tsconfig", dict()).items():
+			for key, value in self.MAKE_CONFIG.obtain_config("tsconfig").items():
 				if value is None:
 					del tsconfig[key]
 				else:
@@ -178,11 +178,11 @@ class Globals:
 		return self.code_settings
 
 	@property
-	def WORKSPACE_COMPOSITE(self):
-		if not hasattr(self, "workspace_composite"):
-			from .workspace import WorkspaceComposite
-			self.workspace_composite = WorkspaceComposite(".toolchain.tsconfig.json")
-		return self.workspace_composite
+	def TSC_COMPOSITE(self):
+		if not hasattr(self, "typescript_composite"):
+			from .tsconfig import CompositeProject
+			self.typescript_composite = CompositeProject(".toolchain.tsconfig.json")
+		return self.typescript_composite
 
 	@property
 	def PARAMETER_SIGNATURE(self):
@@ -229,8 +229,8 @@ class Globals:
 			del self.tsconfig_dependents
 		if hasattr(self, "tsconfig_toolchain"):
 			del self.tsconfig_toolchain
-		if hasattr(self, "workspace_composite"):
-			del self.workspace_composite
+		if hasattr(self, "typescript_composite"):
+			del self.typescript_composite
 
 GLOBALS = Globals()
 

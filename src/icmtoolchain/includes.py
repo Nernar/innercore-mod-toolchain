@@ -3,30 +3,17 @@ import os
 import platform
 import re
 import subprocess
-from os.path import basename, isdir, isfile, join, normpath, relpath
-from typing import (Any, Dict, Final, List, MutableMapping, MutableSequence,
+from os.path import (basename, isdir, isfile, join, normpath,
+                     relpath)
+from typing import (Any, Final, List, MutableMapping, MutableSequence,
                     Optional)
 
 from . import GLOBALS, PROPERTIES
 from .config import FileConfig
 from .hglob import glob
 from .shell import debug, error, info, pretty_print, warn
+from .tsconfig import TSCONFIG
 from .utils import ensure_file_directory, request_typescript
-from .workspace import TSCONFIG
-
-# Will be excluded with toolchain overriden options
-TSCONFIG_DEPENDENTS: Dict[str, Any] = {
-	"allowSyntheticDefaultImports": "esModuleInterop",
-	"alwaysStrict": "strict",
-	"noImplicitAny": "strict",
-	"noImplicitThis": "strict",
-	"strictBindCallApply": "strict",
-	"strictFunctionTypes": "strict",
-	"strictNullChecks": "strict",
-	"strictPropertyInitialization": "strict",
-	"incremental": "composite",
-	"declaration": "composite"
-}
 
 
 class Includes:
@@ -169,7 +156,7 @@ class Includes:
 
 	def create_tsconfig(self, temporary_path: str) -> None:
 		template = {
-			"extends": relpath(GLOBALS.WORKSPACE_COMPOSITE.get_tsconfig(), self.directory),
+			"extends": relpath(GLOBALS.TSC_COMPOSITE.get_tsconfig(), self.directory),
 			"compilerOptions": {
 				"outFile": temporary_path
 			},
