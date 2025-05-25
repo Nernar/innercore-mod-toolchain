@@ -1,6 +1,5 @@
 from functools import cmp_to_key
-from os.path import basename, isfile, join
-from posixpath import splitext
+from os.path import basename, isfile, join, splitext
 from typing import Any, Iterable, MutableSequence, Optional, Union, override
 
 from .config import Config, FileConfig

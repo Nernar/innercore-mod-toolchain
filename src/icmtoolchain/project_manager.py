@@ -10,19 +10,20 @@ from .utils import ensure_not_whitespace, remove_tree
 
 
 class ProjectManager:
-	projects: Final[List[str]]; templates: Final[List[str]]
+	projects: Final[List[str]]
+	templates: Final[List[str]]
 
 	def __init__(self) -> None:
 		self.projects = list()
 		self.templates = list()
-		locations = GLOBALS.PREFERRED_CONFIG.get_value("projectLocations", list())
-		for location in ["", *locations]:
+		locations = GLOBALS.PREFERRED_CONFIG.obtain_list("projectLocations")
+		for location in locations[:]:
 			path = GLOBALS.TOOLCHAIN_CONFIG.get_path(location)
 			if not exists(path) or not isdir(path):
 				warn(f"* Not found project location {location}!")
 				continue
 
-			for entry in ["", *os.listdir(path)]:
+			for entry in os.listdir(path):
 				make_path = join(path, entry, "make.json")
 				if exists(make_path) and isfile(make_path):
 					self.projects.append(join(location, entry))
@@ -76,10 +77,9 @@ class ProjectManager:
 				self.append_workspace_folder(folder, template_info["name"])
 
 		if GLOBALS.CODE_SETTINGS.available():
-			exclude = GLOBALS.CODE_SETTINGS.get_value("files.exclude", dict())
+			exclude = GLOBALS.CODE_SETTINGS.obtain_config("files.exclude", implace_fallback=True)
 			if not folder.startswith("../"):
 				exclude[folder] = True
-				GLOBALS.CODE_SETTINGS.set_value("files.exclude", exclude)
 				GLOBALS.CODE_SETTINGS.save_as_file()
 
 		self.projects.append(folder)
@@ -105,10 +105,9 @@ class ProjectManager:
 				GLOBALS.CODE_WORKSPACE.save_as_file()
 
 		if GLOBALS.CODE_SETTINGS.available():
-			exclude = GLOBALS.CODE_SETTINGS.get_value("files.exclude", dict())
+			exclude = GLOBALS.CODE_SETTINGS.obtain_config("files.exclude")
 			if folder in exclude:
 				del exclude[folder]
-				GLOBALS.CODE_SETTINGS.set_value("files.exclude", exclude)
 				GLOBALS.CODE_SETTINGS.save_as_file()
 
 		remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path(folder))
@@ -117,7 +116,7 @@ class ProjectManager:
 
 	def append_workspace_folder(self, folder: str, name: Optional[object] = "Mod") -> None:
 		if GLOBALS.CODE_WORKSPACE.available():
-			folders = GLOBALS.CODE_WORKSPACE.get_value("folders", list())
+			folders = GLOBALS.CODE_WORKSPACE.obtain_list("folders", implace_fallback=True)
 			if len(folders) == 0:
 				folders.append({
 					"path": GLOBALS.CODE_WORKSPACE.get_toolchain_path().replace("\\", "/"),
@@ -127,7 +126,6 @@ class ProjectManager:
 				"path": GLOBALS.CODE_WORKSPACE.get_toolchain_path(folder).replace("\\", "/"),
 				"name": str(name)
 			})
-			GLOBALS.CODE_WORKSPACE.set_value("folders", folders)
 			GLOBALS.CODE_WORKSPACE.save_as_file()
 
 	def select_project_folder(self, folder: Optional[str] = None) -> None:
@@ -151,13 +149,12 @@ class ProjectManager:
 				self.append_workspace_folder(folder, self.resolve_mod_name(folder, make_obj))
 
 		if folder and GLOBALS.CODE_SETTINGS.available():
-			exclude = GLOBALS.CODE_SETTINGS.get_value("files.exclude", dict())
+			exclude = GLOBALS.CODE_SETTINGS.obtain_config("files.exclude")
 			if GLOBALS.is_project_available():
 				if not GLOBALS.MAKE_CONFIG.current_project.startswith("../") and not exists(abspath(GLOBALS.MAKE_CONFIG.current_project)):
 					exclude[GLOBALS.MAKE_CONFIG.current_project] = True
 			if not folder.startswith("../"):
 				exclude[folder] = False
-			GLOBALS.CODE_SETTINGS.set_value("files.exclude", exclude)
 			GLOBALS.CODE_SETTINGS.save_as_file()
 
 		self.select_project_folder(folder)
@@ -171,7 +168,7 @@ class ProjectManager:
 	def resolve_mod_name(self, path: str, make_obj: Optional[Dict[Any, Any]] = None) -> str:
 		if not make_obj:
 			try:
-				make_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(path + "/make.json")
+				make_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(join(path, "make.json"))
 				if isfile(make_path):
 					with open(make_path, "r", encoding="utf-8") as make_file:
 						make_obj = json.loads(make_file.read())
