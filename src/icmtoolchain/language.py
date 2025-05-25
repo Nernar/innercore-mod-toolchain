@@ -138,6 +138,8 @@ class MakeAssetData:
 	push_unchanged_files: bool = True
 	cleanup_remote: bool = True
 
+AVAILABLE_DATA_CONFIGS: Dict[Union[str, Callable[[str], str]], type['MakeDataConfig']] = {}
+
 class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 	defaults: FileConfig
 	current_project: Final[str]
@@ -227,7 +229,7 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 	def supports_java(self) -> bool:
 		return False
 
-	def iterate_java(self) -> Iterable[MakeJavaData]:
+	def iterate_java(self, defaults: Optional[Config] = None) -> Iterable[MakeJavaData]:
 		"""Returns iterable java data that is used in appropriate compilers and handlers.
 		Java represents folders in their respective language, compiled using Javac.
 		You are responsible for producing this data, using this config and manifests within a project.
@@ -254,7 +256,7 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 	def supports_native(self) -> bool:
 		return False
 
-	def iterate_native(self) -> Iterable[MakeNativeData]:
+	def iterate_native(self, defaults: Optional[Config] = None) -> Iterable[MakeNativeData]:
 		"""Returns iterable native data that is used in appropriate compilers and handlers.
 		Native represents folders that uses C/C++ languages, compiled using GNU GCC.
 		You are responsible for producing this data, using this config and manifests within a project.
@@ -343,3 +345,34 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 			Iterable[MakeAssetData]: iterable which can be used in compilers
 		"""
 		...
+
+	@staticmethod
+	def register_config(criteria: Union[str, Callable[[str], str]], data: type['MakeDataConfig']) -> None:
+		"""Here you can check if this project can be loaded with this config.
+
+		Args:
+			criteria (Union[str, Callable[[str], bool]]): filter configs by filename or deeper callable inspection
+			data (type[&#39;MakeDataConfig&#39;]): type to be created, which will become a config with data
+
+		Raises:
+			ValueError: if this criteria has already been registered earlier
+		"""
+		if criteria in AVAILABLE_DATA_CONFIGS:
+			raise ValueError(f"Data criteria {criteria} already occupied by {AVAILABLE_DATA_CONFIGS[criteria]}!")
+		AVAILABLE_DATA_CONFIGS[criteria] = data
+
+	@staticmethod
+	def of(directory: str) -> Optional['MakeDataConfig']:
+		for criteria, config_type in AVAILABLE_DATA_CONFIGS.items():
+			if isinstance(criteria, str):
+				config_file = join(directory, criteria)
+				if not isfile(config_file):
+					continue
+			elif callable(criteria):
+				config_file = criteria(directory)
+			else:
+				continue
+			if not config_file:
+				continue
+			from . import GLOBALS
+			return config_type(config_file, defaults=GLOBALS.TOOLCHAIN_CONFIG)

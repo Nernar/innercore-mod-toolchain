@@ -15,10 +15,7 @@ VALID_RESOURCE_TYPES = ("resource_directory", "gui", "minecraft_resource_pack", 
 class MakeConfig(MakeDataConfig):
 	def __init__(self, path: str, defaults: FileConfig) -> None:
 		super().__init__(path, defaults)
-		if "make.json" == basename(path):
-			self.migrate_make_config(self)
-		if "toolchain.json" == basename(defaults.path):
-			self.migrate_make_config(defaults)
+		self.migrate_make_config(self)
 
 	def migrate_make_config(self, config: FileConfig, save_then: bool = True) -> bool:
 		changes = False
