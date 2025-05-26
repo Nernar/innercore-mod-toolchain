@@ -166,13 +166,22 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 		"""
 		return False
 
+	def iterate_dependencies(self) -> Iterable['MakeDataConfig']:
+		"""Each project may contain dependencies that must be compiled before that project itself.
+		When instantiating a config, toolchain will make a dependency graph first, and only then build your project.
+
+		Returns:
+			Iterable[MakeDataConfig]: optional project data on which manifest is based
+		"""
+		...
+
 	@abstractmethod
 	def obtain_project_data(self) -> Optional[Union[MakeModData, MakePackData]]:
 		"""Basic data describing this config and project as a whole. They should be provided in any case.
 		If there is no value, no built-in startup configurations are created.
 
 		Returns:
-			Union[MakeModData, MakePackData]: project data on which manifest is based
+			Optional[Union[MakeModData, MakePackData]]: optional project data on which manifest is based
 		"""
 		...
 
@@ -352,7 +361,7 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 
 		Args:
 			criteria (Union[str, Callable[[str], bool]]): filter configs by filename or deeper callable inspection
-			data (type[&#39;MakeDataConfig&#39;]): type to be created, which will become a config with data
+			data (type[MakeDataConfig]): type to be created, which will become a config with data
 
 		Raises:
 			ValueError: if this criteria has already been registered earlier

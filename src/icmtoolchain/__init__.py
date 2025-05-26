@@ -1,7 +1,7 @@
 import os
 from copy import deepcopy
 from os.path import abspath, dirname, isfile, join, splitdrive
-from typing import Iterable, Optional, Union
+from typing import Iterable, Optional
 
 from .config import Config, FileConfig
 
