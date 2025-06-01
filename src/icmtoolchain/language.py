@@ -356,7 +356,7 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 		...
 
 	@staticmethod
-	def register_config(criteria: Union[str, Callable[[str], str]], data: type['MakeDataConfig']) -> None:
+	def register(criteria: Union[str, Callable[[str], str]], data: type['MakeDataConfig']) -> None:
 		"""Here you can check if this project can be loaded with this config.
 
 		Args:

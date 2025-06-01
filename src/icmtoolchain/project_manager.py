@@ -1,13 +1,91 @@
 import json
 import os
+from abc import ABCMeta, abstractmethod
 from os.path import abspath, basename, exists, isdir, isfile, join
-from typing import Any, Dict, Final, List, Optional, Tuple
+from typing import (Any, Callable, Dict, Final, List, Optional, Tuple, Union,
+                    override)
 
 from . import GLOBALS
 from .config import Config
+from .language import MakeDataConfig
 from .shell import abort, confirm_prompt, pretty_print, warn
 from .utils import ensure_not_whitespace, remove_tree
 
+AVAILABLE_ARTIFACTS: Dict[Union[type, Callable[[Any], bool]], Union[Callable[[Any], 'Artifact'], type['Artifact']]] = {}
+
+class Artifact(metaclass=ABCMeta):
+	def __init__(self, description: Any) -> None:
+		self.description = description
+
+	@abstractmethod
+	def fetch(self) -> None:
+		...
+
+	@abstractmethod
+	def as_project(self) -> MakeDataConfig:
+		...
+
+	@staticmethod
+	def register(criteria: Union[type, Callable[[Any], bool]], data: Union[Callable[[Any], 'Artifact'], type['Artifact']]) -> None:
+		"""Here you can match right artifact to different types of dependencies.
+
+		Args:
+			criteria (Union[str, Callable[[str], bool]]): filter artifact types by filename or deeper callable inspection
+			data (type[Artifact]): type to be created, which will become a artifact with data
+
+		Raises:
+			ValueError: if this criteria has already been registered earlier
+		"""
+		if criteria in AVAILABLE_ARTIFACTS:
+			raise ValueError(f"Data criteria {criteria} already occupied by {AVAILABLE_ARTIFACTS[criteria]}!")
+		AVAILABLE_ARTIFACTS[criteria] = data
+
+	@staticmethod
+	def of(description: Any) -> Optional['Artifact']:
+		for criteria, artifact_type in AVAILABLE_ARTIFACTS.items():
+			if isinstance(criteria, type):
+				if not isinstance(description, criteria):
+					continue
+			elif callable(criteria):
+				if not criteria(description):
+					continue
+			else:
+				continue
+			return artifact_type(description)
+
+class ModBrowserArtifact(Artifact):
+	description: int
+
+	def __init__(self, remote_id: int) -> None:
+		super().__init__(remote_id)
+
+	@override
+	def fetch(self) -> None:
+		pass
+
+	@override
+	def as_project(self) -> MakeDataConfig:
+		raise NotImplementedError()
+
+Artifact.register(int, ModBrowserArtifact)
+Artifact.register(lambda description: isinstance(description, dict) and "projectId" in description, lambda description: ModBrowserArtifact(description["projectId"]))
+
+class RepositoryArtifact(Artifact):
+	description: str
+
+	def __init__(self, remote_url: str) -> None:
+		super().__init__(remote_url)
+
+	@override
+	def fetch(self) -> None:
+		pass
+
+	@override
+	def as_project(self) -> MakeDataConfig:
+		raise NotImplementedError()
+
+Artifact.register(lambda description: isinstance(description, str) and "://" in description, RepositoryArtifact)
+Artifact.register(lambda description: isinstance(description, dict) and "url" in description, lambda description: RepositoryArtifact(description["url"]))
 
 class ProjectManager:
 	projects: Final[List[str]]

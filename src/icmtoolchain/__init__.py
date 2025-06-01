@@ -239,5 +239,5 @@ from .build_config import BuildConfig
 from .language import MakeDataConfig
 from .make_config import MakeConfig
 
-MakeDataConfig.register_config("make.json", MakeConfig)
-MakeDataConfig.register_config("build.config", BuildConfig)
+MakeDataConfig.register("make.json", MakeConfig)
+MakeDataConfig.register("build.config", BuildConfig)
