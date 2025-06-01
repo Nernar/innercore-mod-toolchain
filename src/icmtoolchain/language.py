@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from os.path import abspath, basename, dirname, isdir, isfile, join
 from typing import (Any, Callable, Dict, Final, Iterable, MutableMapping,
                     Optional, Union)
@@ -74,7 +74,7 @@ class MakePackData:
 	name: str
 	version: str
 	description: Union[MutableMapping[str, str], str] = ""
-	manifest: MutableMapping[str, Any] = Config()
+	manifest: MutableMapping[str, Any] = field(default_factory=Config)
 
 @dataclass
 class MakeScriptData:
@@ -92,12 +92,12 @@ class MakeJavaData:
 	relative_path: str
 	output_path: str
 	sources: Iterable[str]
-	libraries: Iterable[str] = []
-	classpath: Iterable[str] = []
+	libraries: Iterable[str] = field(default_factory=list)
+	classpath: Iterable[str] = field(default_factory=list)
 	verbose: bool = False
 	keep_libraries: bool = False
 	keep_sources: bool = False
-	options: Iterable[str] = []
+	options: Iterable[str] = field(default_factory=list)
 
 @dataclass
 class MakeNativeData:
@@ -105,13 +105,13 @@ class MakeNativeData:
 	output_path: str
 	shared_name: str
 	depends: Iterable[str]
-	link: Iterable[str] = []
-	link_static: Iterable[str] = []
-	include: Iterable[str] = []
-	stdincludes: Iterable[str] = []
+	link: Iterable[str] = field(default_factory=list)
+	link_static: Iterable[str] = field(default_factory=list)
+	include: Iterable[str] = field(default_factory=list)
+	stdincludes: Iterable[str] = field(default_factory=list)
 	keep_includes: bool = False
 	keep_sources: bool = False
-	options: Iterable[str] = []
+	options: Iterable[str] = field(default_factory=list)
 
 @dataclass
 class MakeSharedObjectData:

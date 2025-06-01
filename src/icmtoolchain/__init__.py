@@ -1,6 +1,6 @@
 import os
 from copy import deepcopy
-from os.path import abspath, dirname, isfile, join, splitdrive
+from os.path import abspath, dirname, isfile, join
 from typing import Iterable, Optional
 
 from .config import Config, FileConfig
@@ -8,7 +8,9 @@ from .config import Config, FileConfig
 
 def find_config_directory(path: str, filename: str) -> Optional[str]:
 	working_directory = abspath(path)
-	while splitdrive(working_directory)[1]:
+	# When searching for config ignore root directory and iterate
+	# through parent ones until resolution or nothing.
+	while working_directory and working_directory != dirname(working_directory):
 		config_path = join(working_directory, filename)
 		if isfile(config_path):
 			return config_path
@@ -16,7 +18,9 @@ def find_config_directory(path: str, filename: str) -> Optional[str]:
 
 def find_project_config(path: str) -> Optional['MakeDataConfig']:
 	working_directory = abspath(path)
-	while splitdrive(working_directory)[1]:
+	# When searching for config ignore root directory and iterate
+	# through parent ones until resolution or nothing.
+	while working_directory and working_directory != dirname(working_directory):
 		config = MakeDataConfig.of(working_directory)
 		if config:
 			return config

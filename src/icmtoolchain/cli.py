@@ -1,4 +1,5 @@
 import sys
+from itertools import tee
 from typing import Optional
 
 from .shell import pretty_print
@@ -29,6 +30,9 @@ def run(argv: Optional[list[str]] = None):
 	if "--list" in argv:
 		show_available_tasks()
 		exit(0)
+	if "--cli-test" in argv:
+		run_test()
+		exit(0)
 
 	from time import time
 	startup_millis = time()
@@ -46,8 +50,14 @@ def run(argv: Optional[list[str]] = None):
 
 	apply_environment_properties()
 
-	anything_performed = False
-	tasks = iter(targets)
+	targets, has_anything = tee(targets)
+	try:
+		next(has_anything)
+	except StopIteration:
+		debug("* No tasks to execute.")
+		exit(0)
+
+	targets, tasks = tee(targets)
 	while True:
 		try:
 			callable = next(tasks)
@@ -65,11 +75,6 @@ def run(argv: Optional[list[str]] = None):
 				if isinstance(err, RuntimeCodeError):
 					abort(f"* Task {callable.name} failed with error code #{err.code}: {err}")
 				abort(f"* Task {callable.name} failed with unexpected error!", cause=err)
-			anything_performed = True
-
-	if not anything_performed:
-		debug("* No tasks to execute.")
-		exit(0)
 
 	startup_millis = time() - startup_millis
 	debug(f"* Tasks successfully completed in {startup_millis:.2f}s!")
@@ -196,7 +201,7 @@ def run_test():
 		Interactable("Please confirm that you are lazy:", focusable=True),
 		checkbox,
 		HorizontalLine(),
-		Editable("What do you want? ", hint="Modding Tools+ Subscription"),
+		Editable("What do you want?", hint="Modding Tools+ Subscription"),
 		Button("Confirm", do_action),
 		whitespace,
 		Interactable("Don't forget to subscribe, leave comment and like our work. Money produced from those events goes to Inner Core development!"),

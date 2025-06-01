@@ -724,7 +724,7 @@ class Progress(UIControl):
 
 class Debugger(Interactable):
 	"""
-	Debugging staff considered from content with max available width. 
+	Debugging stuff considered from content with max available width. 
 	"""
 
 	def __init__(
