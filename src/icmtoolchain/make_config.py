@@ -7,6 +7,9 @@ from .language import (MakeAssetData, MakeDataConfig, MakeJavaData,
                        MakeModData, MakeNativeData, MakePackData,
                        MakePackGraphicsData, MakeResourceData, MakeScriptData,
                        MakeSharedObjectData)
+from .project_manager import Artifact
+from .shell import pretty_print_attention
+from .utils import ensure_not_whitespace
 
 VALID_SOURCE_TYPES = ("main", "launcher", "preloader", "instant", "custom", "library")
 VALID_RESOURCE_TYPES = ("resource_directory", "gui", "minecraft_resource_pack", "minecraft_behavior_pack")
@@ -48,6 +51,35 @@ class MakeConfig(MakeDataConfig):
 	@override
 	def is_pack(self) -> bool:
 		return "manifest" in self
+
+	def iterate_dependencies(self) -> Iterable[Union[MakeDataConfig, Artifact]]:
+		dependencies = self.obtain_list("dependencies")
+		for dependency in dependencies:
+			path = None
+			if isinstance(dependency, Config):
+				path = dependency.get_value("path")
+			elif isinstance(dependency, str):
+				path = dependency
+			if path and ensure_not_whitespace(path):
+				absolute_path = self.get_path(path)
+				project = MakeDataConfig.of(absolute_path)
+				if project:
+					yield project
+					continue
+				from . import GLOBALS
+				absolute_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(path)
+				project = MakeDataConfig.of(absolute_path)
+				if project:
+					yield project
+					continue
+			artifact = Artifact.of(dependency)
+			if artifact:
+				yield artifact
+				continue
+			if not self.get_value("project.requiredDependencies", True) or isinstance(dependency, Config) and not dependency.get_value("required", True):
+				pretty_print_attention(f"Skipping unsatisfied depdendency {dependency!r}, since it is optional.")
+				continue
+			raise ValueError(f"Invalid dependency {dependency!r}, it should be relative project path, id or repository url!")
 
 	@override
 	def obtain_project_data(self) -> Optional[Union[MakeModData, MakePackData]]:

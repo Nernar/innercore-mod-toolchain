@@ -2,14 +2,16 @@ from abc import ABCMeta, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
 from os.path import abspath, basename, dirname, isdir, isfile, join
-from typing import (Any, Callable, Dict, Final, Iterable, MutableMapping,
-                    Optional, Union)
+from typing import (TYPE_CHECKING, Any, Callable, Dict, Final, Iterable,
+                    MutableMapping, Optional, Union)
 
 from .config import Config, FileConfig
 from .output_directory import expand_paths
 from .shell import abort, warn
 from .utils import RuntimeCodeError, ensure_not_whitespace
 
+if TYPE_CHECKING:
+	from .project_manager import Artifact
 
 def get_language_directories(compile_type: str, language_config: Config, properties_merger: Optional[Callable] = None, make_config: Optional['MakeDataConfig'] = None) -> Dict[str, Config]:
 	if not make_config:
@@ -166,7 +168,7 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 		"""
 		return False
 
-	def iterate_dependencies(self) -> Iterable['MakeDataConfig']:
+	def iterate_dependencies(self) -> Iterable[Union['MakeDataConfig', 'Artifact']]:
 		"""Each project may contain dependencies that must be compiled before that project itself.
 		When instantiating a config, toolchain will make a dependency graph first, and only then build your project.
 

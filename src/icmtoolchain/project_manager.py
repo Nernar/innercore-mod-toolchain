@@ -22,7 +22,7 @@ class Artifact(metaclass=ABCMeta):
 		...
 
 	@abstractmethod
-	def as_project(self) -> MakeDataConfig:
+	def as_project(self) -> Optional['MakeDataConfig']:
 		...
 
 	@staticmethod
@@ -64,7 +64,7 @@ class ModBrowserArtifact(Artifact):
 		pass
 
 	@override
-	def as_project(self) -> MakeDataConfig:
+	def as_project(self) -> Optional['MakeDataConfig']:
 		raise NotImplementedError()
 
 Artifact.register(int, ModBrowserArtifact)
@@ -81,7 +81,7 @@ class RepositoryArtifact(Artifact):
 		pass
 
 	@override
-	def as_project(self) -> MakeDataConfig:
+	def as_project(self) -> Optional['MakeDataConfig']:
 		raise NotImplementedError()
 
 Artifact.register(lambda description: isinstance(description, str) and "://" in description, RepositoryArtifact)

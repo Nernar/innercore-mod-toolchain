@@ -21,6 +21,9 @@ class Config(dict[str, Any]):
 			super().__init__()
 		self.defaults = defaults
 
+	def __hash__(self):
+		return hash(frozenset(self))
+
 	def is_supported_value(self, value: Any) -> bool:
 		return value is None \
 			or isinstance(value, int) \

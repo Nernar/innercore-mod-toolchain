@@ -1,8 +1,12 @@
 import sys
 from itertools import tee
-from typing import Optional
+from typing import TYPE_CHECKING, MutableSequence, MutableSet, Optional, Union
 
-from .shell import pretty_print
+from .language import MakeDataConfig
+from .shell import pretty_print, pretty_print_attention
+
+if TYPE_CHECKING:
+	from .project_manager import Artifact
 
 
 def show_help():
@@ -20,6 +24,92 @@ def show_available_tasks():
 		if task.description:
 			pretty_print(": " + task.description, end="")
 		pretty_print()
+
+class ProjectEdge:
+	dependencies: MutableSequence['ProjectEdge']
+	references: MutableSequence['ProjectEdge']
+	artifact: Optional['Artifact'] = None
+
+	def __init__(self, project: Union[MakeDataConfig, 'Artifact']):
+		self.project = project
+		from .language import Artifact
+		if isinstance(project, Artifact):
+			self.artifact = project
+		self.dependencies = []
+		self.references = []
+
+class ProjectGraph(dict[Union[MakeDataConfig, 'Artifact'], ProjectEdge]):
+	def __init__(self, project: MakeDataConfig) -> None:
+		self.project = project
+		self.obtain_edge(project)
+
+	@property
+	def root(self) -> ProjectEdge:
+		return self.obtain_edge(self.project)
+
+	def obtain_edge(self, config: Union[MakeDataConfig, 'Artifact']) -> ProjectEdge:
+		if not config in self:
+			self[config] = ProjectEdge(config)
+		return self[config]
+
+	def obtain_project(self, node: ProjectEdge) -> Union[MakeDataConfig, 'Artifact']:
+		for config, subnode in self.items():
+			if node == subnode:
+				return config
+		raise ValueError(f"ProjectGraph#project_of: Unresolved edge {node.project}!")
+
+	def find_dependencies(self, dependency: ProjectEdge) -> MutableSequence[ProjectEdge]:
+		dependencies = []
+		for config, node in self.items():
+			if dependency in node.dependencies:
+				dependencies.append(node)
+		return dependencies
+
+	def find_references(self, reference: ProjectEdge) -> MutableSequence[ProjectEdge]:
+		references = []
+		for config, node in self.items():
+			if reference in node.references:
+				references.append(node)
+		return references
+
+	def has_cross_references(self, node: ProjectEdge, visited: Optional[MutableSequence[ProjectEdge]] = None) -> bool:
+		if not visited:
+			visited = list()
+		if node in visited:
+			pretty_print_attention(f"Circular dependency when traversing {visited[-1].project} -> {node.project}!")
+			return True
+		visited.append(node)
+		for dependency in node.dependencies:
+			if self.has_cross_references(dependency, visited):
+				return True
+		visited.remove(node)
+		return False
+
+def traverse_dependencies(config: MakeDataConfig, edge: ProjectEdge, graph: ProjectGraph) -> None:
+	for dependency in config.iterate_dependencies():
+		edge = graph.obtain_edge(dependency)
+		if isinstance(dependency, MakeDataConfig):
+			traverse_dependencies(dependency, edge, graph)
+
+def resolve_dependencies(edge: ProjectEdge, graph: ProjectGraph) -> MutableSet[ProjectEdge]:
+	edge_unresolved_artifacts: MutableSet[ProjectEdge] = set()
+	unresolved_artifacts: MutableSet[ProjectEdge] = set()
+	for dependency in edge.dependencies:
+		if not isinstance(dependency.project, MakeDataConfig):
+			assert dependency.artifact
+			dependency.artifact.fetch()
+			project = dependency.artifact.as_project()
+			# Ignoring unresolved projects intentionally, otherwise artifact
+			# itself can throw an error if resolving required.
+			if not project:
+				edge_unresolved_artifacts.add(dependency)
+				continue
+			dependency.project = project
+			traverse_dependencies(project, dependency, graph)
+		unresolved_artifacts.update(resolve_dependencies(dependency, graph))
+	unresolved_artifacts.update(edge_unresolved_artifacts)
+	# Remove unresolved edge artifacts from graph...
+	return unresolved_artifacts
 
 def run(argv: Optional[list[str]] = None):
 	if not argv or len(argv) == 0:
@@ -56,6 +146,11 @@ def run(argv: Optional[list[str]] = None):
 	except StopIteration:
 		debug("* No tasks to execute.")
 		exit(0)
+
+	from . import GLOBALS
+	graph = ProjectGraph(GLOBALS.MAKE_CONFIG)
+	traverse_dependencies(GLOBALS.MAKE_CONFIG, graph.root, graph)
+	edges = resolve_dependencies(graph.root, graph)
 
 	targets, tasks = tee(targets)
 	while True:
