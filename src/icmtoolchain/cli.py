@@ -3,7 +3,7 @@ from itertools import tee
 from typing import TYPE_CHECKING, MutableSequence, MutableSet, Optional, Union
 
 from .language import MakeDataConfig
-from .shell import pretty_print, pretty_print_attention
+from .shell import pretty_print
 
 if TYPE_CHECKING:
 	from .project_manager import Artifact
@@ -32,7 +32,8 @@ class ProjectEdge:
 
 	def __init__(self, project: Union[MakeDataConfig, 'Artifact']):
 		self.project = project
-		from .language import Artifact
+		if not TYPE_CHECKING:
+			from .project_manager import Artifact
 		if isinstance(project, Artifact):
 			self.artifact = project
 		self.dependencies = []
@@ -52,11 +53,33 @@ class ProjectGraph(dict[Union[MakeDataConfig, 'Artifact'], ProjectEdge]):
 			self[config] = ProjectEdge(config)
 		return self[config]
 
-	def obtain_project(self, node: ProjectEdge) -> Union[MakeDataConfig, 'Artifact']:
-		for config, subnode in self.items():
-			if node == subnode:
+	def obtain_project(self, edge: ProjectEdge) -> Union[MakeDataConfig, 'Artifact']:
+		for config, subedge in self.items():
+			if edge == subedge:
 				return config
-		raise ValueError(f"ProjectGraph#project_of: Unresolved edge {node.project}!")
+		raise ValueError(f"ProjectGraph#project_of: Unresolved edge {edge.project}!")
+
+	def remove_edge(self, edge: ProjectEdge, keep_unused: bool = False) -> None:
+		edge_key = None
+		for config, subedge in self.items():
+			if edge == subedge:
+				edge_key = config
+				break
+		if edge_key:
+			del self[edge_key]
+		for config, subedge in self.items():
+			if edge in subedge.dependencies:
+				subedge.dependencies.remove(edge)
+			if edge in subedge.references:
+				subedge.references.remove(edge)
+		if not keep_unused:
+			self.remove_unused_edges()
+
+	def remove_unused_edges(self, edge: Optional[ProjectEdge] = None) -> None:
+		dependencies = self.traverse_dependencies(edge)
+		for config, node in list(self.items()):
+			if node not in dependencies:
+				del self[config]
 
 	def find_dependencies(self, dependency: ProjectEdge) -> MutableSequence[ProjectEdge]:
 		dependencies = []
@@ -72,26 +95,43 @@ class ProjectGraph(dict[Union[MakeDataConfig, 'Artifact'], ProjectEdge]):
 				references.append(node)
 		return references
 
-	def has_cross_references(self, node: ProjectEdge, visited: Optional[MutableSequence[ProjectEdge]] = None) -> bool:
+	def traverse_dependencies(self, edge: Optional[ProjectEdge] = None) -> MutableSet[ProjectEdge]:
+		if not edge:
+			edge = self.root
+		edges = set()
+		edges.add(edge)
+		for dependency in edge.dependencies:
+			references = self.traverse_dependencies(dependency)
+			edges.update(references)
+		return edges
+
+	def get_cross_references(self, node: Optional[ProjectEdge] = None, visited: Optional[MutableSequence[ProjectEdge]] = None) -> Optional[MutableSet[tuple[ProjectEdge, ProjectEdge]]]:
+		if not node:
+			node = self.root
 		if not visited:
 			visited = list()
 		if node in visited:
-			pretty_print_attention(f"Circular dependency when traversing {visited[-1].project} -> {node.project}!")
-			return True
+			cross_references = set()
+			cross_references.add((visited[-1], node))
+			return cross_references
 		visited.append(node)
 		for dependency in node.dependencies:
-			if self.has_cross_references(dependency, visited):
-				return True
+			cross_references = self.get_cross_references(dependency, visited)
+			if cross_references:
+				return cross_references
 		visited.remove(node)
-		return False
 
-def traverse_dependencies(config: MakeDataConfig, edge: ProjectEdge, graph: ProjectGraph) -> None:
+def collect_dependencies(config: MakeDataConfig, graph: ProjectGraph, edge: Optional[ProjectEdge] = None) -> None:
+	if not edge:
+		edge = graph.root
 	for dependency in config.iterate_dependencies():
 		edge = graph.obtain_edge(dependency)
 		if isinstance(dependency, MakeDataConfig):
-			traverse_dependencies(dependency, edge, graph)
+			collect_dependencies(dependency, graph, edge)
 
-def resolve_dependencies(edge: ProjectEdge, graph: ProjectGraph) -> MutableSet[ProjectEdge]:
+def resolve_dependencies(graph: ProjectGraph, edge: Optional[ProjectEdge] = None) -> MutableSet[ProjectEdge]:
+	if not edge:
+		edge = graph.root
 	edge_unresolved_artifacts: MutableSet[ProjectEdge] = set()
 	unresolved_artifacts: MutableSet[ProjectEdge] = set()
 	for dependency in edge.dependencies:
@@ -105,10 +145,11 @@ def resolve_dependencies(edge: ProjectEdge, graph: ProjectGraph) -> MutableSet[P
 				edge_unresolved_artifacts.add(dependency)
 				continue
 			dependency.project = project
-			traverse_dependencies(project, dependency, graph)
-		unresolved_artifacts.update(resolve_dependencies(dependency, graph))
+			collect_dependencies(project, graph, dependency)
+		unresolved_artifacts.update(resolve_dependencies(graph, dependency))
 	unresolved_artifacts.update(edge_unresolved_artifacts)
-	# Remove unresolved edge artifacts from graph...
+	for artifact_edge in edge_unresolved_artifacts:
+		graph.remove_edge(artifact_edge)
 	return unresolved_artifacts
 
 def run(argv: Optional[list[str]] = None):
@@ -149,8 +190,8 @@ def run(argv: Optional[list[str]] = None):
 
 	from . import GLOBALS
 	graph = ProjectGraph(GLOBALS.MAKE_CONFIG)
-	traverse_dependencies(GLOBALS.MAKE_CONFIG, graph.root, graph)
-	edges = resolve_dependencies(graph.root, graph)
+	collect_dependencies(GLOBALS.MAKE_CONFIG, graph)
+	unresolved_artifacts = resolve_dependencies(graph)
 
 	targets, tasks = tee(targets)
 	while True:
