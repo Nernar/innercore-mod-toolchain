@@ -215,6 +215,39 @@ def run(argv: Optional[list[str]] = None):
 	startup_millis = time() - startup_millis
 	debug(f"* Tasks successfully completed in {startup_millis:.2f}s!")
 
+from .language import AbobaConfig
+
+project_config = AbobaConfig("1")
+graph = ProjectGraph(project_config)
+node1 = graph.obtain_edge(project_config)
+node2 = graph.obtain_edge(AbobaConfig("2"))
+node1.dependencies.append(node2)
+node3 = graph.obtain_edge(AbobaConfig("3"))
+node2.dependencies.append(node3)
+node4 = graph.obtain_edge(AbobaConfig("4"))
+node3.dependencies.append(node4)
+node4.dependencies.append(node2)
+node5 = graph.obtain_edge(AbobaConfig("5"))
+node1.dependencies.append(node5)
+node6 = graph.obtain_edge(AbobaConfig("6"))
+node5.dependencies.append(node6)
+node6.dependencies.append(node3)
+node7 = graph.obtain_edge(AbobaConfig("7"))
+node6.dependencies.append(node7)
+node8 = graph.obtain_edge(AbobaConfig("8"))
+node1.dependencies.append(node8)
+node6.dependencies.append(node8)
+
+print(f"Node 1: {graph.get_cross_references(node1)}")
+print(f"Node 2: {graph.get_cross_references(node2)}")
+print(f"Node 3: {graph.get_cross_references(node3)}")
+print(f"Node 4: {graph.get_cross_references(node4)}")
+print(f"Node 5: {graph.get_cross_references(node5)}")
+print(f"Node 6: {graph.get_cross_references(node6)}")
+print(f"Node 7: {graph.get_cross_references(node7)}")
+print(f"Node 8: {graph.get_cross_references(node8)}")
+print(f"Cross references: {graph.get_cross_references()}")
+
 def run_test():
 	import asyncio
 	from itertools import cycle
