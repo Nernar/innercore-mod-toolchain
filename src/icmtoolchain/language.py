@@ -415,3 +415,6 @@ class AbobaConfig(MakeDataConfig):
 
 	def iterate_assets(self) -> Iterable[MakeAssetData]:
 		return []
+
+	def __repr__(self) -> str:
+		return self.key

@@ -1,5 +1,6 @@
 import sys
-from itertools import tee
+from functools import cmp_to_key
+from itertools import chain, tee
 from typing import TYPE_CHECKING, MutableSequence, MutableSet, Optional, Union
 
 from .language import MakeDataConfig
@@ -39,6 +40,12 @@ class ProjectEdge:
 		self.dependencies = []
 		self.references = []
 
+	def __repr__(self) -> str:
+		return f"ProjectEdge(project={self.project}, dependencies=({', '.join(str(edge.project) for edge in self.dependencies)}), references=({', '.join(str(edge.project) for edge in self.references)}))"
+
+	def __str__(self) -> str:
+		return f"Project {self.project} ({len(self.dependencies)} dependencies)"
+
 class ProjectGraph(dict[Union[MakeDataConfig, 'Artifact'], ProjectEdge]):
 	def __init__(self, project: MakeDataConfig) -> None:
 		self.project = project
@@ -59,6 +66,23 @@ class ProjectGraph(dict[Union[MakeDataConfig, 'Artifact'], ProjectEdge]):
 				return config
 		raise ValueError(f"ProjectGraph#project_of: Unresolved edge {edge.project}!")
 
+	def depend_on(self, edge: ProjectEdge, dependency: ProjectEdge) -> None:
+		if not dependency in edge.dependencies:
+			edge.dependencies.append(dependency)
+		if not edge in dependency.references:
+			dependency.references.append(edge)
+
+	def undepend_on(self, edge: ProjectEdge, dependency: ProjectEdge, keep_unused: bool = False) -> None:
+		removed_something = False
+		if edge in dependency.references:
+			dependency.references.remove(edge)
+			removed_something = True
+		if dependency in edge.dependencies:
+			edge.dependencies.remove(dependency)
+			removed_something = True
+		if removed_something and not keep_unused:
+			self.remove_unused_edges()
+
 	def remove_edge(self, edge: ProjectEdge, keep_unused: bool = False) -> None:
 		edge_key = None
 		for config, subedge in self.items():
@@ -76,10 +100,43 @@ class ProjectGraph(dict[Union[MakeDataConfig, 'Artifact'], ProjectEdge]):
 			self.remove_unused_edges()
 
 	def remove_unused_edges(self, edge: Optional[ProjectEdge] = None) -> None:
-		dependencies = self.traverse_dependencies(edge)
+		dependencies = self.traverse_referenced_nodes(edge)
 		for config, node in list(self.items()):
 			if node not in dependencies:
 				del self[config]
+
+	def collect_dependencies(self, config: MakeDataConfig, parent: Optional[ProjectEdge] = None) -> None:
+		if not parent:
+			parent = self.root
+		for dependency in config.iterate_dependencies():
+			child = self.obtain_edge(dependency)
+			if isinstance(dependency, MakeDataConfig):
+				self.collect_dependencies(dependency, child)
+			self.depend_on(parent, child)
+
+	def resolve_dependencies(self, edge: Optional[ProjectEdge] = None, keep_unused: bool = False) -> MutableSet[ProjectEdge]:
+		if not edge:
+			edge = self.root
+		edge_unresolved_artifacts: MutableSet[ProjectEdge] = set()
+		unresolved_artifacts: MutableSet[ProjectEdge] = set()
+		for dependency in edge.dependencies:
+			if not isinstance(dependency.project, MakeDataConfig):
+				assert dependency.artifact
+				dependency.artifact.fetch()
+				project = dependency.artifact.as_project()
+				# Ignoring unresolved projects intentionally, otherwise artifact
+				# itself can throw an error if resolving required.
+				if not project:
+					edge_unresolved_artifacts.add(dependency)
+					continue
+				dependency.project = project
+				self.collect_dependencies(project, dependency)
+			unresolved_artifacts.update(self.resolve_dependencies(dependency))
+		unresolved_artifacts.update(edge_unresolved_artifacts)
+		if not keep_unused:
+			for artifact_edge in edge_unresolved_artifacts:
+				self.remove_edge(artifact_edge)
+		return unresolved_artifacts
 
 	def find_dependencies(self, dependency: ProjectEdge) -> MutableSequence[ProjectEdge]:
 		dependencies = []
@@ -95,62 +152,84 @@ class ProjectGraph(dict[Union[MakeDataConfig, 'Artifact'], ProjectEdge]):
 				references.append(node)
 		return references
 
-	def traverse_dependencies(self, edge: Optional[ProjectEdge] = None) -> MutableSet[ProjectEdge]:
+	def traverse_referenced_nodes(self, edge: Optional[ProjectEdge] = None) -> MutableSet[ProjectEdge]:
 		if not edge:
 			edge = self.root
 		edges = set()
 		edges.add(edge)
-		for dependency in edge.dependencies:
-			references = self.traverse_dependencies(dependency)
-			edges.update(references)
+		for reference in chain(edge.dependencies, edge.references):
+			nodes = self.traverse_referenced_nodes(reference)
+			edges.update(nodes)
 		return edges
+	
+	def traverse_priority_dependencies(self, edge: Optional[ProjectEdge] = None) -> MutableSequence[ProjectEdge]:
+		if not edge:
+			edge = self.root
+		def compare_dependencies(a: ProjectEdge, b: ProjectEdge) -> int:
+			# Number of dependencies is prioritized, fewer is better
+			da = len(a.dependencies)
+			db = len(b.dependencies)
+			if da < db:
+				return -1
+			elif da > db:
+				return 1
+			# Now references, more is better
+			ra = len(a.references)
+			rb = len(b.references)
+			if ra > rb:
+				return -1
+			elif ra < rb:
+				return 1
+			return 0
+		return sorted(self.values(), key=cmp_to_key(compare_dependencies))
 
-	def get_cross_references(self, node: Optional[ProjectEdge] = None, visited: Optional[MutableSequence[ProjectEdge]] = None) -> Optional[MutableSet[tuple[ProjectEdge, ProjectEdge]]]:
+	def traverse_dependencies(self, edge: Optional[ProjectEdge] = None) -> MutableSequence[ProjectEdge]:
+		dependencies = self.traverse_priority_dependencies(edge)
+		traversed_dependencies: MutableSequence[ProjectEdge] = []
+		unresolved_dependencies: MutableSequence[ProjectEdge] = []
+		index = 0
+		while index < len(dependencies):
+			reference = dependencies[index]
+			# All previously listed dependencies must satisfy reference
+			unresolved = False
+			for dependency in reference.dependencies:
+				if not dependency in traversed_dependencies:
+					unresolved = True
+					break
+			if unresolved:
+				unresolved_dependencies.append(reference)
+				dependencies.remove(reference)
+				continue
+			traversed_dependencies.append(reference)
+			# Now that dependency is resolved, we can make sure that there are references for following iterations
+			for dependency in reversed(unresolved_dependencies[:]):
+				# If there is no reference, dependency is still unresolved
+				if reference not in dependency.dependencies:
+					continue
+				unresolved = False
+				for requirement in dependency.dependencies:
+					if requirement not in traversed_dependencies:
+						unresolved = True
+						break
+				if not unresolved:
+					dependencies.insert(index + 1, dependency)
+					unresolved_dependencies.remove(dependency)
+			index += 1
+		return dependencies	
+
+	def get_cross_references(self, node: Optional[ProjectEdge] = None, visited: Optional[MutableSequence[ProjectEdge]] = None) -> Optional[tuple[ProjectEdge, ProjectEdge]]:
 		if not node:
 			node = self.root
 		if not visited:
 			visited = list()
 		if node in visited:
-			cross_references = set()
-			cross_references.add((visited[-1], node))
-			return cross_references
+			return (visited[-1], node)
 		visited.append(node)
 		for dependency in node.dependencies:
 			cross_references = self.get_cross_references(dependency, visited)
 			if cross_references:
 				return cross_references
 		visited.remove(node)
-
-def collect_dependencies(config: MakeDataConfig, graph: ProjectGraph, edge: Optional[ProjectEdge] = None) -> None:
-	if not edge:
-		edge = graph.root
-	for dependency in config.iterate_dependencies():
-		edge = graph.obtain_edge(dependency)
-		if isinstance(dependency, MakeDataConfig):
-			collect_dependencies(dependency, graph, edge)
-
-def resolve_dependencies(graph: ProjectGraph, edge: Optional[ProjectEdge] = None) -> MutableSet[ProjectEdge]:
-	if not edge:
-		edge = graph.root
-	edge_unresolved_artifacts: MutableSet[ProjectEdge] = set()
-	unresolved_artifacts: MutableSet[ProjectEdge] = set()
-	for dependency in edge.dependencies:
-		if not isinstance(dependency.project, MakeDataConfig):
-			assert dependency.artifact
-			dependency.artifact.fetch()
-			project = dependency.artifact.as_project()
-			# Ignoring unresolved projects intentionally, otherwise artifact
-			# itself can throw an error if resolving required.
-			if not project:
-				edge_unresolved_artifacts.add(dependency)
-				continue
-			dependency.project = project
-			collect_dependencies(project, graph, dependency)
-		unresolved_artifacts.update(resolve_dependencies(graph, dependency))
-	unresolved_artifacts.update(edge_unresolved_artifacts)
-	for artifact_edge in edge_unresolved_artifacts:
-		graph.remove_edge(artifact_edge)
-	return unresolved_artifacts
 
 def run(argv: Optional[list[str]] = None):
 	if not argv or len(argv) == 0:
@@ -190,8 +269,8 @@ def run(argv: Optional[list[str]] = None):
 
 	from . import GLOBALS
 	graph = ProjectGraph(GLOBALS.MAKE_CONFIG)
-	collect_dependencies(GLOBALS.MAKE_CONFIG, graph)
-	unresolved_artifacts = resolve_dependencies(graph)
+	graph.collect_dependencies(GLOBALS.MAKE_CONFIG)
+	unresolved_artifacts = graph.resolve_dependencies()
 
 	targets, tasks = tee(targets)
 	while True:
@@ -215,29 +294,33 @@ def run(argv: Optional[list[str]] = None):
 	startup_millis = time() - startup_millis
 	debug(f"* Tasks successfully completed in {startup_millis:.2f}s!")
 
+from random import random
+
 from .language import AbobaConfig
 
 project_config = AbobaConfig("1")
 graph = ProjectGraph(project_config)
 node1 = graph.obtain_edge(project_config)
 node2 = graph.obtain_edge(AbobaConfig("2"))
-node1.dependencies.append(node2)
+graph.depend_on(node1, node2)
 node3 = graph.obtain_edge(AbobaConfig("3"))
-node2.dependencies.append(node3)
+graph.depend_on(node2, node3)
 node4 = graph.obtain_edge(AbobaConfig("4"))
-node3.dependencies.append(node4)
-node4.dependencies.append(node2)
+graph.depend_on(node3, node4)
+if random() < 0.5:
+	graph.depend_on(node4, node2)
 node5 = graph.obtain_edge(AbobaConfig("5"))
-node1.dependencies.append(node5)
+graph.depend_on(node1, node5)
 node6 = graph.obtain_edge(AbobaConfig("6"))
-node5.dependencies.append(node6)
-node6.dependencies.append(node3)
+graph.depend_on(node5, node6)
+graph.depend_on(node6, node3)
 node7 = graph.obtain_edge(AbobaConfig("7"))
-node6.dependencies.append(node7)
+graph.depend_on(node6, node7)
 node8 = graph.obtain_edge(AbobaConfig("8"))
-node1.dependencies.append(node8)
-node6.dependencies.append(node8)
+graph.depend_on(node1, node8)
+graph.depend_on(node6, node8)
 
+print("Cross references")
 print(f"Node 1: {graph.get_cross_references(node1)}")
 print(f"Node 2: {graph.get_cross_references(node2)}")
 print(f"Node 3: {graph.get_cross_references(node3)}")
@@ -246,7 +329,8 @@ print(f"Node 5: {graph.get_cross_references(node5)}")
 print(f"Node 6: {graph.get_cross_references(node6)}")
 print(f"Node 7: {graph.get_cross_references(node7)}")
 print(f"Node 8: {graph.get_cross_references(node8)}")
-print(f"Cross references: {graph.get_cross_references()}")
+print(f"Looped by cross references? {'No' if not graph.get_cross_references() else 'Yes'}")
+print(f"Order: {', '.join([edge.project.key if isinstance(edge.project, AbobaConfig) else str(edge) for edge in graph.traverse_dependencies()])}")
 
 def run_test():
 	import asyncio
