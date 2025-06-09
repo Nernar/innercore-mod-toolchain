@@ -387,34 +387,3 @@ class MakeDataConfig(FileConfig, metaclass=ABCMeta):
 				continue
 			from . import GLOBALS
 			return config_type(config_file, defaults=GLOBALS.TOOLCHAIN_CONFIG)
-
-class AbobaConfig(MakeDataConfig):
-	def __init__(self, key: str) -> None:
-		from . import GLOBALS
-		if not isfile(GLOBALS.TOOLCHAIN_CONFIG.path):
-			from os import makedirs
-			from os.path import dirname
-			makedirs(dirname(GLOBALS.TOOLCHAIN_CONFIG.path))
-			with open(GLOBALS.TOOLCHAIN_CONFIG.path, "x") as file:
-				file.write("{}")
-		super().__init__(GLOBALS.TOOLCHAIN_CONFIG.path, GLOBALS.TOOLCHAIN_CONFIG)
-		self.key = key
-
-	def __hash__(self):
-		return hash(frozenset(self)) ^ hash(self.key)
-
-	@property
-	def is_pack(self) -> bool:
-		return False
-
-	def iterate_dependencies(self) -> Iterable[Union['MakeDataConfig', 'Artifact']]:
-		return []
-
-	def obtain_project_data(self) -> Optional[Union[MakeModData, MakePackData]]:
-		pass
-
-	def iterate_assets(self) -> Iterable[MakeAssetData]:
-		return []
-
-	def __repr__(self) -> str:
-		return self.key
