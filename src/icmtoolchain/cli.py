@@ -1,9 +1,9 @@
 import sys
 from itertools import tee
-from typing import Optional
+from typing import MutableSet, Optional
 
-from .project_manager import ProjectGraph
-from .shell import pretty_print
+from .project_manager import ProjectEdge, ProjectGraph
+from .shell import pretty_print, pretty_print_attention, pretty_print_failure
 
 
 def show_help():
@@ -21,6 +21,29 @@ def show_available_tasks():
 		if task.description:
 			pretty_print(": " + task.description, end="")
 		pretty_print()
+
+def show_unresolved_dependencies(dependencies: MutableSet[ProjectEdge]) -> None:
+	if not any(dependencies):
+		return
+	pretty_print_attention(f"We were unable to resolve following dependencies: {', '.join(str(dependency) for dependency in dependencies)}")
+
+def resolve_circular_references(graph: ProjectGraph) -> bool:
+	circular_reference = graph.find_circular_reference()
+	if not circular_reference:
+		return False
+	repr_circular_references = []
+	while circular_reference:
+		repr_circular_references.append(f"{circular_reference[0]} -> {circular_reference[1]}")
+		graph.undepend_on(circular_reference[0], circular_reference[1], keep_unused=True)
+		circular_reference = graph.find_circular_reference()
+	pretty_print_attention(f"Circular dependencies detected, make sure your projects are configured correctly: {', '.join(repr_circular_references)}.")
+	unused_edges = graph.remove_unused_edges()
+	if any(unused_edges):
+		repr_unused_edges = [f"{edge}" for edge in unused_edges]
+		pretty_print_failure(f"Following dependencies have been removed as there is no further connection in them to other projects: {', '.join(repr_unused_edges)}!")
+		from .utils import RuntimeCodeError
+		raise RuntimeCodeError(255, "Cannot build a project with unresolved dependencies!")
+	return True
 
 def run(argv: Optional[list[str]] = None):
 	if not argv or len(argv) == 0:
@@ -62,25 +85,32 @@ def run(argv: Optional[list[str]] = None):
 	graph = ProjectGraph(GLOBALS.MAKE_CONFIG)
 	graph.collect_dependencies(GLOBALS.MAKE_CONFIG)
 	unresolved_artifacts = graph.resolve_dependencies()
+	show_unresolved_dependencies(unresolved_artifacts)
+	resolve_circular_references(graph)
 
-	targets, tasks = tee(targets)
-	while True:
-		try:
-			callable = next(tasks)
-		except StopIteration:
-			break
-		else:
+	from .language import MakeDataConfig
+	for edge in graph.traverse_dependencies():
+		GLOBALS.shutdown_project()
+		assert isinstance(edge.project, MakeDataConfig)
+		GLOBALS.make_config = edge.project
+		targets, tasks = tee(targets)
+		while True:
 			try:
-				result = callable.callable()
-				if result != 0:
-					abort(f"* Task {callable.name} failed with result {result}.", code=result)
-			except BaseException as err:
-				if isinstance(err, SystemExit):
-					raise err
-				from .utils import RuntimeCodeError
-				if isinstance(err, RuntimeCodeError):
-					abort(f"* Task {callable.name} failed with error code #{err.code}: {err}")
-				abort(f"* Task {callable.name} failed with unexpected error!", cause=err)
+				callable = next(tasks)
+			except StopIteration:
+				break
+			else:
+				try:
+					result = callable.callable()
+					if result != 0:
+						abort(f"* Task {callable.name} failed with result {result}.", code=result)
+				except BaseException as err:
+					if isinstance(err, SystemExit):
+						raise err
+					from .utils import RuntimeCodeError
+					if isinstance(err, RuntimeCodeError):
+						abort(f"* Task {callable.name} failed with error code #{err.code}: {err}")
+					abort(f"* Task {callable.name} failed with unexpected error!", cause=err)
 
 	startup_millis = time() - startup_millis
 	debug(f"* Tasks successfully completed in {startup_millis:.2f}s!")
