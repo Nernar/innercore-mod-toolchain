@@ -7,7 +7,7 @@ from .language import (MakeAssetData, MakeDataConfig, MakeJavaData,
                        MakeModData, MakeNativeData, MakePackData,
                        MakePackGraphicsData, MakeResourceData, MakeScriptData,
                        MakeSharedObjectData)
-from .project_manager import Artifact
+from .project_graph import Artifact
 from .shell import pretty_print_attention
 from .utils import ensure_not_whitespace
 
@@ -77,7 +77,7 @@ class MakeConfig(MakeDataConfig):
 				yield artifact
 				continue
 			if not self.get_value("project.requiredDependencies", True) or isinstance(dependency, Config) and not dependency.get_value("required", True):
-				pretty_print_attention(f"Skipping unsatisfied depdendency {dependency!r}, since it is optional.")
+				pretty_print_attention(f"Skipping unsatisfied dependency {dependency!r}, since it is optional.")
 				continue
 			raise ValueError(f"Invalid dependency {dependency!r}, it should be relative project path, id or repository url!")
 

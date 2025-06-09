@@ -2,7 +2,7 @@ import sys
 from itertools import tee
 from typing import MutableSet, Optional
 
-from .project_manager import ProjectEdge, ProjectGraph
+from .project_graph import ProjectEdge, ProjectGraph
 from .shell import pretty_print, pretty_print_attention, pretty_print_failure
 
 

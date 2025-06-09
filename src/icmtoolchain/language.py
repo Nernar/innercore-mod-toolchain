@@ -11,7 +11,7 @@ from .shell import abort, warn
 from .utils import RuntimeCodeError, ensure_not_whitespace
 
 if TYPE_CHECKING:
-	from .project_manager import Artifact
+	from .project_graph import Artifact
 
 def get_language_directories(compile_type: str, language_config: Config, properties_merger: Optional[Callable] = None, make_config: Optional['MakeDataConfig'] = None) -> Dict[str, Config]:
 	if not make_config:

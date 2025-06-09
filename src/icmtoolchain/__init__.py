@@ -130,7 +130,7 @@ class Globals:
 	@property
 	def PROJECT_MANAGER(self):
 		if not hasattr(self, "project_manager"):
-			from .project_manager import ProjectManager
+			from .project_graph import ProjectManager
 			self.project_manager = ProjectManager()
 		return self.project_manager
 
