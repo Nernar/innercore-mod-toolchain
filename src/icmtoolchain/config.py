@@ -1,3 +1,4 @@
+from itertools import chain
 from json import JSONDecodeError
 from json import dump as dump_json
 from json import load as load_json
@@ -37,7 +38,7 @@ class Config(dict[str, Any]):
 		try:
 			return self.get_value_unsafe(key)
 		except KeyError:
-			if self.defaults is not None and allow_prototype:
+			if allow_prototype and self.defaults is not None:
 				return self.defaults.get_value(key, fallback)
 		return fallback() if callable(fallback) else fallback
 
@@ -68,7 +69,10 @@ class Config(dict[str, Any]):
 		value = self.get_value(key, allow_prototype=allow_prototype)
 		if isinstance(value, result_type):
 			return value
-		value = self.replace_value(value)
+		prototype_value = None
+		if self.defaults is not None:
+			prototype_value = self.defaults.get_value(key)
+		value = self.replace_value(value, prototype_value)
 		requires_implace = isinstance(value, result_type)
 		if not requires_implace:
 			if fallback is not None:
@@ -80,10 +84,24 @@ class Config(dict[str, Any]):
 		return value
 
 	def obtain_config(self, key: str, *, implace_fallback: bool = False, allow_prototype: bool = True) -> 'Config':
-		return self.obtain(key, Config, implace_fallback=implace_fallback, allow_prototype=allow_prototype)
+		config = self.obtain(key, Config, implace_fallback=implace_fallback, allow_prototype=allow_prototype)
+		if allow_prototype and self.defaults is not None:
+			# Ensure that fallbacks/merge strategies are passed to subconfigs.
+			prototype_config = self.defaults.obtain(key, Config, implace_fallback=False)
+			if prototype_config is not None and prototype_config != config.defaults:
+				if config.defaults is not None:
+					prototype_config.defaults = config.defaults
+				config.defaults = prototype_config
+		return config
 
 	def obtain_list(self, key: str, *, implace_fallback: bool = False, allow_prototype: bool = True) -> MutableSequence:
-		return self.obtain(key, MutableSequence, fallback=lambda: list(), implace_fallback=implace_fallback, allow_prototype=allow_prototype)
+		sequence = self.obtain(key, MutableSequence, fallback=lambda: list(), implace_fallback=implace_fallback, allow_prototype=allow_prototype)
+		if allow_prototype and self.defaults is not None:
+			# Merging lists, maybe creating a new one is sometimes not convenient, then you should use allow_prototype=False.
+			prototype_sequence = self.defaults.obtain_list(key, implace_fallback=False)
+			if len(prototype_sequence) > 0:
+				return list(chain(sequence, prototype_sequence))
+		return sequence
 
 	def set_value(self, key: str, value: Any, strip_none_from_lists: bool = False) -> None:
 		self.set_value_unsafe(key, value, replace_mismatched_types=True, strip_none_from_lists=strip_none_from_lists)
@@ -92,7 +110,10 @@ class Config(dict[str, Any]):
 		if not self.is_supported_value(value):
 			raise ValueError(f"Config value should be primitive, array or nested config, got {key!r}: {type(value)}!")
 		if not "." in key:
-			super().__setitem__(key, self.replace_value(value, strip_none_from_lists=strip_none_from_lists))
+			fallback = None
+			if self.defaults is not None:
+				fallback = self.defaults.get_value(key)
+			super().__setitem__(key, self.replace_value(value, fallback, strip_none_from_lists=strip_none_from_lists))
 			return
 
 		namespace_keys = key.partition(".")
@@ -101,21 +122,25 @@ class Config(dict[str, Any]):
 			if not replace_mismatched_types:
 				raise ValueError(f"{key!r}: {namespace}")
 			namespace = Config()
+			if self.defaults is not None:
+				namespace.defaults=self.defaults.obtain_config(key, implace_fallback=False)
 			super().__setitem__(namespace_keys[0], namespace)
 
 		namespace.set_value_unsafe(namespace_keys[2], value, replace_mismatched_types=replace_mismatched_types)
 
-	def replace_value(self, obj: Any, strip_none_from_lists: bool = False) -> Any:
+	def replace_value(self, obj: Any, fallback: Any = None, strip_none_from_lists: bool = False) -> Any:
 		if not self.is_supported_value(obj):
 			return None
 		if isinstance(obj, MutableMapping) and not isinstance(obj, Config):
-			return Config(map=obj)
+			obj = Config(obj)
 		if isinstance(obj, MutableSequence):
 			for offset, value in enumerate(obj):
 				obj[offset] = self.replace_value(value, strip_none_from_lists=strip_none_from_lists)
 			if strip_none_from_lists:
 				while None in obj:
 					obj.remove(None)
+		if isinstance(obj, Config) and self.defaults is not None and isinstance(fallback, Config):
+			obj.defaults = fallback
 		return obj
 
 	@override
@@ -127,8 +152,11 @@ class Config(dict[str, Any]):
 			extend_lists = True
 
 		for key, value in config.items():
+			fallback = None
+			if self.defaults is not None:
+				fallback = self.defaults.get_value(key)
 			if not key in self:
-				super().__setitem__(key, self.replace_value(value, strip_none_from_lists=strip_none_from_lists))
+				super().__setitem__(key, self.replace_value(value, fallback, strip_none_from_lists=strip_none_from_lists))
 				continue
 
 			current_value = super().__getitem__(key)
@@ -143,7 +171,7 @@ class Config(dict[str, Any]):
 						current_value.append(obj)
 				continue
 
-			super().__setitem__(key, self.replace_value(value, strip_none_from_lists=strip_none_from_lists))
+			super().__setitem__(key, self.replace_value(value, fallback, strip_none_from_lists=strip_none_from_lists))
 
 	def delete_value(self, key: str, *, remove_when_empty: bool = True) -> None:
 		self.delete_value_unsafe(key, remove_mismatched_types=True, remove_when_empty=remove_when_empty)
