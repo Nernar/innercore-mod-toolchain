@@ -34,6 +34,9 @@ class Config(dict[str, Any]):
 			or isinstance(value, MutableSequence) \
 			or isinstance(value, MutableMapping)
 
+	def get_dict_value(self, key: str) -> Any:
+		return super().__getitem__(key)
+
 	def get_value(self, key: str, fallback: Any = None, *, allow_prototype: bool = True) -> Any:
 		try:
 			return self.get_value_unsafe(key)
@@ -44,10 +47,10 @@ class Config(dict[str, Any]):
 
 	def get_value_unsafe(self, key: str) -> Any:
 		if not "." in key:
-			return super().__getitem__(key)
+			return self.get_dict_value(key)
 
 		namespace_keys = key.partition(".")
-		namespace = super().__getitem__(namespace_keys[0])
+		namespace = self.get_dict_value(namespace_keys[0])
 		if not isinstance(namespace, Config):
 			raise KeyError(key)
 
@@ -103,6 +106,9 @@ class Config(dict[str, Any]):
 				return list(chain(sequence, prototype_sequence))
 		return sequence
 
+	def set_dict_value(self, key: str, value: Any) -> None:
+		super().__setitem__(key, value)
+
 	def set_value(self, key: str, value: Any, strip_none_from_lists: bool = False) -> None:
 		self.set_value_unsafe(key, value, replace_mismatched_types=True, strip_none_from_lists=strip_none_from_lists)
 
@@ -113,18 +119,18 @@ class Config(dict[str, Any]):
 			fallback = None
 			if self.defaults is not None:
 				fallback = self.defaults.get_value(key)
-			super().__setitem__(key, self.replace_value(value, fallback, strip_none_from_lists=strip_none_from_lists))
+			self.set_dict_value(key, self.replace_value(value, fallback, strip_none_from_lists=strip_none_from_lists))
 			return
 
 		namespace_keys = key.partition(".")
-		namespace = super().__getitem__(namespace_keys[0])
+		namespace = self.get_dict_value(namespace_keys[0])
 		if not isinstance(namespace, Config):
 			if not replace_mismatched_types:
 				raise ValueError(f"{key!r}: {namespace}")
 			namespace = Config()
 			if self.defaults is not None:
 				namespace.defaults=self.defaults.obtain_config(key, implace_fallback=False)
-			super().__setitem__(namespace_keys[0], namespace)
+			self.set_dict_value(namespace_keys[0], namespace)
 
 		namespace.set_value_unsafe(namespace_keys[2], value, replace_mismatched_types=replace_mismatched_types)
 
@@ -156,10 +162,10 @@ class Config(dict[str, Any]):
 			if self.defaults is not None:
 				fallback = self.defaults.get_value(key)
 			if not key in self:
-				super().__setitem__(key, self.replace_value(value, fallback, strip_none_from_lists=strip_none_from_lists))
+				self.set_dict_value(key, self.replace_value(value, fallback, strip_none_from_lists=strip_none_from_lists))
 				continue
 
-			current_value = super().__getitem__(key)
+			current_value = self.get_dict_value(key)
 			if not replace_configs and isinstance(value, Config) and isinstance(current_value, Config):
 				current_value.merge_config(value, extend_lists=extend_lists, strip_none_from_lists=strip_none_from_lists)
 				continue
@@ -171,21 +177,24 @@ class Config(dict[str, Any]):
 						current_value.append(obj)
 				continue
 
-			super().__setitem__(key, self.replace_value(value, fallback, strip_none_from_lists=strip_none_from_lists))
+			self.set_dict_value(key, self.replace_value(value, fallback, strip_none_from_lists=strip_none_from_lists))
+
+	def delete_dict_value(self, key: str) -> None:
+		super().__delitem__(key)
 
 	def delete_value(self, key: str, *, remove_when_empty: bool = True) -> None:
 		self.delete_value_unsafe(key, remove_mismatched_types=True, remove_when_empty=remove_when_empty)
 
 	def delete_value_unsafe(self, key: str, *, remove_mismatched_types: bool = False, remove_when_empty: bool = True) -> None:
 		if not "." in key:
-			super().__delitem__(key)
+			self.delete_dict_value(key)
 			return
 
 		namespace_keys = key.partition(".")
-		namespace = super().__getitem__(namespace_keys[0])
+		namespace = self.get_dict_value(namespace_keys[0])
 		if not isinstance(namespace, Config):
 			if remove_mismatched_types:
-				super().__delitem__(key)
+				self.delete_dict_value(key)
 				return
 			raise ValueError(f"{key!r}: {namespace}")
 
@@ -193,7 +202,7 @@ class Config(dict[str, Any]):
 		if remove_when_empty:
 			for _ in namespace:
 				return
-			super().__delitem__(key)
+			self.delete_dict_value(key)
 
 	@override
 	def __delitem__(self, key: str, /) -> None:
