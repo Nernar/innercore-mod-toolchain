@@ -1,8 +1,9 @@
-from abc import ABCMeta, abstractmethod
-from functools import lru_cache
-from typing import Dict, MutableSequence, MutableSet, Optional
+from abc import ABCMeta
+from itertools import chain
+from typing import (Any, Dict, MutableMapping, MutableSequence, MutableSet,
+                    Optional)
 
-from .config import Config
+from .config import Config, ConfigSupportsKeysAndGetItem
 from .utils import ensure_not_whitespace
 
 
@@ -95,10 +96,28 @@ class RuleSetHolder(metaclass=ABCMeta):
 	def remove_rules(self, *rules: str) -> None:
 		self.rule_set.remove_rules(self.properties, *rules)
 
-@lru_cache(maxsize=4096)
-def get_rule_set_config(type: Optional[type['Config']]):
-	if not type:
-		type = Config
-	class RuleSetConfig(type, RuleSetHolder):
-		pass
-	return RuleSetConfig
+class RuleSetConfig(Config):
+	def __init__(self, map: Optional[ConfigSupportsKeysAndGetItem] = None, defaults: Optional[Config] = None, overrides: Optional[Config] = None):
+		super().__init__(map=map, defaults=defaults)
+		self.overrides = overrides
+
+	def get_dict_value(self, key: str) -> Any:
+		value = super().get_dict_value(key)
+		if not self.overrides or not key in self.overrides:
+			return value
+		overriden_value = self.overrides.get_dict_value(key)
+		if isinstance(overriden_value, MutableMapping):
+			if not isinstance(value, MutableMapping):
+				return overriden_value
+			if isinstance(value, RuleSetConfig):
+				return value
+			if not isinstance(overriden_value, Config):
+				overriden_value = Config(overriden_value)
+			config = RuleSetConfig(map=value, overrides=overriden_value)
+			self.set_value_unsafe(key, config)
+			return config
+		if isinstance(overriden_value, MutableSequence):
+			if not isinstance(value, MutableSequence):
+				return overriden_value
+			return list(chain(overriden_value, value))
+		return overriden_value

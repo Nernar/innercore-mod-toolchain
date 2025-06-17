@@ -153,7 +153,7 @@ class Config(dict[str, Any]):
 	def __setitem__(self, key: str, value: Any, /) -> None:
 		self.set_value_unsafe(key, value, replace_mismatched_types=True)
 
-	def merge_config(self, config: Union[dict, 'Config'], *, replace_configs: bool = False, exclusive_lists: bool = False, extend_lists: bool = False, strip_none_from_lists: bool = False) -> None:
+	def merge_config(self, config: Union[MutableMapping, 'Config'], *, replace_configs: bool = False, exclusive_lists: bool = False, extend_lists: bool = False, strip_none_from_lists: bool = False) -> None:
 		if exclusive_lists:
 			extend_lists = True
 
@@ -208,7 +208,7 @@ class Config(dict[str, Any]):
 	def __delitem__(self, key: str, /) -> None:
 		self.delete_value_unsafe(key, remove_mismatched_types=True)
 
-	def as_json(self, *, strip_none: bool = True) -> dict:
+	def as_json(self, *, strip_none: bool = True) -> MutableMapping:
 		json = {}
 		for key, value in self.items():
 			if not isinstance(value, Config):
