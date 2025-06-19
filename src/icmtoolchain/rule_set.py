@@ -90,11 +90,16 @@ class RuleSetHolder(metaclass=ABCMeta):
 	def is_relevant_configuration(self, value_set: str, allow_unresolved_properties: bool = True) -> bool:
 		return self.rule_set.is_relevant(self.properties, value_set, allow_unresolved_properties=allow_unresolved_properties)
 
+	def update_properties(self) -> None:
+		pass
+
 	def bisect_properties(self, *properties: str) -> None:
 		self.rule_set.bisect_values(self.properties, *properties)
+		self.update_properties()
 
 	def remove_rules(self, *rules: str) -> None:
 		self.rule_set.remove_rules(self.properties, *rules)
+		self.update_properties()
 
 class RuleSetConfig(Config):
 	def __init__(self, map: Optional[ConfigSupportsKeysAndGetItem] = None, defaults: Optional[Config] = None, overrides: Optional[Config] = None):

@@ -1,6 +1,7 @@
 from functools import cmp_to_key
 from os.path import basename, isfile, join, splitext
-from typing import Any, Iterable, MutableSequence, Optional, Union, override
+from typing import (Any, Iterable, MutableMapping, MutableSequence, Optional,
+                    Union, override)
 
 from .config import Config, FileConfig
 from .language import (MakeAssetData, MakeDataConfig, MakeJavaData,
@@ -46,6 +47,21 @@ class MakeConfig(MakeDataConfig):
 		if save_then and changes:
 			config.save_as_file()
 		return changes
+
+	@override
+	def update_properties(self) -> None:
+		configurations = self.get_value("configurations")
+		if not isinstance(configurations, MutableMapping):
+			self.overrides = None
+			return
+		overrides = None
+		for value_set, configuration in configurations.items():
+			if not self.is_relevant_configuration(value_set) or not isinstance(configuration, MutableMapping):
+				continue
+			if overrides is None:
+				overrides = Config()
+			overrides.merge_config(configuration)
+		self.overrides = overrides
 
 	@property
 	@override

@@ -7,6 +7,7 @@ from typing import (TYPE_CHECKING, Any, Callable, Dict, Final, Iterable,
 
 from .config import Config, FileConfig
 from .output_directory import expand_paths
+from .rule_set import RuleSet, RuleSetConfig, RuleSetHolder
 from .shell import abort, warn
 from .utils import RuntimeCodeError, ensure_not_whitespace
 
@@ -142,16 +143,18 @@ class MakeAssetData:
 
 AVAILABLE_DATA_CONFIGS: Dict[Union[str, Callable[[str], str]], type['MakeDataConfig']] = {}
 
-class MakeDataConfig(FileConfig, metaclass=ABCMeta):
+class MakeDataConfig(RuleSetConfig, FileConfig, RuleSetHolder, metaclass=ABCMeta):
 	defaults: FileConfig
 	current_project: Final[str]
 	project_unique_name: Final[str]
 
-	def __init__(self, path: str, defaults: FileConfig) -> None:
+	def __init__(self, path: str, defaults: FileConfig, rule_set: Optional[RuleSet] = None) -> None:
 		if not isfile(path):
 			abort(f"Not found {basename(path)!r}, are you sure that selected project exists?")
+		RuleSetConfig.__init__(self)
 		self.current_project = dirname(abspath(path))
-		super().__init__(path, defaults, raise_non_existing=True)
+		FileConfig.__init__(self, path, defaults, raise_non_existing=True)
+		RuleSetHolder.__init__(self, rule_set=rule_set)
 		from .output_directory import unique_folder_name
 		self.project_unique_name = unique_folder_name(self.directory)
 
