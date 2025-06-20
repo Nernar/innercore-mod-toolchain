@@ -7,7 +7,6 @@ from typing import MutableMapping
 from . import GLOBALS
 from .config import FileConfig
 from .language import MakeModData, MakePackData
-from .make_config import MakeConfig
 from .output_directory import expand_paths
 from .shell import debug, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory,

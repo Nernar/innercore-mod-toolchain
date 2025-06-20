@@ -114,7 +114,7 @@ class BuildConfig(MakeDataConfig):
 	@property
 	@override
 	def supports_native(self) -> bool:
-		return False
+		return True
 
 	@override
 	def iterate_native(self, defaults: Optional[Config] = None) -> Iterable[MakeNativeData]:
@@ -186,4 +186,4 @@ class BuildConfig(MakeDataConfig):
 	@override
 	def iterate_assets(self) -> Iterable[MakeAssetData]:
 		# TODO: Probably do something like resource copying, probably keep them in place...
-		return []
+		...

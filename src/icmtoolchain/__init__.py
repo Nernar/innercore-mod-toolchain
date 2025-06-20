@@ -238,6 +238,8 @@ PROPERTIES = Config()
 from .build_config import BuildConfig
 from .language import MakeDataConfig
 from .make_config import MakeConfig
+from .modpack_config import ModpackConfig
 
 MakeDataConfig.register("make.json", MakeConfig)
+MakeDataConfig.register("modpack.json", ModpackConfig)
 MakeDataConfig.register("build.config", BuildConfig)

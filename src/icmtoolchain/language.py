@@ -80,6 +80,16 @@ class MakePackData:
 	manifest: MutableMapping[str, Any] = field(default_factory=Config)
 
 @dataclass
+class MakeModpackData:
+	name: str
+	displayed_name: Union[MutableMapping[str, str], str]
+	author: Union[MutableMapping[str, str], str]
+	version_name: Union[MutableMapping[str, str], str] = "1.0"
+	version_code: int = 1
+	description: Union[MutableMapping[str, str], str] = ""
+	icon: Optional[str] = "pack_icon.png"
+
+@dataclass
 class MakeScriptData:
 	relative_path: str
 	output_path: str
@@ -181,12 +191,12 @@ class MakeDataConfig(RuleSetConfig, FileConfig, RuleSetHolder, metaclass=ABCMeta
 		...
 
 	@abstractmethod
-	def obtain_project_data(self) -> Optional[Union[MakeModData, MakePackData]]:
+	def obtain_project_data(self) -> Optional[Any]:
 		"""Basic data describing this config and project as a whole. They should be provided in any case.
 		If there is no value, no built-in startup configurations are created.
 
 		Returns:
-			Optional[Union[MakeModData, MakePackData]]: optional project data on which manifest is based
+			Optional[Any]: optional project data on which manifest is based
 		"""
 		...
 
@@ -206,23 +216,44 @@ class MakeDataConfig(RuleSetConfig, FileConfig, RuleSetHolder, metaclass=ABCMeta
 			icon=icon
 		)
 
+	def shortcodes_mapping(self, mapping: Union[MutableMapping[str, str], str]) -> Union[MutableMapping[str, str], str]:
+		from .utils import shortcodes
+		if isinstance(mapping, MutableMapping):
+			for key, value in mapping.items():
+				mapping[key] = shortcodes(value)
+		elif isinstance(mapping, str):
+			return shortcodes(mapping)
+		return mapping
+
 	def obtain_pack_data(self, manifest: Config) -> MakePackData:
 		name = manifest.get_value("pack") or ""
 		version = manifest.get_value("packVersion") or ""
 		description = manifest.get_value("description") or ""
 
 		from .utils import shortcodes
-		if isinstance(description, MutableMapping):
-			for key, value in description.items():
-				description[key] = shortcodes(value)
-		elif isinstance(description, str):
-			description = shortcodes(description)
-
 		return MakePackData(
 			name=shortcodes(name),
 			version=shortcodes(version),
-			description=description,
+			description=self.shortcodes_mapping(description),
 			manifest=manifest
+		)
+
+	def obtain_modpack_data(self, manifest: Config) -> MakeModpackData:
+		name = manifest.get_value("packName", lambda: manifest.get_value("name")) or ""
+		displayed_name = manifest.get_value("displayedName") or ""
+		version_name = manifest.get_value("versionName") or ""
+		version_code = manifest.get_value("versionCode", 1)
+		author = manifest.get_value("author") or ""
+		description = manifest.get_value("description") or ""
+
+		from .utils import shortcodes
+		return MakeModpackData(
+			name=shortcodes(name),
+			displayed_name=self.shortcodes_mapping(displayed_name),
+			author=self.shortcodes_mapping(author),
+			version_name=self.shortcodes_mapping(version_name),
+			version_code=version_code,
+			description=self.shortcodes_mapping(description)
 		)
 
 	@property

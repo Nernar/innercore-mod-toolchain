@@ -68,6 +68,7 @@ class MakeConfig(MakeDataConfig):
 	def is_pack(self) -> bool:
 		return "manifest" in self
 
+	@override
 	def iterate_dependencies(self) -> Iterable[Union[MakeDataConfig, Artifact]]:
 		dependencies = self.obtain_list("dependencies")
 		for dependency in dependencies:
