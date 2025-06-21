@@ -44,6 +44,19 @@ class RuleSet:
 				if value == rule_value:
 					return rule
 
+	def contains_rules(self, properties: MutableSequence[str], *rules: str) -> bool:
+		for rule in rules:
+			if not rule in self.rules:
+				return False
+			value_resolved = False
+			for rule_value in self.rules[rule]:
+				if rule_value in properties:
+					value_resolved = True
+					break
+			if not value_resolved:
+				return False
+		return True
+
 	def bisect_values(self, properties: MutableSequence[str], *values: str) -> None:
 		for value in values:
 			rule = self.rule_of(value)
@@ -97,6 +110,9 @@ class RuleSetHolder(metaclass=ABCMeta):
 		self.rule_set.bisect_values(self.properties, *properties)
 		self.update_properties()
 
+	def contains_rules(self, *rules: str) -> bool:
+		return self.rule_set.contains_rules(self.properties, *rules)
+
 	def remove_rules(self, *rules: str) -> None:
 		self.rule_set.remove_rules(self.properties, *rules)
 		self.update_properties()
@@ -110,6 +126,7 @@ class RuleSetConfig(Config):
 		value = super().get_dict_value(key)
 		if not self.overrides or not key in self.overrides:
 			return value
+
 		overriden_value = self.overrides.get_dict_value(key)
 		if isinstance(overriden_value, MutableMapping):
 			if not isinstance(value, MutableMapping):
@@ -121,6 +138,7 @@ class RuleSetConfig(Config):
 			config = RuleSetConfig(map=value, overrides=overriden_value)
 			self.set_value_unsafe(key, config)
 			return config
+
 		if isinstance(overriden_value, MutableSequence):
 			if not isinstance(value, MutableSequence):
 				return overriden_value
