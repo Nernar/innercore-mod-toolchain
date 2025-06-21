@@ -3,7 +3,8 @@ from itertools import tee
 from typing import MutableSet, Optional
 
 from .project_graph import ProjectEdge, ProjectGraph
-from .shell import pretty_print, pretty_print_attention, pretty_print_failure
+from .shell import (abort, attention, failure, pretty_error, pretty_print,
+                    pretty_warn, success)
 
 
 def show_help():
@@ -25,7 +26,7 @@ def show_available_tasks():
 def show_unresolved_dependencies(dependencies: MutableSet[ProjectEdge]) -> None:
 	if not any(dependencies):
 		return
-	pretty_print_attention(f"We were unable to resolve following dependencies: {', '.join(str(dependency) for dependency in dependencies)}")
+	attention(f"We were unable to resolve following dependencies: {', '.join(str(dependency) for dependency in dependencies)}")
 
 def resolve_circular_references(graph: ProjectGraph) -> bool:
 	circular_reference = graph.find_circular_reference()
@@ -36,11 +37,11 @@ def resolve_circular_references(graph: ProjectGraph) -> bool:
 		repr_circular_references.append(f"{circular_reference[0]} -> {circular_reference[1]}")
 		graph.undepend_on(circular_reference[0], circular_reference[1], keep_unused=True)
 		circular_reference = graph.find_circular_reference()
-	pretty_print_attention(f"Circular dependencies detected, make sure your projects are configured correctly: {', '.join(repr_circular_references)}.")
+	attention(f"Circular dependencies detected, make sure your projects are configured correctly: {', '.join(repr_circular_references)}.")
 	unused_edges = graph.remove_unused_edges()
 	if any(unused_edges):
 		repr_unused_edges = [f"{edge}" for edge in unused_edges]
-		pretty_print_failure(f"Following dependencies have been removed as there is no further connection in them to other projects: {', '.join(repr_unused_edges)}!")
+		failure(f"Following dependencies have been removed as there is no further connection in them to other projects: {', '.join(repr_unused_edges)}!")
 		from .utils import RuntimeCodeError
 		raise RuntimeCodeError(255, "Cannot build a project with unresolved dependencies!")
 	return True
@@ -63,13 +64,12 @@ def run(argv: Optional[list[str]] = None):
 	argv = argv[1:]
 
 	from .parser import apply_environment_properties, parse_arguments
-	from .shell import abort, debug, error, warn
 	from .task import TASKS
 
 	try:
-		targets = parse_arguments(argv, TASKS, lambda name, target, callables: warn(f"* No such task: {name}."))
+		targets = parse_arguments(argv, TASKS, lambda name, target, callables: attention(f"No such task: {name}."))
 	except (TypeError, ValueError) as err:
-		error(" ".join(argv))
+		pretty_error(" ".join(argv))
 		abort(cause=err)
 
 	apply_environment_properties()
@@ -78,7 +78,7 @@ def run(argv: Optional[list[str]] = None):
 	try:
 		next(has_anything)
 	except StopIteration:
-		debug("* No tasks to execute.")
+		attention("No tasks to execute.")
 		exit(0)
 
 	from . import GLOBALS
@@ -103,17 +103,17 @@ def run(argv: Optional[list[str]] = None):
 				try:
 					result = callable.callable()
 					if result != 0:
-						abort(f"* Task {callable.name} failed with result {result}.", code=result)
+						abort(f"Task {callable.name} failed with result {result}.", code=result)
 				except BaseException as err:
 					if isinstance(err, SystemExit):
 						raise err
 					from .utils import RuntimeCodeError
 					if isinstance(err, RuntimeCodeError):
-						abort(f"* Task {callable.name} failed with error code #{err.code}: {err}")
-					abort(f"* Task {callable.name} failed with unexpected error!", cause=err)
+						abort(f"Task {callable.name} failed with error code #{err.code}: {err}")
+					abort(f"Task {callable.name} failed with unexpected error!", cause=err)
 
 	startup_millis = time() - startup_millis
-	debug(f"* Tasks successfully completed in {startup_millis:.2f}s!")
+	success(f"Tasks successfully completed in {startup_millis:.2f}s!")
 
 def run_test():
 	import asyncio
@@ -130,8 +130,8 @@ def run_test():
 	from prompt_toolkit.widgets import Button, HorizontalLine, TextArea
 
 	from .shell import (Debugger, Editable, Interactable, Progress, Selectable,
-	                    debug, error, get_toolchain_style, info, pretty_print,
-	                    warn)
+	                    get_toolchain_style, pretty_debug, pretty_error,
+	                    pretty_info, pretty_print)
 
 	class AnimatedTask:
 		def __init__(self, project, messages, frames, speed, metadatas = None):
@@ -222,10 +222,10 @@ def run_test():
 	def do_action():
 		# XXX: patch_stdout is more than 3x time slower, so (run_)in_terminal
 		# is preffered (print_formatted_text uses same function)
-		debug("[DEBUG] aboba")
-		info("[INFO] aboba")
-		warn("[WARN] aboba")
-		error("[ERROR] aboba")
+		pretty_debug("[DEBUG] aboba")
+		pretty_info("[INFO] aboba")
+		pretty_warn("[WARN] aboba")
+		pretty_error("[ERROR] aboba")
 		pretty_print("Wow! You are wonderful!".center(55), style="class:selection")
 
 	contents = [

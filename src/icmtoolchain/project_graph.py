@@ -10,7 +10,7 @@ from typing import (Any, Callable, Dict, Final, List, MutableSequence,
 from . import GLOBALS
 from .config import Config
 from .language import MakeDataConfig
-from .shell import abort, confirm_prompt, pretty_print, warn
+from .shell import abort, attention, confirm_prompt, pretty_print
 from .utils import ensure_not_whitespace, remove_tree
 
 AVAILABLE_ARTIFACTS: Dict[Union[type, Callable[[Any], bool]], Union[Callable[[Any], 'Artifact'], type['Artifact']]] = {}
@@ -318,7 +318,7 @@ class ProjectManager:
 		for location in locations[:]:
 			path = GLOBALS.TOOLCHAIN_CONFIG.get_path(location)
 			if not exists(path) or not isdir(path):
-				warn(f"* Not found project location {location}!")
+				attention(f"Not found project location {location}!")
 				continue
 
 			for entry in os.listdir(path):

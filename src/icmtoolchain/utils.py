@@ -8,6 +8,8 @@ from typing import (Any, Callable, Dict, Iterable, List, Optional, TextIO,
                     Union, overload)
 from zipfile import ZipFile, ZipInfo
 
+from .shell import failure
+
 DEVNULL = open(os.devnull, "w")
 
 
@@ -269,18 +271,18 @@ def request_typescript(only_check: bool = False) -> Optional[str]:
 	from . import GLOBALS
 	if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
 		return None
-	from .shell import confirm_prompt, error, info
+	from .shell import confirm_prompt, pretty_debug
 	tsc = shutil.which("tsc") or request_tool("tsc")
 	if tsc or only_check:
 		return tsc
 	if not confirm_prompt("Do you want to enable TypeScript and ES6+ support (requires Node.js to build project)?", True):
 		return None
-	info("Updating TypeScript globally via npm...")
+	pretty_debug("Updating TypeScript globally via npm...")
 	subprocess.run("npm install -g typescript")
 	tsc = shutil.which("tsc") or request_tool("tsc")
 	if tsc:
 		return tsc
-	error("Something went wrong when trying to install TypeScript Compiler, please check your Node.js and npm installation and try again.")
+	failure("Something went wrong when trying to install TypeScript Compiler, please check your Node.js and npm installation and try again.")
 	return None
 
 def request_executable_version(executable: Union[str, List[str]]) -> float:

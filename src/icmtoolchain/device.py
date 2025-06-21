@@ -7,9 +7,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from . import GLOBALS
 from .hglob import glob
-from .shell import (InteractiveSession, Progress, abort, confirm_prompt, error,
-                    pretty_print, pretty_print_attention, pretty_print_failure,
-                    pretty_print_success, select_prompt, warn)
+from .shell import (InteractiveSession, Progress, abort, attention,
+                    confirm_prompt, failure, pretty_error, pretty_print,
+                    select_prompt, success)
 from .utils import DEVNULL
 
 
@@ -112,8 +112,8 @@ def setup_modpack_directory() -> Optional[str]:
 		locations = ["games/horizon/packs", "Android/data/com.zheka.horizon/files/horizon/packs"]
 	sdcard_directory = get_sdcard_directory()
 	if not sdcard_directory:
-		error("We were unable to find storage folder on your device.")
-		error("Please override `storageLocations` property in your 'toolchain.json' to override path.")
+		pretty_error("We were unable to find storage folder on your device.")
+		pretty_error("Please override `storageLocations` property in your 'toolchain.json' to override path.")
 		return None
 	directories = set()
 	for location in locations:
@@ -124,8 +124,8 @@ def setup_modpack_directory() -> Optional[str]:
 	if test_directory_exist(sdcard_directory + "/games/com.mojang/mods"):
 		directories.add(sdcard_directory + "/games/com.mojang")
 	if len(directories) == 0:
-		error("It looks like your device does not contain an Inner Core installation.")
-		error("Please install pack via Horizon or override `modpackLocations` property of your 'toolchain.json'.")
+		pretty_error("It looks like your device does not contain an Inner Core installation.")
+		pretty_error("Please install pack via Horizon or override `modpackLocations` property of your 'toolchain.json'.")
 		return None
 	directories = list(directories)
 	readable_directories = [person_readable_modpack_name(directory) for directory in directories]
@@ -139,7 +139,7 @@ def test_directory_exist(path: str, *args: str) -> bool:
 		] + list(args), check=True)
 	except subprocess.CalledProcessError as err:
 		if err.returncode != 1:
-			error("adb shell test -d failed with code", err.returncode)
+			failure("adb shell test -d failed with code", err.returncode)
 		return False
 	return True
 
@@ -150,7 +150,7 @@ def ls(path: str, *args: str) -> Tuple[List[str], List[str]]:
 		] + list(args), text=True, check=True, capture_output=True)
 	except subprocess.CalledProcessError as err:
 		if err.returncode != 1:
-			error("adb shell ls failed with code", err.returncode)
+			failure("adb shell ls failed with code", err.returncode)
 		return (list(), list())
 	except KeyboardInterrupt:
 		return (list(), list())
@@ -186,7 +186,7 @@ def push_everything(push_unchanged: bool = True, cleanup_remote: bool = True) ->
 		if result > 0:
 			return result
 	if result < 0:
-		pretty_print_success("All files already up to date.")
+		success("All files already up to date.")
 
 	GLOBALS.OUTPUT_STORAGE.save()
 	return 0
@@ -216,11 +216,11 @@ def push_file(file: str, destination_file: str, push_unchanged: bool = True, cle
 		if result.returncode != 0:
 			cause = result.stdout.splitlines()[-1]
 			if cause and len(cause) > 0:
-				error(cause)
-			pretty_print_failure(f"Failed to push file {readable_name!r} with error code {result.returncode}!")
+				pretty_error(cause)
+			failure(f"Failed to push file {readable_name!r} with error code {result.returncode}!")
 			return result.returncode
 
-	pretty_print_success(f"Pushed file {readable_name!r} into {destination_file!r}.")
+	success(f"Pushed file {readable_name!r} into {destination_file!r}.")
 	return result.returncode
 
 def push_directory(directory: str, destination_directory: str, push_unchanged: bool = True, cleanup_remote: bool = True) -> int:
@@ -260,11 +260,11 @@ def push_directory(directory: str, destination_directory: str, push_unchanged: b
 			if result.returncode != 0:
 				cause = result.stdout.strip().splitlines()[-1]
 				if cause and len(cause) > 0:
-					error(cause)
-				pretty_print_failure(f"Failed to push directory {readable_name!r} with error code {result.returncode}!")
+					pretty_error(cause)
+				failure(f"Failed to push directory {readable_name!r} with error code {result.returncode}!")
 				return result.returncode
 
-	pretty_print_success(f"Pushed directory {readable_name!r} into {destination_directory!r}.")
+	success(f"Pushed directory {readable_name!r} into {destination_directory!r}.")
 	return 0
 
 def make_locks(*locks: str) -> int:
@@ -290,7 +290,7 @@ def ensure_server_running(retry: int = 0) -> bool:
 		return True
 	except subprocess.CalledProcessError as err:
 		if retry >= 3:
-			error("adb start-server failed with code", err.returncode)
+			failure("adb start-server failed with code", err.returncode)
 			return False
 		return ensure_server_running(retry + 1)
 
@@ -321,7 +321,7 @@ def get_device_state() -> int:
 	except subprocess.CalledProcessError as err:
 		if err.returncode == 1:
 			return STATE_NO_DEVICES
-		error("adb get-state failed with code", err.returncode)
+		failure("adb get-state failed with code", err.returncode)
 		return STATE_UNKNOWN
 	except subprocess.TimeoutExpired:
 		return STATE_UNKNOWN
@@ -334,7 +334,7 @@ def get_device_serial() -> Optional[str]:
 			"get-serialno"
 		], text=True, check=True, capture_output=True)
 	except subprocess.CalledProcessError as err:
-		warn("adb get-serialno failed with code", err.returncode)
+		attention("adb get-serialno failed with code", err.returncode)
 		return None
 	return pipe.stdout.strip()
 
@@ -345,7 +345,7 @@ def device_list() -> Optional[List[Dict[str, Any]]]:
 			"devices", "-l"
 		], text=True, check=True, capture_output=True)
 	except subprocess.CalledProcessError as err:
-		warn("adb devices failed with code", err.returncode)
+		attention("adb devices failed with code", err.returncode)
 		return None
 	data = pipe.stdout.rstrip().splitlines()
 	data.pop(0)
@@ -470,7 +470,7 @@ def get_adb_command_by_serialno_type(which: str, silent: bool = False) -> Option
 	], text=True, capture_output=True)
 	if serial.returncode != 0:
 		if not silent:
-			warn("adb get-serialno failed with code", serial.returncode)
+			attention("adb get-serialno failed with code", serial.returncode)
 		return None
 	return get_adb_command_by_serial(serial.stdout.rstrip())
 
@@ -498,7 +498,7 @@ def setup_device_connection() -> Optional[List[str]]:
 def setup_via_usb() -> Optional[List[str]]:
 	try:
 		pretty_print("Listening device via cable...")
-		pretty_print(f"* Press Ctrl+{'C' if platform.system() == 'Windows' else 'Z'} to leave")
+		attention(f"Press Ctrl+{'C' if platform.system() == 'Windows' else 'Z'} to leave")
 		subprocess.run([
 			get_adb_executable(),
 			"wait-for-usb-device"
@@ -507,7 +507,7 @@ def setup_via_usb() -> Optional[List[str]]:
 		if command:
 			return command
 	except subprocess.CalledProcessError as err:
-		error("adb wait-for-usb-device failed with code", err.returncode)
+		failure("adb wait-for-usb-device failed with code", err.returncode)
 	except subprocess.TimeoutExpired:
 		pretty_print("Timeout")
 	except KeyboardInterrupt:
@@ -548,7 +548,7 @@ def setup_via_ping_localhost() -> Optional[List[str]]:
 			# return setup_via_network()
 
 		if len(accepted) == 0:
-			pretty_print_attention("Not found anything, are you sure that network is connected?")
+			attention("Not found anything, are you sure that network is connected?")
 			return setup_via_network()
 		subprocess.run([
 			get_adb_executable(),
@@ -570,13 +570,13 @@ def setup_via_ping_localhost() -> Optional[List[str]]:
 				else:
 					pretty_print()
 			except subprocess.CalledProcessError as err:
-				error("adb connect failed with code", err.returncode)
+				failure("adb connect failed with code", err.returncode)
 			except subprocess.TimeoutExpired:
 				pretty_print("Timeout")
 
 		if latest:
 			return latest
-		pretty_print_attention("Pinging every port, interrupt operation if you already know it.")
+		attention("Pinging every port, interrupt operation if you already know it.")
 		for next in accepted:
 			ports = list()
 			try:
@@ -672,7 +672,7 @@ def setup_via_tcp_network(ip: Optional[str] = None, port: Optional[str] = None, 
 				pairing_code
 			], check=True, stderr=DEVNULL, stdout=DEVNULL)
 		except subprocess.CalledProcessError as err:
-			error("adb pair failed with code", err.returncode)
+			failure("adb pair failed with code", err.returncode)
 		except KeyboardInterrupt:
 			pretty_print()
 	subprocess.run([
@@ -688,7 +688,7 @@ def setup_via_tcp_network(ip: Optional[str] = None, port: Optional[str] = None, 
 		command = get_adb_command_by_tcp(ip, int(port) if port else None)
 		return command or setup_via_tcp_network()
 	except subprocess.CalledProcessError as err:
-		error("adb connect failed with code", err.returncode)
+		failure("adb connect failed with code", err.returncode)
 	except subprocess.TimeoutExpired:
 		pretty_print("Timeout")
 	except KeyboardInterrupt:

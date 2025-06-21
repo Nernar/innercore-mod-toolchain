@@ -10,7 +10,6 @@ from .language import (PROJECT_TYPE_MOD, PROJECT_TYPE_MODPACK,
                        MakeNativeData, MakePackGraphicsData, MakeResourceData,
                        MakeScriptData, MakeSharedObjectData)
 from .project_graph import Artifact
-from .shell import pretty_print_attention
 from .utils import ensure_not_whitespace
 
 VALID_SOURCE_TYPES = ("main", "launcher", "preloader", "instant", "custom", "library")
@@ -99,7 +98,8 @@ class MakeConfig(MakeDataConfig):
 				yield artifact
 				continue
 			if not self.get_value("project.requiredDependencies", True) or isinstance(dependency, Config) and not dependency.get_value("required", True):
-				pretty_print_attention(f"Skipping unsatisfied dependency {dependency!r}, since it is optional.")
+				from .shell import attention
+				attention(f"Skipping unsatisfied dependency {dependency!r}, since it is optional.")
 				continue
 			raise ValueError(f"Invalid dependency {dependency!r}, it should be relative project path, id or repository url!")
 

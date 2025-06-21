@@ -5,7 +5,8 @@ from . import GLOBALS, PROPERTIES
 from .includes import Includes
 from .language import MakeScriptData
 from .output_directory import expand_paths
-from .shell import debug, error, info, pretty_print, warn
+from .shell import (attention, failure, frozen, pretty_debug, pretty_print,
+                    success)
 from .utils import (RuntimeCodeError, copy_file, ensure_not_whitespace,
                     request_typescript, walk_all_files)
 
@@ -17,7 +18,7 @@ def build_all_scripts(watch: bool = False) -> int:
 	if request_typescript(only_check=True) and not isdir(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("declarations")):
 		from .output_directory import get_config_directory
 		if not isdir(join(get_config_directory(), "declarations")):
-			warn("Not found 'declarations', in most cases build will be failed, please install it via tasks.")
+			attention("Not found 'declarations', in most cases build will be failed, please install it via tasks.")
 
 	return build_composite_project() if not watch else watch_composite_project()
 
@@ -53,7 +54,7 @@ def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], L
 
 		for source_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(source.relative_path)):
 			if not exists(source_path):
-				warn(f"* Skipped non-existing source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r}!")
+				attention(f"Skipped non-existing source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r}!")
 				continue
 
 			# Supports assembling directories, JavaScript and TypeScript
@@ -61,7 +62,7 @@ def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], L
 			if not isdir(source_path):
 				preffered_typescript = source_path.endswith(".ts")
 				if not preffered_typescript and not source_path.endswith(".js"):
-					warn(f"* Unsupported script {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r}, it should be directory with includes or Java/TypeScript file!")
+					attention(f"Unsupported script {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r}, it should be directory with includes or Java/TypeScript file!")
 					continue
 			else:
 				try:
@@ -76,7 +77,7 @@ def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], L
 			if language == "typescript" and not request_typescript():
 				if preffered_typescript:
 					raise RuntimeCodeError(255, f"We cannot compile source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r} without you having Node.js, despite `denyTypeScript` property of your 'toolchain.json' being active. Please disable it and install Node.js to compile TypeScript sources.")
-				warn(f"* Source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r} specifies target language as TypeScript, so this script probably uses ESNext capabilities. Build as normal JavaScript files, since `denyTypeScript` property of your 'toolchain.json' is active.")
+				attention(f"Source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r} specifies target language as TypeScript, so this script probably uses ESNext capabilities. Build as normal JavaScript files, since `denyTypeScript` property of your 'toolchain.json' is active.")
 				language = "javascript"
 
 			# Preserve output target duplication
@@ -132,11 +133,11 @@ def copy_build_targets(composite: List[Tuple[str, str, str]], includes: List[Tup
 			if isfile(temporary_script):
 				copy_file(temporary_script, included[1])
 			else:
-				warn(f"* Not found build target {basename(temporary_script)!r}, maybe it building emitted error or corresponding source is empty.")
+				attention(f"Not found build target {basename(temporary_script)!r}, maybe it building emitted error or corresponding source is empty.")
 				continue
 
 		if not GLOBALS.BUILD_STORAGE.is_path_changed(temporary_script):
-			info(f"* Build target {basename(temporary_script)!r} is not changed.")
+			frozen(f"Build target {basename(temporary_script)!r} is not changed.")
 
 	for included in composite:
 		# Single JavaScript sources when TypeScript is not forced just copies to output without
@@ -153,11 +154,11 @@ def copy_build_targets(composite: List[Tuple[str, str, str]], includes: List[Tup
 			if isfile(temporary_script):
 				copy_file(temporary_script, included[1])
 			else:
-				warn(f"* Not found build target {basename(temporary_script)!r}, but it directly included!")
+				attention(f"Not found build target {basename(temporary_script)!r}, but it directly included!")
 				continue
 
 		if not GLOBALS.BUILD_STORAGE.is_path_changed(temporary_script):
-			info(f"* Build target {basename(temporary_script)!r} is not changed.")
+			failure(f"Build target {basename(temporary_script)!r} is not changed.")
 
 	GLOBALS.BUILD_STORAGE.save()
 
@@ -196,7 +197,7 @@ def build_composite_project() -> int:
 		# which files changed with hashing algorithm and composite building may rebuild everything
 		# when tsconfig changes or something unexpected happened, like removing temporary declarations
 		if len(which) > 0:
-			debug("Rebuilding composite", ", ".join([
+			pretty_debug("Rebuilding composite", ", ".join([
 				basename(included[1]) for included in which
 			]))
 
@@ -208,9 +209,9 @@ def build_composite_project() -> int:
 
 			startup_millis = time() - startup_millis
 			if overall_result == 0:
-				pretty_print(f"Completed composite script rebuild in {startup_millis:.2f}s!")
+				success(f"Completed composite script rebuild in {startup_millis:.2f}s!")
 			else:
-				error(f"Failed composite script rebuild in {startup_millis:.2f}s with result {overall_result}.")
+				failure(f"Failed composite script rebuild in {startup_millis:.2f}s with result {overall_result}.")
 
 		if overall_result != 0:
 			return overall_result
@@ -221,7 +222,7 @@ def build_composite_project() -> int:
 
 def watch_composite_project() -> int:
 	if not request_typescript():
-		error("* Watching is not supported for legacy JavaScript!")
+		failure("Watching is not supported for legacy JavaScript!")
 		return 1
 	overall_result = 0
 

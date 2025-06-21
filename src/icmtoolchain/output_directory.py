@@ -3,8 +3,8 @@ import sys
 from functools import lru_cache
 from io import FileIO
 from os import environ, fsync, listdir, remove
-from os.path import (abspath, basename, dirname, exists, expanduser, getsize,
-                     isdir, isfile, join, normpath, realpath)
+from os.path import (basename, dirname, exists, expanduser, getsize, isdir,
+                     isfile, join, normpath, realpath)
 from time import sleep, time
 from typing import Callable, Dict, List, Optional
 
@@ -163,8 +163,8 @@ def lock_file(
 				raise TimeoutError(f"Lock {file!r} being blocked too long!")
 			if requires_locked_message and yield_message:
 				requires_locked_message = False
-				from .shell import pretty_print_yield
-				pretty_print_yield(yield_message)
+				from .shell import frozen
+				frozen(yield_message)
 			sleep(retry_delay)
 
 	try:
@@ -173,8 +173,8 @@ def lock_file(
 		pass
 	LOCKS[absolute_path] = lock
 	if not requires_locked_message and continue_message:
-		from .shell import pretty_print_success
-		pretty_print_success(continue_message)
+		from .shell import success
+		success(continue_message)
 	return lock
 
 def unlock_file(

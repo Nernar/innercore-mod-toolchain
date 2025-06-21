@@ -12,7 +12,8 @@ from . import GLOBALS, PROPERTIES
 from .config import Config
 from .language import PROJECT_TYPE_PACK, MakeJavaData
 from .output_directory import expand_paths
-from .shell import abort, debug, error, info, pretty_print, warn
+from .shell import (abort, attention, failure, frozen, pretty_debug,
+                    pretty_error, pretty_info, pretty_print, success)
 from .utils import (copy_directory, copy_file, ensure_directory, ensure_file,
                     get_all_files, get_next_filename, remove_tree,
                     request_executable_version, request_tool, walk_all_files)
@@ -37,7 +38,7 @@ def collect_classpath_files(directories: Collection[str]) -> List[str]:
 				from .output_directory import get_config_directory
 				classpath_directory = join(get_config_directory(), directory)
 		if not isdir(classpath_directory):
-			warn(f"* Skipped non-existing classpath directory {directory!r}, please make sure that it exist!")
+			attention(f"Skipped non-existing classpath directory {directory!r}, please make sure that it exist!")
 			continue
 		libraries = get_all_files(classpath_directory, (".jar"))
 		classpath.extend(libraries)
@@ -52,7 +53,7 @@ def collect_classpath_files(directories: Collection[str]) -> List[str]:
 				try:
 					TOOLCHAIN_CLASSPATH.remove(innercore_test)
 				except ValueError:
-					warn("* Failed to exclude 'innercore-test.jar' from classpath for package build, contact developer and tell them they are a arsehole.")
+					attention("Failed to exclude 'innercore-test.jar' from classpath for package build, contact developer and tell them they are a arsehole.")
 	if TOOLCHAIN_CLASSPATH:
 		classpath.extend(TOOLCHAIN_CLASSPATH)
 	return classpath
@@ -66,16 +67,16 @@ def rebuild_library_cache(relative_directory: str, libraries: Collection[str], t
 	target_classes_directory = join(target_directory, "libraries", "classes", relative_directory)
 	compressed_libraries = join(target_directory, "libraries", relative_directory + ".zip")
 
-	debug(f"Rebuilding library cache: {relative_directory}")
+	pretty_debug(f"Rebuilding library cache: {relative_directory}")
 	remove_tree(target_classes_directory)
 	ensure_directory(target_classes_directory)
 
 	import shutil
 	for filename in libraries:
-		debug(f"Extracting library classes: {basename(filename)}")
+		pretty_debug(f"Extracting library classes: {basename(filename)}")
 		shutil.unpack_archive(filename, target_classes_directory, "zip")
 
-	debug("Zipping extracted cache")
+	pretty_debug("Zipping extracted cache")
 	remove_tree(compressed_libraries)
 	shutil.make_archive(compressed_libraries[:-4], "zip", target_classes_directory)
 	return [compressed_libraries]
@@ -93,7 +94,7 @@ def update_modified_targets(targets: Collection[BuildTarget], target_directory: 
 			if exists(library_directory) and isdir(library_directory):
 				libraries.extend(GLOBALS.BUILD_STORAGE.get_modified_files(library_directory, (".jar")))
 			else:
-				warn(f"* Directory {library_path!r} could not be found, please check your 'manifest' file!")
+				attention(f"Directory {library_path!r} could not be found, please check your 'manifest' file!")
 
 		if len(libraries) > 0:
 			libraries = rebuild_library_cache(target.relative_directory, libraries, target_directory)
@@ -160,7 +161,7 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 	from .output_directory import get_config_directory
 	r8_executable = join(get_config_directory(), "r8", "r8.jar")
 
-	debug("Dexing libraries")
+	pretty_debug("Dexing libraries")
 	result = subprocess.run([
 		java_executable,
 		"-classpath", r8_executable,
@@ -173,10 +174,10 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 		"--output", target_d8_directory
 	], text=True, capture_output=True)
 	if result.returncode != 0:
-		error(result.stderr.strip())
+		pretty_error(result.stderr.strip())
 		return result.returncode
 
-	debug("Dexing classes")
+	pretty_debug("Dexing classes")
 	result = subprocess.run([
 		java_executable,
 		"-classpath", r8_executable,
@@ -190,10 +191,10 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 		"--output", target_d8_directory
 	], text=True, capture_output=True)
 	if result.returncode != 0:
-		error(result.stderr.strip())
+		pretty_error(result.stderr.strip())
 		return result.returncode
 
-	debug("Compressing archives")
+	pretty_debug("Compressing archives")
 	with ZipFile(compressed_target, "w") as archive:
 		walk_all_files(target_d8_directory, lambda filename: archive.write(filename, arcname=filename[len(target_d8_directory) + 1:]), (".dex"))
 
@@ -211,7 +212,7 @@ def merge_compressed_dexes(target: BuildTarget, target_directory: str) -> int:
 	from .output_directory import get_config_directory
 	r8_executable = join(get_config_directory(), "r8", "r8.jar")
 
-	debug("Merging dex")
+	pretty_debug("Merging dex")
 	result = subprocess.run([
 		java_executable,
 		"-classpath", r8_executable,
@@ -223,7 +224,7 @@ def merge_compressed_dexes(target: BuildTarget, target_directory: str) -> int:
 		"--output", output_directory
 	], text=True, capture_output=True)
 	if result.returncode != 0:
-		error(result.stderr.strip())
+		pretty_error(result.stderr.strip())
 		return result.returncode
 
 	return 0
@@ -252,7 +253,7 @@ def build_java_with_javac(targets: Collection[BuildTarget], target_directory: st
 
 		classes_listing = join(target_compiler_directory, ".classes")
 		if not write_changed_source_files(target, source_directories, classes_listing):
-			info(f"* Directory {target.relative_directory!r} is not changed.")
+			frozen(f"Directory {target.relative_directory!r} is not changed.")
 			continue
 
 		if not javac_executable:
@@ -297,10 +298,10 @@ def build_java_with_javac(targets: Collection[BuildTarget], target_directory: st
 		], text=True, capture_output=True)
 		startup_millis = time() - startup_millis
 		if result.returncode != 0:
-			error(result.stderr.strip())
-			error(f"Failed {target.relative_directory!r} compilation in {startup_millis:.2f}s with result {result.returncode}.")
+			pretty_error(result.stderr.strip())
+			failure(f"Failed {target.relative_directory!r} compilation in {startup_millis:.2f}s with result {result.returncode}.")
 			return result.returncode
-		debug(f"Completed {target.relative_directory!r} compilation in {startup_millis:.2f}s!")
+		success(f"Completed {target.relative_directory!r} compilation in {startup_millis:.2f}s!")
 	return 0
 
 def write_changed_source_files(target: BuildTarget, directories: Collection[str], filename: str) -> bool:
@@ -337,7 +338,7 @@ def build_java_with_ecj(targets: Collection[BuildTarget], target_directory: str)
 
 		classes_listing = join(target_compiler_directory, ".classes")
 		if not write_changed_source_files(target, source_directories, classes_listing):
-			info(f"* Directory {target.relative_directory!r} is not changed.")
+			frozen(f"Directory {target.relative_directory!r} is not changed.")
 			continue
 
 		if not ecj_executable:
@@ -382,10 +383,10 @@ def build_java_with_ecj(targets: Collection[BuildTarget], target_directory: str)
 		], text=True, capture_output=True)
 		startup_millis = time() - startup_millis
 		if result.returncode == 0:
-			debug(f"Completed {target.relative_directory!r} compilation in {startup_millis:.2f}s!")
+			success(f"Completed {target.relative_directory!r} compilation in {startup_millis:.2f}s!")
 		else:
-			error(result.stderr.strip())
-			error(f"Failed {target.relative_directory!r} compilation in {startup_millis:.2f}s with result {result.returncode}.")
+			pretty_error(result.stderr.strip())
+			failure(f"Failed {target.relative_directory!r} compilation in {startup_millis:.2f}s with result {result.returncode}.")
 			return result.returncode
 	return 0
 
@@ -413,9 +414,9 @@ def build_java_with_gradle(targets: Collection[BuildTarget], target_directory: s
 			# fallback = result.stderr.splitlines()
 			# if "Could not initialize class org.codehaus.groovy.runtime.InvokerHelper" in fallback or \
 					# "java.lang.NoClassDefFoundError: Could not initialize class org.codehaus.groovy.vmplugin.v7.Java7" in fallback:
-				# warn("It seems that you are using an incompatible version of Java. We need OpenJDK 8 to compile sources (e.g., https://github.com/corretto/corretto-8/releases).")
+				# attention("It seems that you are using an incompatible version of Java. We need OpenJDK 8 to compile sources (e.g., https://github.com/corretto/corretto-8/releases).")
 			# else:
-				# error(result.stderr.strip())
+				# failure(result.stderr.strip())
 			# return result.returncode
 		pretty_print()
 
@@ -515,17 +516,17 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 		if target.relative_directory not in modified_targets:
 			# Otherwise it will be reported immediately.
 			if tool == "gradle":
-				info(f"* Directory {target.relative_directory!r} is not changed.")
+				frozen(f"Directory {target.relative_directory!r} is not changed.")
 		else:
-			info(f"* Running d8 with {target.relative_directory!r}")
+			pretty_info(f"* Running d8 with {target.relative_directory!r}")
 			result = run_d8(target, modified_targets[target.relative_directory], target.classpath, target_directory)
 			if result != 0:
-				error(f"Failed to dex {target.relative_directory!r} with result {result}.")
+				failure(f"Failed to dex {target.relative_directory!r} with result {result}.")
 				GLOBALS.MAKE_CONFIG.remove_rules("java_compiler")
 				return result
 			result = merge_compressed_dexes(target, target_directory)
 			if result != 0:
-				error(f"Failed to merge {target.relative_directory!r} with result {result}.")
+				failure(f"Failed to merge {target.relative_directory!r} with result {result}.")
 				GLOBALS.MAKE_CONFIG.remove_rules("java_compiler")
 				return result
 
@@ -544,7 +545,7 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 				built_successfully = True
 
 		if not built_successfully:
-			warn(f"* Directory {target.relative_directory!r} is empty.")
+			attention(f"Directory {target.relative_directory!r} is empty.")
 
 	if GLOBALS.MAKE_CONFIG.project_type == PROJECT_TYPE_PACK:
 		target_output_path = GLOBALS.MOD_STRUCTURE.get_target_output_directory("java")
@@ -563,7 +564,7 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 
 def compile_java(tool: str = "gradle") -> int:
 	if tool not in ("gradle", "javac", "ecj"):
-		error(f"Java compilation will be cancelled, because tool {tool!r} is not available.")
+		failure(f"Java compilation will be cancelled, because tool {tool!r} is not available.")
 		return 255
 	from time import time
 	startup_millis = time()
@@ -585,7 +586,7 @@ def compile_java(tool: str = "gradle") -> int:
 		from .output_directory import get_config_directory
 		classpath_directory = join(get_config_directory(), "classpath")
 	if not isdir(classpath_directory):
-		warn("Not found 'classpath', in most cases build will be failed, please install it via tasks.")
+		attention("Not found 'classpath', in most cases build will be failed, please install it via tasks.")
 	project_classpath_directory = GLOBALS.MAKE_CONFIG.get_relative_path("classpath")
 	if exists(project_classpath_directory):
 		classpath_directories.append(project_classpath_directory)
@@ -601,7 +602,7 @@ def compile_java(tool: str = "gradle") -> int:
 	if overall_result != -1:
 		startup_millis = time() - startup_millis
 		if overall_result == 0:
-			pretty_print(f"Completed java build in {startup_millis:.2f}s!")
+			success(f"Completed java build in {startup_millis:.2f}s!")
 		else:
-			error(f"Failed java build in {startup_millis:.2f}s with result {overall_result}.")
+			failure(f"Failed java build in {startup_millis:.2f}s with result {overall_result}.")
 	return max(0, overall_result)

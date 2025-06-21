@@ -6,7 +6,7 @@ from types import (BuiltinMethodType, ClassMethodDescriptorType,
                    DynamicClassAttribute)
 from typing import Any, Callable, List, Mapping, Optional, Tuple
 
-from .shell import pretty_print, stringify, warn
+from .shell import attention, pretty_print, stringify
 from .task import Task
 
 MAGICS = (
@@ -335,7 +335,7 @@ def apply_environment_properties(ignore_config: bool = False) -> None:
 			if isinstance(key, str) and isinstance(environ[key], str):
 				os.environ[key] = environ[key]
 			else:
-				warn(f"Environment variable {key!r} expected to be string, please check your 'environment' property in 'toolchain.json'!")
+				attention(f"Environment variable {key!r} expected to be string, please check your 'environment' property in 'toolchain.json'!")
 
 def apply_properties(**kwargs) -> int:
 	from . import PROPERTIES

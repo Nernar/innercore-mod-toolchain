@@ -8,7 +8,7 @@ from typing import (TYPE_CHECKING, Any, Callable, Dict, Final, Iterable,
 from .config import Config, FileConfig
 from .output_directory import expand_paths
 from .rule_set import RuleSet, RuleSetConfig, RuleSetHolder
-from .shell import abort, warn
+from .shell import abort, attention
 from .utils import RuntimeCodeError, copy_file, ensure_not_whitespace
 
 if TYPE_CHECKING:
@@ -47,10 +47,10 @@ def get_language_directories(compile_type: str, language_config: Config, propert
 		for flattened_directory in expand_paths(make_config.get_relative_path(directory)):
 			absolute_directory = make_config.get_path(flattened_directory)
 			if not isdir(absolute_directory):
-				warn(f"* Skipped non-existing {compile_type} directory {directory!r}!")
+				attention(f"Skipped non-existing {compile_type} directory {directory!r}!")
 				continue
 			if absolute_directory in configurables:
-				warn(f"* Duplicate {compile_type} directory {directory!r}, overriding existing properties...")
+				attention(f"Duplicate {compile_type} directory {directory!r}, overriding existing properties...")
 
 			if properties_merger:
 				config = properties_merger(config, language_config)
@@ -97,7 +97,7 @@ class MakeModData(FlushableMakeProjectData):
 		if isfile(icon_path) and icon_path != output_info_path:
 			copy_file(icon_path, output_info_path)
 		elif ensure_not_whitespace(self.icon):
-			warn(f"* Icon {icon_path!r} described in mod {self.name!r} is not found!")
+			attention(f"Mod icon {icon_path!r} described in {self.name!r} is not found!")
 		return 0
 
 @dataclass
@@ -133,7 +133,7 @@ class MakeModpackData(FlushableMakeProjectData):
 		if isfile(icon_path) and icon_path != output_info_path:
 			copy_file(icon_path, output_info_path)
 		elif ensure_not_whitespace(self.icon):
-			warn(f"* Icon {icon_path!r} described in modpack {self.name!r} is not found!")
+			attention(f"Modpack icon {icon_path!r} described in {self.name!r} is not found!")
 		return 0
 
 @dataclass

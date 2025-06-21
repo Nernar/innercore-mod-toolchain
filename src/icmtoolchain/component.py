@@ -3,7 +3,7 @@ from os.path import isdir, isfile, join
 from typing import Final, List, Optional
 
 from . import GLOBALS
-from .shell import abort, pretty_print, pretty_print_attention
+from .shell import abort, attention, frozen, pretty_print, success
 from .utils import ensure_not_whitespace, request_typescript
 
 
@@ -61,7 +61,7 @@ def install_components(*keywords: str) -> None:
 			continue
 		if keyword == "cpp":
 			continue
-		pretty_print_attention(f"What do you expect? We doesn't have {COMPONENTS[keyword].packurl} anymore!")
+		attention(f"What do you expect? We doesn't have {COMPONENTS[keyword].packurl} anymore!")
 	if "cpp" in keywords:
 		abis = GLOBALS.TOOLCHAIN_CONFIG.obtain_list("native.abis")
 		if len(abis) == 0:
@@ -127,7 +127,7 @@ def startup() -> None:
 	try:
 		results = welcome_review.request(returns_empty_properties=True)
 	except (KeyboardInterrupt, EOFError):
-		pretty_print("* Preconfiguration was canceled, you can do it later, execute `icmtoolchain --help` for a list of commands.")
+		frozen("Preconfiguration was canceled, you can do it later, execute `icmtoolchain --help` for a list of commands.")
 		return None
 
 	username = ensure_not_whitespace(results["username"])
@@ -149,7 +149,7 @@ def startup() -> None:
 	GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 
 	from .output_directory import get_script_directory
-	pretty_print(f"* Setup procedure is completed, Inner Core Mod Toolchain has been installed to {get_script_directory()!r} directory. Execute `icmtoolchain --help` to obtain a list of available commands. You may need to restart your console to be able to access any commands.")
+	success(f"Setup procedure is completed, Inner Core Mod Toolchain has been installed to {get_script_directory()!r} directory. Execute `icmtoolchain --help` to obtain a list of available commands. You may need to restart your console to be able to access any commands.")
 
 def upgrade() -> int:
 	pretty_print("Nothing to perform.")

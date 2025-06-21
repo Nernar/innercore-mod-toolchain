@@ -3,8 +3,8 @@ from typing import Any, Callable, Dict, Final, List, Optional
 
 from . import GLOBALS, PROPERTIES
 from .output_directory import get_temporary_directory, lock_file, unlock_file
-from .shell import (abort, confirm_prompt, error, pretty_print,
-                    pretty_print_success, warn)
+from .shell import (abort, attention, confirm_prompt, failure, pretty_print,
+                    success)
 from .utils import DEVNULL, remove_tree
 
 
@@ -122,7 +122,7 @@ def task_compile_native() -> int:
 		if not abi:
 			abi = GLOBALS.MAKE_CONFIG.get_value("debugAbi")
 		if abi:
-			# TODO: warn("* Property `debugAbi` has been deprecated in favor of configurations, determine your own ABIs via 'debug' rule.")
+			attention("Property `debugAbi` has been deprecated in favor of configurations, determine your own ABIs via 'debug' rule.")
 			abis = [abi]
 	if not abis:
 		abis = GLOBALS.MAKE_CONFIG.obtain_list("native.abis")
@@ -150,7 +150,7 @@ def task_compile_java(tool: Optional[str] = None) -> int:
 	if not tool:
 		return 1
 	if not tool == "gradle" and GLOBALS.MAKE_CONFIG.get_value("java.configurable", False):
-		warn("* Project uses configurable Gradle, different tools cannot be applied.")
+		attention("Project uses configurable Gradle, different tools cannot be applied.")
 		tool = "gradle"
 	return compile_java(tool)
 
@@ -172,7 +172,7 @@ def task_build_scripts() -> int:
 )
 def task_watch_scripts() -> int:
 	if not GLOBALS.MAKE_CONFIG.supports_scripts:
-		error("* You cannot have scripts to watch because your project does not support them.")
+		failure("You cannot have scripts to watch because your project does not support them.")
 		return 1
 	from .script_build import build_all_scripts
 	return build_all_scripts(watch=True)
@@ -217,7 +217,7 @@ def task_resources() -> int:
 def task_build_info() -> int:
 	project_data = GLOBALS.MAKE_CONFIG.obtain_project_data()
 	if project_data is None:
-		warn("* Nothing to write in project configurations, project data does not exist.")
+		attention("Nothing to write in project configurations, project data does not exist.")
 		return 0
 	return project_data.flush_to_output(GLOBALS.MOD_STRUCTURE.directory)
 
@@ -300,7 +300,7 @@ def task_monkey_launcher() -> int:
 			if not successful:
 				raise RuntimeError()
 		except BaseException:
-			warn("* Horizon is not installed, nothing to launch.")
+			attention("Horizon is not installed, nothing to launch.")
 	return 0
 
 @task(
@@ -343,7 +343,7 @@ def task_new_project() -> int:
 	index = new_project(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
 	if index is None:
 		return 1
-	pretty_print_success("Successfully completed!")
+	success("Successfully completed!")
 
 	if not confirm_prompt("Select this project?", True):
 		return 0
@@ -355,7 +355,7 @@ def task_new_project() -> int:
 	description="Converts a project for utilization with toolchains or creates a merge of several projects."
 )
 def task_import_project(path: str = "", target: str = "") -> int:
-	pretty_print("Project successfully imported!")
+	success("Project successfully imported!")
 	if not confirm_prompt("Select this project?", True):
 		return 0
 	GLOBALS.PROJECT_MANAGER.select_project(folder=relpath(path, GLOBALS.TOOLCHAIN_CONFIG.directory))
@@ -369,7 +369,7 @@ def task_import_project(path: str = "", target: str = "") -> int:
 def task_remove_project() -> int:
 	if GLOBALS.PROJECT_MANAGER.how_much() == 0:
 		abort("Not found any project to remove.")
-	pretty_print("Selected project will be deleted forever, please think twice before removing anything!")
+	attention("Selected project will be deleted forever, please think twice before removing anything!")
 
 	who = GLOBALS.PROJECT_MANAGER.require_selection("Which project will be deleted?", "Do you really want to delete {}?", "I don't want it anymore")
 	if not who:

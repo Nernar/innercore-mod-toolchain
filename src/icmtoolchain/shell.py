@@ -47,7 +47,7 @@ TOOLCHAIN_STYLE = {
 	"task.execute": "fg:ansibrightgreen bold",
 	"print.answer": "fg:ansibrightblack",
 	"print.debug": "fg:ansibrightblack",
-	"print.yield": "fg:ansibrightblue",
+	"print.frozen": "fg:ansibrightblue",
 	"print.info": "fg:ansibrightgreen",
 	"print.success": "fg:ansibrightgreen",
 	"print.warn": "fg:ansibrightyellow",
@@ -844,46 +844,47 @@ def pretty_print(*values: object, style: str = "", sep: Optional[str] = " ", end
 		print_something = True
 	print_formatted_text(end if end is not None else "\n", end="", file=file, flush=flush, style=baked_style, include_default_pygments_style=include_default_pygments_style)
 
-def debug(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+def pretty_debug(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
 	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.debug", include_default_pygments_style=include_default_pygments_style)
 
-def info(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+def pretty_info(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
 	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.info", include_default_pygments_style=include_default_pygments_style)
 
-def warn(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+def pretty_warn(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
 	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.warn", include_default_pygments_style=include_default_pygments_style)
 
-def error(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+def pretty_error(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
 	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.error", include_default_pygments_style=include_default_pygments_style)
 
-def pretty_print_answer(prompt: AnyFormattedText, *values: object, sep: str=", ", end: Optional[str] = "\n", prompt_end: Optional[str] = " ", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+def pretty_answer(prompt: AnyFormattedText, *values: object, sep: str=", ", end: Optional[str] = "\n", prompt_end: Optional[str] = " ", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
 	if prompt:
-		pretty_print_success(prompt, end=prompt_end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+		success(prompt, end=prompt_end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 	pretty_print(*values, style="class:print.answer", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 
-def pretty_print_success(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
+def success(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
 	pretty_print(UNICODE_CHECK_MARK, style="class:print.success", end=" ")
 	pretty_print(*values, style="class:print.success", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 
-def pretty_print_attention(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
+def attention(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
 	pretty_print(UNICODE_POINTED_STAR, style="class:print.attention", end=" ")
 	pretty_print(*values, style="class:print.attention", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 
-def pretty_print_failure(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
+def failure(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
 	pretty_print(UNICODE_BALLOT_X, style="class:print.failure", end=" ")
 	pretty_print(*values, style="class:print.failure", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 
-def pretty_print_yield(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
-	pretty_print(UNICODE_SNOWFLAKE, style="class:print.yield", end=" ")
-	pretty_print(*values, style="class:print.yield", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+def frozen(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
+	pretty_print(UNICODE_SNOWFLAKE, style="class:print.frozen", end=" ")
+	pretty_print(*values, style="class:print.frozen", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 
 def abort(*values: object, sep: Optional[str] = " ", code: int = 255, cause: Optional[BaseException] = None) -> NoReturn:
 	if cause:
 		from traceback import print_exception
 		buffer = StringIO()
 		print_exception(cause.__class__, cause, cause.__traceback__, file=buffer)
-		error(*buffer.getvalue().rsplit("\n", 9)[1:-1], sep="\n")
+		pretty_error(*buffer.getvalue().rsplit("\n", 9)[1:-1], sep="\n")
 	if len(values) != 0:
+		pretty_print(UNICODE_BALLOT_X, style="class:print.failure", end=" ")
 		pretty_print(*values, sep=sep, style="class:print.abort-message")
 	elif not cause:
 		pretty_print("Abort.")

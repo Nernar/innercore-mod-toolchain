@@ -6,7 +6,7 @@ from typing import Any, Collection, Dict, Final, List, Optional
 
 from . import GLOBALS
 from .language import PROJECT_TYPE_MOD
-from .shell import warn
+from .shell import attention
 from .utils import (ensure_directory, ensure_file, ensure_file_directory,
                     remove_tree)
 
@@ -45,7 +45,7 @@ class ModStructure:
 			return
 		directory = join(self.directory, target_type.directory)
 		if relpath(directory, self.directory)[:2] == "..":
-			warn(f"* Output target {keyword} is not relative to output, it will not be cleaned!")
+			attention(f"Output target {keyword} is not relative to output, it will not be cleaned!")
 			return
 		if not GLOBALS.PREFERRED_CONFIG.get_value("development.clearOutput", False):
 			remove_tree(directory)
@@ -119,7 +119,7 @@ class ModStructure:
 					self.build_config = json.loads(build_config.read())
 					return
 				except json.JSONDecodeError as err:
-					warn("* Something went wrong while reading cached build config:", err.msg)
+					attention("Something went wrong while reading cached build config:", err.msg)
 		self.build_config = dict()
 
 	def write_build_config(self) -> None:
@@ -185,8 +185,7 @@ class LinkedResourceStorage:
 					if len(self.latest_contents) == 0:
 						del self.latest_contents
 			except json.JSONDecodeError:
-				from .shell import warn
-				warn(f"* Malformed {basename(self.contents_path)!r}, prebuilt contents will be ignored...")
+				attention(f"Malformed {basename(self.contents_path)!r}, prebuilt contents will be ignored...")
 
 	def save_contents(self):
 		ensure_file(self.contents_path)
@@ -198,7 +197,7 @@ class LinkedResourceStorage:
 	def append_resource(self, relative_path: str, output_path: str, **properties: Any) -> None:
 		for linked_resource in self.contents:
 			if relative_path == linked_resource["relative_path"] and output_path == linked_resource["output_path"]:
-				warn(f"* Duplicate resource directory {relative_path}, skipping it...")
+				attention(f"Duplicate resource directory {relative_path}, skipping it...")
 				return
 		self.contents.append({
 			"relative_path": relative_path,
@@ -208,8 +207,7 @@ class LinkedResourceStorage:
 
 	def iterate_resources(self):
 		if len(self.contents) > 0 and hasattr(self, "latest_contents"):
-			from .shell import warn
-			warn(f"* There is cached and runtime contents at same time, this can lead to duplication of some resources. If you are an add-on developer, please make sure that your LinkedResourceStorage is stored.")
+			attention(f"There is cached and runtime contents at same time, this can lead to duplication of some resources. If you are an add-on developer, please make sure that your LinkedResourceStorage is stored.")
 		for linked_resource in self.contents:
 			yield linked_resource
 		if hasattr(self, "latest_contents"):

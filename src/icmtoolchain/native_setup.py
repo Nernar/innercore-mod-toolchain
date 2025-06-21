@@ -10,9 +10,9 @@ from typing import Any, Generator, List, Optional, Union
 
 from . import GLOBALS
 from .fetch import queue_download_request
-from .shell import (InteractiveSession, Progress, abort, confirm_prompt, error,
-                    info, pretty_print, pretty_print_failure,
-                    pretty_print_success, warn)
+from .shell import (InteractiveSession, Progress, abort, attention,
+                    confirm_prompt, failure, pretty_error, pretty_print,
+                    pretty_warn, success)
 from .utils import (AttributeZipFile, RuntimeCodeError, ensure_file,
                     ensure_not_whitespace, iterate_subdirectories,
                     read_properties_stream, remove_tree)
@@ -147,12 +147,12 @@ def require_compiler_executable(arch: str, install_if_required: bool = False) ->
 		install_gcc(arches=arch, reinstall=False)
 		file = search_for_gcc_executable(ndk_directory)
 		if not file or not isfile(file):
-			warn(f"Executable of GCC (abi: {arch}) is not found, trying to reinstall it.")
+			attention(f"Executable of GCC (abi: {arch}) is not found, trying to reinstall it.")
 			if install_gcc(arches=arch, reinstall=True) != 0:
 				return None
 			file = search_for_gcc_executable(ndk_directory)
 			if not file or not isfile(file):
-				error("Critical exception occured, installation is not supported anymore!")
+				failure("Critical exception occured, installation is not supported anymore!")
 				return None
 	return file
 
@@ -197,7 +197,7 @@ def get_download_ndk_url(revision: str) -> str:
 		if is_32bit:
 			raise RuntimeCodeError(255, f"Your platform {package_suffix} should be upgraded to 64 bit, otherwise Android NDK cannot be installed.")
 		if package_suffix != "Linux":
-			warn(f"* Expected platform Windows, MacOS or Linux. Got: {package_suffix}, falling back to Linux.")
+			attention(f"Expected platform Windows, MacOS or Linux. Got: {package_suffix}, falling back to Linux.")
 		package_suffix = "linux-x86_64" if requires_architecture else "linux"
 	return f"https://dl.google.com/android/repository/android-ndk-{revision}-{package_suffix}.zip"
 
@@ -215,19 +215,19 @@ def download_gcc(ndk_version: Optional[str] = None) -> Optional[str]:
 		try:
 			with AttributeZipFile(archive_path, "r") as archive:
 				archive.extractall(extract_path)
-			pretty_print_success("Extracted NDK/GCC into temporary directory.")
+			success("Extracted NDK/GCC into temporary directory.")
 		except OSError as exc:
-			pretty_print_failure(f"#{exc.errno}: {basename(exc.filename)}")
+			failure(f"#{exc.errno}: {basename(exc.filename)}")
 			try:
 				remove_tree(extract_path)
 			except OSError:
-				pretty_print_failure(f"#{exc.errno}: {basename(exc.filename)} (security fail)")
+				failure(f"#{exc.errno}: {basename(exc.filename)} (security fail)")
 		except zipfile.BadZipFile as exc:
 			try:
 				remove_tree(extract_path)
 				return download_gcc(revision)
 			except OSError as exc:
-				pretty_print_failure(f"#{exc.errno}: {basename(exc.filename)} (security fail)")
+				failure(f"#{exc.errno}: {basename(exc.filename)} (security fail)")
 
 	return search_ndk_path(extract_path, contains_ndk=True, ndk_version=ndk_version)
 
@@ -244,10 +244,10 @@ def install_distutils_optionally() -> bool:
 		], capture_output=True, text=True)
 		setuptools_installed = pip_output.returncode == 0
 		if setuptools_installed:
-			info("Dependency distutils for Android NDK successfully installed!")
+			success("Dependency distutils for Android NDK successfully installed!")
 		else:
-			warn("Android NDK requires distutils dependency in order to work, but installation went wrong:")
-			warn(pip_output.stderr.strip())
+			pretty_warn("Android NDK requires distutils dependency in order to work, but installation went wrong:")
+			pretty_warn(pip_output.stderr.strip())
 		return setuptools_installed
 	except OSError:
 		pass
@@ -272,7 +272,7 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False) -
 			abort()
 
 	if not ndk_path:
-		error("Installation interrupted by raised cause above, you are must extract 'temp/ndk-r**.zip' manually into temp and retry task.")
+		failure("Installation interrupted by raised cause above, you are must extract 'temp/ndk-r**.zip' manually into temp and retry task.")
 		return 1
 
 	with InteractiveSession(progress=Progress(f"Making standalone toolchain of {abi}...", percentage=0.5)) as session:
@@ -286,12 +286,12 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False) -
 			"--force"
 		], capture_output=True, text=True)
 		if output.returncode != 0:
-			error(output.stderr.strip())
-			pretty_print_failure(f"Failed to make a standalone toolchain for {abi} architecture with code {output.returncode}!")
+			pretty_error(output.stderr.strip())
+			failure(f"Failed to make a standalone toolchain for {abi} architecture with code {output.returncode}!")
 			return output.returncode
 		else:
 			ensure_file(join(get_config_directory(), "ndk", f".installed-{arch}"))
-			pretty_print_success(f"Now native builds are available for {arch} architecture.")
+			success(f"Now native builds are available for {arch} architecture.")
 	return output.returncode
 
 def install_gcc(arches: Union[str, List[str]] = "arm", reinstall: bool = False) -> int:
@@ -321,16 +321,16 @@ def install_gcc(arches: Union[str, List[str]] = "arm", reinstall: bool = False) 
 				troubleshoot = "To use Android NDK starting with Python 3.12 requires installation of distutils dependency."
 			else:
 				troubleshoot = "Your Python installation does not contain distutils dependency needed to run Android NDK."
-			warn(troubleshoot, "We were unable to do this automatically, so you can try following options to solve problem:")
+			attention(troubleshoot, "We were unable to do this automatically, so you can try following options to solve problem:")
 			if platform.system() == 'Windows':
-				warn(" - pip install setuptools")
-				warn(" - python -m pip install setuptools")
+				pretty_warn(" - pip install setuptools")
+				pretty_warn(" - python -m pip install setuptools")
 			else:
-				warn(" - apt-get install python-setuputils")
-				warn(" - pacman -S python-setuputils")
-				warn(" - pip3 install setuptools")
-				warn(" - python3 -m pip install setuptools")
-			warn(f"Visit https://docs.python.org/3/library/distutils.html for details.")
+				pretty_warn(" - apt-get install python-setuputils")
+				pretty_warn(" - pacman -S python-setuputils")
+				pretty_warn(" - pip3 install setuptools")
+				pretty_warn(" - python3 -m pip install setuptools")
+			pretty_warn(f"Visit https://docs.python.org/3/library/distutils.html for details.")
 		else:
-			warn("Please use a different version of Android NDK or report this issue to developer.")
+			pretty_warn("Please use a different version of Android NDK or report this issue to developer.")
 	return result

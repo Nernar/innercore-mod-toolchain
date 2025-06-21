@@ -6,8 +6,8 @@ from typing import Any, Dict, List, Optional, cast
 from . import GLOBALS
 from .config import Config, FileConfig
 from .output_directory import expand_paths
-from .shell import (abort, error, pretty_print, pretty_print_attention,
-                    pretty_print_success, select_prompt, warn)
+from .shell import (abort, attention, failure, pretty_print, select_prompt,
+                    success)
 from .utils import (copy_file, ensure_not_whitespace, get_all_files,
                     get_project_folder_by_name, name_to_identifier,
                     remove_tree)
@@ -21,16 +21,16 @@ def get_path_set(locations: List[str], error_sensitive: bool = False) -> Optiona
 				directories.append(directory)
 			else:
 				if error_sensitive:
-					error(f"Declared invalid directory {path}, task will be terminated!")
+					failure(f"Declared invalid directory {path}, task will be terminated!")
 					return None
 				else:
-					warn(f"* Declared invalid directory {path}, it will be skipped.")
+					attention(f"Declared invalid directory {path}, it will be skipped.")
 	return directories
 
 def pretty_cleanup_directory(path: str) -> None:
 	start_time = time.time()
 	remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path(path))
-	pretty_print_success(f"Completed {basename(path)} cleanup in {int((time.time() - start_time) * 100) / 100}s")
+	success(f"Completed {basename(path)} cleanup in {int((time.time() - start_time) * 100) / 100}s")
 
 def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	have_template = "template" in GLOBALS.TOOLCHAIN_CONFIG
@@ -60,7 +60,7 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 			on_validate_template(template)
 		elif len(GLOBALS.PROJECT_MANAGER.templates) <= 1:
 			if len(GLOBALS.PROJECT_MANAGER.templates) == 0:
-				pretty_print_attention("You need at least one template to create a project, it can be done by creating a folder and renaming `make.json` to `template.json`.")
+				attention("You need at least one template to create a project, it can be done by creating a folder and renaming `make.json` to `template.json`.")
 				abort("Not found any templates, nothing to do.")
 			template = GLOBALS.PROJECT_MANAGER.templates[0]
 			on_validate_template(template)
@@ -126,7 +126,7 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	assert output_directory is not None
 	choosen_template = results["template"] or "../toolchain-mod"
 	if always_skip_description:
-		pretty_print_attention("Property `template.skipDescription` has disabled some options.")
+		attention("Property `template.skipDescription` has disabled some options.")
 	elif not have_template:
 		pretty_print("You can override template by setting `template` property in your 'toolchain.json', it will be automatically apply when you create a new project. Properties remain same as `info` property in 'make.json'.", style="class:editable.hint")
 
@@ -170,7 +170,7 @@ def setup_project(make_obj: Dict[Any, Any], template: str, path: str) -> None:
 			try:
 				dirmap[dir] = dirmap[dir].format_map(makemap)
 			except BaseException:
-				warn(f"* Source {dirmap[dir]!r} contains malformed name!")
+				attention(f"Source {dirmap[dir]!r} contains malformed name!")
 			os.mkdir(join(path, dirmap[dir]))
 		for filename in filenames:
 			if dirpath == template and filename == "template.json":

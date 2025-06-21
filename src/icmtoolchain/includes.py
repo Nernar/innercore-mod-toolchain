@@ -3,15 +3,13 @@ import os
 import platform
 import re
 import subprocess
-from os.path import (basename, isdir, isfile, join, normpath,
-                     relpath)
-from typing import (Any, Final, List, MutableMapping, MutableSequence,
-                    Optional)
+from os.path import basename, isdir, isfile, join, normpath, relpath
+from typing import Any, Final, List, MutableMapping, MutableSequence, Optional
 
 from . import GLOBALS, PROPERTIES
 from .config import FileConfig
 from .hglob import glob
-from .shell import debug, error, info, pretty_print, warn
+from .shell import attention, failure, frozen, pretty_debug, success
 from .tsconfig import TSCONFIG
 from .utils import ensure_file_directory, request_typescript
 
@@ -57,7 +55,7 @@ class Includes:
 			else:
 				self.params[key] = value
 		elif default is None:
-			warn(f"* Option {key} not corresponds to any default value!")
+			attention(f"Option {key} not corresponds to any default value!")
 		elif isinstance(default, bool):
 			self.params[key] = not default
 			dependents.append(key)
@@ -172,7 +170,7 @@ class Includes:
 		temp_path = join(GLOBALS.MAKE_CONFIG.get_build_path("sources"), basename(target_path))
 		if GLOBALS.BUILD_STORAGE.is_path_changed(self.directory) or not isfile(temp_path):
 			if language == "typescript":
-				debug(f"Computing {basename(target_path)!r} tsconfig from {self.includes!r}")
+				pretty_debug(f"Computing {basename(target_path)!r} tsconfig from {self.includes!r}")
 				self.create_tsconfig(temp_path)
 			return True
 		return False
@@ -183,22 +181,22 @@ class Includes:
 
 		from time import time
 		if GLOBALS.BUILD_STORAGE.is_path_changed(self.directory) or not isfile(temporary_path):
-			debug(f"Building {basename(target_path)!r} from {self.includes!r}")
+			pretty_debug(f"Building {basename(target_path)!r} from {self.includes!r}")
 
 			startup_millis = time()
 			overall_result = self.build_source(temporary_path, language)
 
 			startup_millis = time() - startup_millis
 			if overall_result == 0:
-				pretty_print(f"Completed {basename(target_path)!r} flushing in {startup_millis:.2f}s!")
+				success(f"Completed {basename(target_path)!r} flushing in {startup_millis:.2f}s!")
 			else:
-				error(f"Failed {basename(target_path)!r} flushing in {startup_millis:.2f}s with result {overall_result}.")
+				failure(f"Failed {basename(target_path)!r} flushing in {startup_millis:.2f}s with result {overall_result}.")
 				return overall_result
 
 			GLOBALS.BUILD_STORAGE.is_path_changed(self.directory, True)
 			GLOBALS.BUILD_STORAGE.save()
 		else:
-			info(f"* Build target {basename(target_path)} is not changed.")
+			frozen(f"Build target {basename(target_path)} is not changed.")
 
 		return overall_result
 

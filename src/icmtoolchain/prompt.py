@@ -15,9 +15,8 @@ from prompt_toolkit.layout import (AnyContainer, HSplit, Layout,
                                    ScrollablePane, ScrollOffsets)
 from prompt_toolkit.validation import Validator
 
-from .shell import (Editable, Interactable, Selectable, get_toolchain_style,
-                    pretty_print, pretty_print_attention, pretty_print_failure,
-                    pretty_print_success, pretty_print_yield)
+from .shell import (Editable, Interactable, Selectable, attention, failure,
+                    frozen, get_toolchain_style, pretty_print, success)
 
 
 class Feedback(metaclass=ABCMeta):
@@ -106,30 +105,30 @@ class Feedback(metaclass=ABCMeta):
 			return await self.request_async()
 		except (KeyboardInterrupt, EOFError):
 			if prints_abort:
-				pretty_print_attention("Abort.")
+				attention("Abort.")
 
 	def request_safe(self, prints_abort: bool = True) -> Any:
 		try:
 			return self.request()
 		except (KeyboardInterrupt, EOFError):
 			if prints_abort:
-				pretty_print_attention("Abort.")
+				attention("Abort.")
 
 	def print_result(self, result: object) -> object:
 		if result is True:
-			pretty_print_success(self.prompt, end=" ")
+			success(self.prompt, end=" ")
 			pretty_print("Yes", style="class:print.answer")
 		elif result is False:
-			pretty_print_failure(self.prompt, end=" ")
+			failure(self.prompt, end=" ")
 			pretty_print("No", style="class:print.answer")
 		elif result == self.fallback:
-			pretty_print_yield(self.prompt, end=" ")
+			frozen(self.prompt, end=" ")
 			pretty_print(result, style="class:print.answer")
 		elif isinstance(result, Sized) and len(result) == 0:
-			pretty_print_attention(self.prompt, end=" ")
+			attention(self.prompt, end=" ")
 			pretty_print("<nope>", style="class:print.answer")
 		else:
-			pretty_print_success(self.prompt, end=" ")
+			success(self.prompt, end=" ")
 			if not isinstance(result, str) and isinstance(result, Iterable):
 				pretty_print(*result, sep=", ", style="class:print.answer")
 			else:
@@ -530,11 +529,11 @@ class Review:
 			return self.request(returns_empty_properties=returns_empty_properties)
 		except (KeyboardInterrupt, EOFError):
 			if prints_abort:
-				pretty_print_attention("Abort.")
+				attention("Abort.")
 
 	async def request_async_safe(self, prints_abort: bool = True, returns_empty_properties: bool = False) -> Optional[Dict[str, Any]]:
 		try:
 			return await self.request_async(returns_empty_properties=returns_empty_properties)
 		except (KeyboardInterrupt, EOFError):
 			if prints_abort:
-				pretty_print_attention("Abort.")
+				attention("Abort.")

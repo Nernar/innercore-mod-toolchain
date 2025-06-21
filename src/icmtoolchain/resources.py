@@ -6,7 +6,7 @@ from shutil import make_archive
 from . import GLOBALS
 from .language import PROJECT_TYPE_MOD
 from .output_directory import expand_paths
-from .shell import debug, pretty_print, warn
+from .shell import attention, pretty_debug, pretty_print
 from .utils import (copy_directory, copy_file, ensure_directory,
                     ensure_file_directory, ensure_not_whitespace, remove_tree)
 
@@ -21,7 +21,7 @@ def build_resources() -> int:
 	for resource in GLOBALS.MAKE_CONFIG.iterate_resources():
 		resource_files = expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(resource.relative_path))
 		if len(resource_files) == 0:
-			warn(f"* Skipped non-existing resource {resource.relative_path!r}!")
+			attention(f"Skipped non-existing resource {resource.relative_path!r}!")
 			continue
 
 		for source_path in resource_files:
@@ -78,7 +78,7 @@ def build_pack_graphics() -> int:
 		for image_directory in graphics.images:
 			for image_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(image_directory)):
 				if not isfile(image_path):
-					warn(f"* Skipping graphics image file {basename(image_path)}, cause it does not exists!")
+					attention(f"Skipping graphics image file {basename(image_path)}, cause it does not exists!")
 					continue
 				copy_file(image_path, join(graphics_directory, f"{graphics.group_name}@{offset}.png"))
 				offset += 1
@@ -95,7 +95,7 @@ def build_additional_resources() -> int:
 	for asset in GLOBALS.MAKE_CONFIG.iterate_assets():
 		additional_files = expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(asset.relative_path))
 		if len(additional_files) == 0:
-			warn(f"* Skipped non-existing additional resource {asset.relative_path!r}!")
+			attention(f"Skipped non-existing additional resource {asset.relative_path!r}!")
 			continue
 
 		for additional_path in additional_files:
@@ -103,7 +103,7 @@ def build_additional_resources() -> int:
 			output_relative_filename = ensure_not_whitespace(asset.output_filename, basename(additional_path))
 			output_path = f"{asset.output_path}/{output_relative_filename}"
 
-			debug(f"Referencing {asset.relative_path!r} to {output_path!r} on remote")
+			pretty_debug(f"Referencing {asset.relative_path!r} to {output_path!r} on remote")
 			GLOBALS.LINKED_RESOURCE_STORAGE.append_resource(
 				relative_path,
 				output_path,
@@ -136,7 +136,7 @@ def build_package() -> int:
 		elif isdir(input_resource):
 			copy_directory(input_resource, output_package_resource)
 		else:
-			warn(f"* We cannot copy {linked_resource['relative_path']} resource because we could not determine its type.")
+			attention(f"We cannot copy {linked_resource['relative_path']} resource because we could not determine its type.")
 	for path in GLOBALS.MAKE_CONFIG.obtain_list("excludeFromRelease"):
 		for excluded_path in expand_paths(join(output_package_directory, path)):
 			remove_tree(excluded_path)

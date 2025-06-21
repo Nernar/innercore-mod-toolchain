@@ -5,12 +5,13 @@ from os.path import abspath, basename, exists, isdir, isfile, join, relpath
 from typing import (Collection, Iterable, List, MutableSequence, NamedTuple,
                     Optional)
 
-from . import GLOBALS, PROPERTIES
+from . import GLOBALS
 from .config import Config, FileConfig
 from .language import MakeNativeData
 from .native_setup import arch_to_abi, prepare_compiler_executable
 from .output_directory import expand_paths
-from .shell import debug, error, info, pretty_print, warn
+from .shell import (attention, failure, frozen, pretty_debug, pretty_info,
+                    pretty_print, success)
 from .utils import (copy_directory, copy_file, ensure_directory, ensure_file,
                     ensure_file_directory, ensure_not_whitespace,
                     get_all_files, remove_tree)
@@ -42,7 +43,7 @@ def collect_stdincludes_directories(directories: Optional[Collection[str]]) -> L
 				from .output_directory import get_config_directory
 				stdincludes_directory = join(get_config_directory(), directory)
 		if not isdir(stdincludes_directory):
-			warn(f"* Skipped non-existing stdincludes directory {directory!r}, please make sure that them exist!")
+			attention(f"Skipped non-existing stdincludes directory {directory!r}, please make sure that them exist!")
 			continue
 		has_directories = False
 		for filename in os.listdir(stdincludes_directory):
@@ -51,7 +52,7 @@ def collect_stdincludes_directories(directories: Optional[Collection[str]]) -> L
 				stdincludes.append(stdincludes_headers)
 				has_directories = True
 			elif not has_directories and filename.endswith((".h", ".hpp")):
-				warn(f"* Header {filename} should be inside any of stdincludes directory, otherwise it will be ignored.")
+				attention(f"Header {filename} should be inside any of stdincludes directory, otherwise it will be ignored.")
 	return stdincludes
 
 def get_manifest(directory: str) -> FileConfig:
@@ -86,9 +87,9 @@ def add_fake_so(executable: str, abi: str, name: str) -> None:
 			"-shared", "-o", file
 		])
 		if result == 0:
-			debug(f"Created linking fake so {name!r} successfully")
+			pretty_debug(f"Created linking fake so {name!r} successfully")
 		else:
-			warn(f"Stubbing fake so failed with result {result}!")
+			attention(f"Stubbing fake so failed with result {result}!")
 
 RUNTIME_ARCHES = {
 	"arm64-v8a": "aarch64",
@@ -114,13 +115,13 @@ def get_native_build_targets(directories: Iterable[MakeNativeData]) -> List[Buil
 	return targets
 
 def compile_directory_with_gcc(directory: str, target_directory: str, target_so: str, abi: str, stdincludes: Collection[str], manifest: MakeNativeData) -> int:
-	info(f"* Compiling {manifest.shared_name!r} for {abi}")
+	pretty_info(f"* Compiling {manifest.shared_name!r} for {abi}")
 	soname = f"lib{manifest.shared_name}.so"
 
 	options = list(manifest.options)
 	if not options or len(options) == 0:
 		options = ["-std=c++11"]
-	debug(", ".join(options))
+	pretty_debug(", ".join(options))
 
 	executable = prepare_compiler_executable(abi)
 	compiler_command = [executable, "-DANDROID_STL=c++_static"]
@@ -149,7 +150,7 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 				except KeyError:
 					pass
 		else:
-			warn(f"* Dependency directory {dependency} is not found, it will be skipped.")
+			attention(f"Dependency directory {dependency} is not found, it will be skipped.")
 	for include in manifest.include:
 		includes.append("-I" + join(directory, include))
 
@@ -169,7 +170,7 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 
 	for file in source_files:
 		relative_file = relpath(file, directory)
-		debug(f"Preprocessing {relative_file} ({object_position}/{total_count}){' ' * 48}", end="\r")
+		pretty_debug(f"Preprocessing {relative_file} ({object_position}/{total_count}){' ' * 48}", end="\r")
 
 		object_file = join(object_directory, relative_file) + ".o"
 		preprocessed_file = join(preprocessed_directory, relative_file)
@@ -191,7 +192,7 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 				if isfile(object_file):
 					os.remove(object_file)
 
-				debug(f"Compiling {relative_file} ({object_position}/{total_count}){' ' * 48}", end="\r")
+				pretty_debug(f"Compiling {relative_file} ({object_position}/{total_count}){' ' * 48}", end="\r")
 				result = max(result, subprocess.call(compiler_command + [
 					"-c", preprocessed_file, "-o", object_file
 				] + options + ([] if "64" in abi else ["-shared"])))
@@ -210,7 +211,7 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 	if overall_result != CODE_OK:
 		pretty_print()
 		return overall_result
-	debug(f"Recompiled {recompiled_count}/{total_count} files with result {overall_result} ({'OK' if overall_result == 0 else 'ERROR'}){' ' * 48}")
+	pretty_debug(f"Recompiled {recompiled_count}/{total_count} files with result {overall_result} ({'OK' if overall_result == 0 else 'ERROR'}){' ' * 48}")
 
 	for link in manifest.link_static:
 		link_path = GLOBALS.MAKE_CONFIG.get_relative_path(join("static_libs", abi, link))
@@ -220,9 +221,9 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 		elif exists(link_path):
 			object_files.append(link_path)
 		else:
-			warn(f"* Skipped static library {link}, because it was not exist.")
+			attention(f"Skipped static library {link}, because it was not exist.")
 
-	debug("Linking object files")
+	pretty_debug("Linking object files")
 	ensure_file(target_so)
 	linking_command = list()
 	linking_command += compiler_command
@@ -239,7 +240,7 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 	linking_command.append("-shared")
 	linking_command.append("-Wl,-soname=" + soname)
 	if "-flto" in options:
-		debug("Linker time optimization is enabled")
+		pretty_debug("Linker time optimization is enabled")
 		linking_command += options
 	linking_command.append("-o")
 	linking_command.append(target_so)
@@ -277,13 +278,13 @@ def build_native_directories(directories: Iterable[MakeNativeData], directory_tu
 					if isdir(src_include_path):
 						copy_directory(src_include_path, output_include_path, clear_destination=True)
 					else:
-						warn(f"* Shared headers folder {include_path!r} does not exist, check your build configuration!")
+						attention(f"Shared headers folder {include_path!r} does not exist, check your build configuration!")
 				else:
 					remove_tree(output_include_path)
 
 		# Copy already prebuilt libraries, output path will be 'libname.so' or 'so/arch/libname.so'.
 		if exists(join(target.directory, ".precompiled")):
-			info(f"* Library directory {target.directory} skipped, because precompiled flag is set.")
+			frozen(f"Library directory {target.directory} skipped, because precompiled flag is set.")
 
 			libraries_count = 0
 			for abi, scoped_directories in abi_targets:
@@ -301,7 +302,7 @@ def build_native_directories(directories: Iterable[MakeNativeData], directory_tu
 					libraries_count += 1
 
 			if libraries_count == 0:
-				warn(f"* Library directory {target.directory} should be precompiled, but there is no shared libraries.")
+				attention(f"Library directory {target.directory} should be precompiled, but there is no shared libraries.")
 				return CODE_FAILED_INVALID_MANIFEST
 			continue
 
@@ -348,7 +349,7 @@ def compile_native(abis: Collection[str]) -> int:
 	if exists(stdincludes_custom):
 		stdincludes_directories.append(stdincludes_custom)
 	if not isdir(stdincludes_toolchain):
-		warn("Not found 'stdincludes', in most cases build will be failed, please install it via tasks.")
+		attention("Not found 'stdincludes', in most cases build will be failed, please install it via tasks.")
 
 	toolchain_config = None
 	if any(stdincludes_directories):
@@ -375,9 +376,9 @@ def compile_native(abis: Collection[str]) -> int:
 	GLOBALS.MOD_STRUCTURE.update_build_config_list("nativeDirs")
 	startup_millis = time() - startup_millis
 	if overall_result == CODE_OK:
-		pretty_print(f"Completed native build in {startup_millis:.2f}s!")
+		success(f"Completed native build in {startup_millis:.2f}s!")
 	else:
-		error(f"Failed native build in {startup_millis:.2f}s with result {overall_result}.")
+		failure(f"Failed native build in {startup_millis:.2f}s with result {overall_result}.")
 
 	return overall_result
 
@@ -391,7 +392,7 @@ def copy_shared_objects(abis: Collection[str]) -> int:
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("shared_object")
 	order = set()
 
-	debug(f"Copying shared objects")
+	pretty_debug(f"Copying shared objects")
 	overall_result = 0
 	for shared_object in shared_objects:
 		relative_path = shared_object.relative_path
@@ -401,7 +402,7 @@ def copy_shared_objects(abis: Collection[str]) -> int:
 			for shared_object_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(formatted_relative_path)):
 				shared_object_name = basename(shared_object_path)
 				if shared_object_name in order:
-					warn(f"* Found duplicate shared object {formatted_relative_path}, overriding existing one...")
+					attention(f"Found duplicate shared object {formatted_relative_path}, overriding existing one...")
 				output_relative_file = join(abi_to_runtime_architecture(abi), shared_object_name)
 				output_file = GLOBALS.MOD_STRUCTURE.new_build_target("shared_object", output_relative_file)
 				copy_file(shared_object_path, output_file)
@@ -415,7 +416,7 @@ def copy_shared_objects(abis: Collection[str]) -> int:
 				order_file.write(shared_object + "\n")
 
 	if overall_result == 0:
-		pretty_print(f"Completed including shared objects!")
+		success(f"Completed including shared objects!")
 	else:
-		error(f"Failed to include shared objects with result {overall_result}.")
+		failure(f"Failed to include shared objects with result {overall_result}.")
 	return overall_result

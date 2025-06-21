@@ -5,8 +5,6 @@ from os.path import (basename, dirname, getmtime, getsize, isdir, isfile,
                      islink, join)
 from typing import Collection, Dict, Final, List
 
-from .utils import get_all_files
-
 try:
 	from hashlib import blake2s as encode
 except ImportError:
@@ -32,8 +30,8 @@ class HashStorage:
 				try:
 					self.last_hashes = json.load(file)
 				except json.JSONDecodeError:
-					from .shell import warn
-					warn(f"* Malformed {basename(self.path)!r}, prebuilt caches will be ignored...")
+					from .shell import attention
+					attention(f"Malformed {basename(self.path)!r}, prebuilt caches will be ignored...")
 
 	def get_path_hash(self, path: str, force: bool = False) -> str:
 		encoded = encode(bytes(path, "utf-8")).hexdigest()
@@ -72,6 +70,7 @@ class HashStorage:
 	def get_modified_files(self, path: str, extensions: Collection[str] = (), force: bool = False) -> List[str]:
 		if not isdir(path):
 			raise NotADirectoryError(path)
+		from .utils import get_all_files
 		return list(filter(
 			lambda filepath: self.is_path_changed(filepath, force),
 			get_all_files(path, extensions)

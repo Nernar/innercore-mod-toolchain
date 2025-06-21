@@ -6,7 +6,6 @@ from .config import Config, FileConfig
 from .language import (PROJECT_TYPE_MODPACK, MakeAssetData, MakeDataConfig,
                        MakeModpackData)
 from .project_graph import Artifact
-from .shell import pretty_print_attention
 
 DECLARED_MODPACK_DIRECTORY_TYPES = ("resource", "user_data", "config", "cache", "invalid")
 
@@ -70,7 +69,8 @@ class ModpackConfig(MakeDataConfig):
 			try:
 				yield self.obtain_asset_data(directory_config)
 			except ValueError as exc:
-				pretty_print_attention(exc)
+				from .shell import attention
+				attention(exc)
 		external_servers = self.get_relative_path("external_servers.txt")
 		if isfile(external_servers):
 			yield MakeAssetData(

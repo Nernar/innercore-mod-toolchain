@@ -7,7 +7,7 @@ from typing import IO, Callable, Optional
 from urllib.error import URLError
 from urllib.response import addinfourl
 
-from .shell import pretty_print_failure, pretty_print_success, warn
+from .shell import attention, failure, success
 from .utils import ensure_file, name_to_identifier
 
 
@@ -106,9 +106,9 @@ def create_download_request(url: str, data: Optional[bytes] = None, /, placehold
 		if isfile(output_path):
 			file_size = getsize(output_path)
 			if content_size == -1:
-				warn(f"* File {placeholder!r} already exists, but since we were unable to determine size of remote file, we will need to download it again.")
+				attention(f"File {placeholder!r} already exists, but since we were unable to determine size of remote file, we will need to download it again.")
 			elif file_size != content_size:
-				warn(f"* File {placeholder!r} already exists, but is not fully downloaded/has changed on remote.")
+				attention(f"File {placeholder!r} already exists, but is not fully downloaded/has changed on remote.")
 			else:
 				return output_path, content_size
 			os.remove(output_path)
@@ -130,9 +130,9 @@ def queue_download_request(url: str, data: Optional[bytes] = None, output_path: 
 			retrieve_size, fetch = create_download_request(url, data, placeholder=placeholder, timeout=timeout, seconds_between_requests=seconds_between_requests, attempts=attempts)
 			file_path, file_size = fetch(output_path, lambda received, size: session["progress"].update(received / size, f"{placeholder} ({received / 1048576:.1f} of {size / 1048576:.1f} MiB)"))
 			session["progress"].update(1.0, placeholder)
-			pretty_print_success(f"File {placeholder} ({file_size / 1048576:.1f} MiB) has been downloaded.")
+			success(f"File {placeholder} ({file_size / 1048576:.1f} MiB) has been downloaded.")
 			return file_path
 		except URLError as exc:
-			pretty_print_failure(f"#{exc.errno}: {exc.strerror}")
+			failure(f"#{exc.errno}: {exc.strerror}")
 			session["progress"].update(1.0, "Check your network connection!")
 			session["progress"].style = "class:raised"
