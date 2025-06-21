@@ -90,6 +90,7 @@ class RuleSet:
 
 TOOLCHAIN_RULE_SET = RuleSet()
 TOOLCHAIN_RULE_SET.append_set("package_type", "develop", "release")
+TOOLCHAIN_RULE_SET.append_set("java_compiler", "javac", "ecj", "gradle")
 TOOLCHAIN_RULE_SET.append_set("native_architecture", "arm", "arm64", "x86", "x86_64")
 
 class RuleSetHolder(metaclass=ABCMeta):

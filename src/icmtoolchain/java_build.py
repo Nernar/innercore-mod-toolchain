@@ -496,6 +496,8 @@ def get_java_build_targets(directories: Iterable[MakeJavaData]) -> List[BuildTar
 	return targets
 
 def build_java_directories(tool: str, directories: Iterable[MakeJavaData], target_directory: str) -> int:
+	tool = tool if tool in ("javac", "ecj", "gradle") else "javac"
+	GLOBALS.MAKE_CONFIG.bisect_properties(tool)
 	targets = get_java_build_targets(directories)
 
 	if tool == "gradle":
@@ -505,6 +507,7 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 	else: # javac
 		result = build_java_with_javac(targets, target_directory)
 	if result != 0:
+		GLOBALS.MAKE_CONFIG.remove_rules("java_compiler")
 		return result
 
 	modified_targets = update_modified_targets(targets, target_directory)
@@ -518,10 +521,12 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 			result = run_d8(target, modified_targets[target.relative_directory], target.classpath, target_directory)
 			if result != 0:
 				error(f"Failed to dex {target.relative_directory!r} with result {result}.")
+				GLOBALS.MAKE_CONFIG.remove_rules("java_compiler")
 				return result
 			result = merge_compressed_dexes(target, target_directory)
 			if result != 0:
 				error(f"Failed to merge {target.relative_directory!r} with result {result}.")
+				GLOBALS.MAKE_CONFIG.remove_rules("java_compiler")
 				return result
 
 		built_successfully = False
@@ -552,6 +557,7 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 			order_file.write("\n")
 
 	copy_additional_sources(targets)
+	GLOBALS.MAKE_CONFIG.remove_rules("java_compiler")
 	GLOBALS.BUILD_STORAGE.save()
 	return result
 
