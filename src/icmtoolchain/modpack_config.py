@@ -1,5 +1,5 @@
 from os import scandir
-from os.path import basename, isdir, join
+from os.path import basename, isdir, isfile, join
 from typing import Iterable, MutableMapping, Optional, Union, override
 
 from .config import Config, FileConfig
@@ -22,7 +22,7 @@ class ModpackConfig(MakeDataConfig):
 			if not filefd.is_dir():
 				continue
 			dependency = MakeDataConfig.of(filefd.path)
-			if dependency:
+			if dependency is not None:
 				yield dependency
 
 	@override
@@ -78,7 +78,7 @@ class ModpackConfig(MakeDataConfig):
 		modpack_assets = self.get_relative_path("mod_assets")
 		if isdir(modpack_assets):
 			yield MakeAssetData(
-				relative_path="mod_assets",
+				relative_path=self.get_path_to_config(modpack_assets),
 				output_path="mod_assets"
 			)
 		for directory in self.obtain_list("directories"):
@@ -86,6 +86,12 @@ class ModpackConfig(MakeDataConfig):
 				continue
 			directory_config = Config(map=directory)
 			yield self.obtain_asset_data(directory_config)
+		external_servers = self.get_relative_path("external_servers.txt")
+		if isfile(external_servers):
+			yield MakeAssetData(
+				relative_path=self.get_path_to_config(external_servers),
+				output_path="mod_assets"
+			)
 
 	def obtain_asset_data(self, source: Config) -> MakeAssetData:
 		relative_path = source.get_value("path")
