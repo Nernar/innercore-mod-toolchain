@@ -100,39 +100,6 @@ def abi_to_runtime_architecture(abi: str) -> str:
 		return RUNTIME_ARCHES[abi]
 	return abi
 
-def is_relevant_configuration(configuration: str, *properties: str) -> bool:
-	if len(configuration) == 0 or configuration == "*":
-		return True
-	rules = configuration.split("-")
-	rule_match_abi = None
-	for rule in rules:
-		try:
-			arch = arch_to_abi(rule)
-			if arch in properties:
-				rule_match_abi = True
-			elif rule_match_abi is None:
-				rule_match_abi = False
-			continue
-		except ValueError:
-			pass
-		if rule == "debug" or rule == "release":
-			is_release = PROPERTIES.get_value("release")
-			if (is_release and rule == "debug") or (not is_release and rule == "release"):
-				return False
-			continue
-		if rule in properties:
-			continue
-		# debug(f"* Mismatched rule {rule} in configuration {configuration!r}, ignoring it...")
-		return False
-	return rule_match_abi != False
-
-def merge_relevant_configurations(configurations: Config, *properties: str) -> Config:
-	relevant = Config()
-	for key, config in configurations.items():
-		if isinstance(config, Config) and is_relevant_configuration(key, *properties):
-			relevant.merge_config(config)
-	return relevant
-
 def get_native_build_targets(directories: Iterable[MakeNativeData]) -> List[BuildTarget]:
 	targets = list()
 
@@ -341,6 +308,7 @@ def build_native_directories(directories: Iterable[MakeNativeData], directory_tu
 		# Compile library for requested ABIs.
 		overall_result = CODE_OK
 		for abi, scoped_directories in abi_targets:
+			GLOBALS.MAKE_CONFIG.bisect_properties(arch_to_abi(abi))
 			scoped_target = next(scoped_directories)
 			target_so = abspath(join(target.output_directory, soname)) if len(abi_targets) == 1 \
 				else abspath(join(target.output_directory, "so", abi_to_runtime_architecture(abi), soname))
@@ -354,7 +322,10 @@ def build_native_directories(directories: Iterable[MakeNativeData], directory_tu
 				scoped_target.manifest
 			)
 			if overall_result != 0:
-				return overall_result
+				break
+		GLOBALS.MAKE_CONFIG.remove_rules("native_architecture")
+		if overall_result != 0:
+			return overall_result
 
 	return CODE_OK
 
@@ -379,20 +350,12 @@ def compile_native(abis: Collection[str]) -> int:
 	if not isdir(stdincludes_toolchain):
 		warn("Not found 'stdincludes', in most cases build will be failed, please install it via tasks.")
 
-	# Apply global configurations to preserve keepIncludes, etc. in builds.
-	optional_config = GLOBALS.MAKE_CONFIG.get_value("configurations")
-	defaults = None
-	if isinstance(optional_config, Config):
-		defaults = merge_relevant_configurations(optional_config)
-
 	toolchain_config = None
 	if any(stdincludes_directories):
 		toolchain_config = Config()
 		toolchain_config.set_value("stdincludes", stdincludes_directories)
-	if toolchain_config and defaults:
-		defaults.merge_config(toolchain_config, exclusive_lists=True)
 
-	directories = GLOBALS.MAKE_CONFIG.iterate_native(defaults=defaults)
+	directories = GLOBALS.MAKE_CONFIG.iterate_native(defaults=toolchain_config)
 	directories, has_anything = tee(directories)
 	try:
 		next(has_anything)
@@ -402,13 +365,10 @@ def compile_native(abis: Collection[str]) -> int:
 
 	directory_tuples: Iterable[tuple[str, Iterable[MakeNativeData]]] = []
 	for abi in abis:
-		optional_defaults = None
-		if isinstance(optional_config, Config):
-			optional_defaults = merge_relevant_configurations(optional_config, abi)
-			if toolchain_config:
-				optional_defaults.merge_config(toolchain_config, exclusive_lists=True)
-		scoped_directories = GLOBALS.MAKE_CONFIG.iterate_native(defaults=optional_defaults)
+		GLOBALS.MAKE_CONFIG.bisect_properties(arch_to_abi(abi))
+		scoped_directories = GLOBALS.MAKE_CONFIG.iterate_native(defaults=toolchain_config)
 		directory_tuples.append((abi, scoped_directories))
+	GLOBALS.MAKE_CONFIG.remove_rules("native_architecture")
 
 	overall_result = build_native_directories(directories, directory_tuples, target_directory)
 
@@ -436,6 +396,7 @@ def copy_shared_objects(abis: Collection[str]) -> int:
 	for shared_object in shared_objects:
 		relative_path = shared_object.relative_path
 		for abi in abis:
+			GLOBALS.MAKE_CONFIG.bisect_properties(arch_to_abi(abi))
 			formatted_relative_path = relative_path.format(abi)
 			for shared_object_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(formatted_relative_path)):
 				shared_object_name = basename(shared_object_path)
@@ -445,6 +406,7 @@ def copy_shared_objects(abis: Collection[str]) -> int:
 				output_file = GLOBALS.MOD_STRUCTURE.new_build_target("shared_object", output_relative_file)
 				copy_file(shared_object_path, output_file)
 				order.add(shared_object_name)
+		GLOBALS.MAKE_CONFIG.remove_rules("native_architecture")
 
 	if any(order):
 		output_directory = GLOBALS.MOD_STRUCTURE.get_target_output_directory("shared_object")
