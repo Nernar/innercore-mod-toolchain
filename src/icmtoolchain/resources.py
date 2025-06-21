@@ -115,64 +115,6 @@ def build_additional_resources() -> int:
 
 	return overall_result
 
-def write_mod_info_file(data: MakeModData) -> int:
-	info_file = join(GLOBALS.MOD_STRUCTURE.directory, "mod.info")
-	info = FileConfig(info_file, do_not_read=True)
-	if not ensure_not_whitespace(data.name):
-		info.set_value("name", data.name)
-	if not ensure_not_whitespace(data.author):
-		info.set_value("author", data.author)
-	if not ensure_not_whitespace(data.version):
-		info.set_value("version", data.version)
-	if not ensure_not_whitespace(data.description):
-		info.set_value("description", data.description)
-	info.save_as_file()
-
-	icon_path = GLOBALS.MAKE_CONFIG.get_path(data.icon or "mod_icon.png")
-	output_info_path = join(GLOBALS.MOD_STRUCTURE.directory, "mod_icon.png")
-	if isfile(icon_path) and icon_path != output_info_path:
-		copy_file(icon_path, output_info_path)
-	elif ensure_not_whitespace(data.icon):
-		warn(f"* Icon {icon_path!r} described in 'make.json' is not found!")
-	return 0
-
-def write_modpack_info_file(data: MakeModpackData) -> int:
-	manifest_file = join(GLOBALS.MOD_STRUCTURE.directory, "modpack.json")
-	manifest = FileConfig(manifest_file, do_not_read=False)
-	if not ensure_not_whitespace(data.name):
-		manifest.set_value("packName", data.name)
-	if isinstance(data.displayed_name, MutableMapping) or ensure_not_whitespace(data.displayed_name):
-		manifest.set_value("displayedName", data.displayed_name)
-	if isinstance(data.version_name, MutableMapping) or ensure_not_whitespace(data.version_name):
-		manifest.set_value("versionName", data.version_name)
-	if data.version_code >= 0:
-		manifest.set_value("versionCode", data.version_code)
-	if isinstance(data.author, MutableMapping) or ensure_not_whitespace(data.author):
-		manifest.set_value("author", data.author)
-	if isinstance(data.description, MutableMapping) or ensure_not_whitespace(data.description):
-		manifest.set_value("description", data.description)
-	manifest.save_as_file()
-
-	icon_path = GLOBALS.MAKE_CONFIG.get_path(data.icon or "pack_icon.png")
-	output_info_path = join(GLOBALS.MOD_STRUCTURE.directory, "pack_icon.png")
-	if isfile(icon_path) and icon_path != output_info_path:
-		copy_file(icon_path, output_info_path)
-	elif ensure_not_whitespace(data.icon):
-		warn(f"* Icon {icon_path!r} described in 'make.json' is not found!")
-	return 0
-
-def write_manifest_file(data: MakePackData) -> int:
-	output_manifest_path = join(GLOBALS.MOD_STRUCTURE.directory, "manifest.json")
-	manifest = FileConfig(output_manifest_path, map=data.manifest, do_not_read=True)
-	if ensure_not_whitespace(data.name):
-		manifest.set_value("pack", data.name)
-	if ensure_not_whitespace(data.version):
-		manifest.set_value("packVersion", data.version)
-	if isinstance(data.description, MutableMapping) or ensure_not_whitespace(data.description):
-		manifest.set_value("description", data.description)
-	manifest.save_as_file(output_manifest_path)
-	return 0
-
 def build_package() -> int:
 	name = basename(GLOBALS.MAKE_CONFIG.current_project)
 	output_directory = GLOBALS.MAKE_CONFIG.get_build_path("package")

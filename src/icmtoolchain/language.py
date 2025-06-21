@@ -9,7 +9,7 @@ from .config import Config, FileConfig
 from .output_directory import expand_paths
 from .rule_set import RuleSet, RuleSetConfig, RuleSetHolder
 from .shell import abort, warn
-from .utils import RuntimeCodeError, ensure_not_whitespace
+from .utils import RuntimeCodeError, copy_file, ensure_not_whitespace
 
 if TYPE_CHECKING:
 	from .project_graph import Artifact
@@ -65,22 +65,43 @@ def get_language_directories(compile_type: str, language_config: Config, propert
 	return configurables
 
 @dataclass
-class MakeModData:
+class FlushableMakeProjectData(metaclass=ABCMeta):
+	@abstractmethod
+	def flush_to_output(self, directory: str) -> int:
+		...
+
+@dataclass
+class MakeModData(FlushableMakeProjectData):
 	name: str
 	author: str
 	version: str = "1.0"
 	description: str = ""
 	icon: Optional[str] = "mod_icon.png"
 
-@dataclass
-class MakePackData:
-	name: str
-	version: str
-	description: Union[MutableMapping[str, str], str] = ""
-	manifest: MutableMapping[str, Any] = field(default_factory=Config)
+	def flush_to_output(self, directory: str) -> int:
+		info_file = join(directory, "mod.info")
+		info = FileConfig(info_file, do_not_read=True)
+		if not ensure_not_whitespace(self.name):
+			info.set_value("name", self.name)
+		if not ensure_not_whitespace(self.author):
+			info.set_value("author", self.author)
+		if not ensure_not_whitespace(self.version):
+			info.set_value("version", self.version)
+		if not ensure_not_whitespace(self.description):
+			info.set_value("description", self.description)
+		info.save_as_file()
+
+		from . import GLOBALS
+		icon_path = GLOBALS.MAKE_CONFIG.get_path(self.icon or "mod_icon.png")
+		output_info_path = join(directory, "mod_icon.png")
+		if isfile(icon_path) and icon_path != output_info_path:
+			copy_file(icon_path, output_info_path)
+		elif ensure_not_whitespace(self.icon):
+			warn(f"* Icon {icon_path!r} described in mod {self.name!r} is not found!")
+		return 0
 
 @dataclass
-class MakeModpackData:
+class MakeModpackData(FlushableMakeProjectData):
 	name: str
 	displayed_name: Union[MutableMapping[str, str], str]
 	author: Union[MutableMapping[str, str], str]
@@ -88,6 +109,51 @@ class MakeModpackData:
 	version_code: int = 1
 	description: Union[MutableMapping[str, str], str] = ""
 	icon: Optional[str] = "pack_icon.png"
+
+	def flush_to_output(self, directory: str) -> int:
+		manifest_file = join(directory, "modpack.json")
+		manifest = FileConfig(manifest_file, do_not_read=False)
+		if not ensure_not_whitespace(self.name):
+			manifest.set_value("packName", self.name)
+		if isinstance(self.displayed_name, MutableMapping) or ensure_not_whitespace(self.displayed_name):
+			manifest.set_value("displayedName", self.displayed_name)
+		if isinstance(self.version_name, MutableMapping) or ensure_not_whitespace(self.version_name):
+			manifest.set_value("versionName", self.version_name)
+		if self.version_code >= 0:
+			manifest.set_value("versionCode", self.version_code)
+		if isinstance(self.author, MutableMapping) or ensure_not_whitespace(self.author):
+			manifest.set_value("author", self.author)
+		if isinstance(self.description, MutableMapping) or ensure_not_whitespace(self.description):
+			manifest.set_value("description", self.description)
+		manifest.save_as_file()
+
+		from . import GLOBALS
+		icon_path = GLOBALS.MAKE_CONFIG.get_path(self.icon or "pack_icon.png")
+		output_info_path = join(directory, "pack_icon.png")
+		if isfile(icon_path) and icon_path != output_info_path:
+			copy_file(icon_path, output_info_path)
+		elif ensure_not_whitespace(self.icon):
+			warn(f"* Icon {icon_path!r} described in modpack {self.name!r} is not found!")
+		return 0
+
+@dataclass
+class MakePackData(FlushableMakeProjectData):
+	name: str
+	version: str
+	description: Union[MutableMapping[str, str], str] = ""
+	manifest: MutableMapping[str, Any] = field(default_factory=Config)
+
+	def flush_to_output(self, directory: str) -> int:
+		output_manifest_path = join(directory, "manifest.json")
+		manifest = FileConfig(output_manifest_path, map=self.manifest, do_not_read=True)
+		if ensure_not_whitespace(self.name):
+			manifest.set_value("pack", self.name)
+		if ensure_not_whitespace(self.version):
+			manifest.set_value("packVersion", self.version)
+		if isinstance(self.description, MutableMapping) or ensure_not_whitespace(self.description):
+			manifest.set_value("description", self.description)
+		manifest.save_as_file(output_manifest_path)
+		return 0
 
 @dataclass
 class MakeScriptData:
@@ -191,12 +257,12 @@ class MakeDataConfig(RuleSetConfig, FileConfig, RuleSetHolder, metaclass=ABCMeta
 		...
 
 	@abstractmethod
-	def obtain_project_data(self) -> Optional[Any]:
+	def obtain_project_data(self) -> Optional[FlushableMakeProjectData]:
 		"""Basic data describing this config and project as a whole. They should be provided in any case.
 		If there is no value, no built-in startup configurations are created.
 
 		Returns:
-			Optional[Any]: optional project data on which manifest is based
+			Optional[FlushableMakeProjectData]: optional project data on which manifest is based
 		"""
 		...
 

@@ -216,17 +216,10 @@ def task_resources() -> int:
 )
 def task_build_info() -> int:
 	project_data = GLOBALS.MAKE_CONFIG.obtain_project_data()
-	from .language import MakeModData, MakeModpackData, MakePackData
-	from .resources import (write_manifest_file, write_mod_info_file,
-	                        write_modpack_info_file)
-	if isinstance(project_data, MakeModData):
-		return write_mod_info_file(project_data)
-	elif isinstance(project_data, MakePackData):
-		return write_manifest_file(project_data)
-	elif isinstance(project_data, MakeModpackData):
-		return write_modpack_info_file(project_data)
-	warn("* Nothing to write in project configurations, project data does not exist.")
-	return 0
+	if project_data is None:
+		warn("* Nothing to write in project configurations, project data does not exist.")
+		return 0
+	return project_data.flush_to_output(GLOBALS.MOD_STRUCTURE.directory)
 
 @task(
 	"clearOutput",
