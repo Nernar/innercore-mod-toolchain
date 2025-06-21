@@ -52,31 +52,7 @@ class ModpackConfig(MakeDataConfig):
 	@property
 	@override
 	def supports_resources(self) -> bool:
-		return True
-
-	@override
-	def iterate_resources(self) -> Iterable[MakeResourceData]:
-		resource_packs = self.get_relative_path("resource_packs")
-		if isdir(resource_packs):
-			yield MakeResourceData(
-				relative_path="resource_packs",
-				output_path="resource_packs",
-				type="minecraft_resource_pack"
-			)
-		behavior_packs = self.get_relative_path("behavior_packs")
-		if isdir(behavior_packs):
-			yield MakeResourceData(
-				relative_path="behavior_packs",
-				output_path="behavior_packs",
-				type="minecraft_behavior_pack"
-			)
-		texture_packs = self.get_relative_path("texture_packs")
-		if isdir(texture_packs):
-			yield MakeResourceData(
-				relative_path="texture_packs",
-				output_path="texture_packs",
-				type="resource_directory"
-			)
+		return False
 
 	@override
 	def iterate_assets(self) -> Iterable[MakeAssetData]:
@@ -96,6 +72,24 @@ class ModpackConfig(MakeDataConfig):
 			yield MakeAssetData(
 				relative_path=self.get_path_to_config(external_servers),
 				output_path="mod_assets"
+			)
+		resource_packs = self.get_relative_path("resource_packs")
+		if isdir(resource_packs):
+			yield MakeAssetData(
+				relative_path=self.get_path_to_config(resource_packs),
+				output_path="resource_packs"
+			)
+		behavior_packs = self.get_relative_path("behavior_packs")
+		if isdir(behavior_packs):
+			yield MakeAssetData(
+				relative_path=self.get_path_to_config(behavior_packs),
+				output_path="behavior_packs"
+			)
+		texture_packs = self.get_relative_path("texture_packs")
+		if isdir(texture_packs):
+			yield MakeAssetData(
+				relative_path=self.get_path_to_config(texture_packs),
+				output_path="texture_packs"
 			)
 
 	def obtain_asset_data(self, source: Config) -> MakeAssetData:
