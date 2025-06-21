@@ -5,6 +5,7 @@ from os.path import basename, isdir, isfile, join, relpath
 from typing import Any, Collection, Dict, Final, List, Optional
 
 from . import GLOBALS
+from .language import PROJECT_TYPE_MOD
 from .shell import warn
 from .utils import (ensure_directory, ensure_file, ensure_file_directory,
                     remove_tree)
@@ -129,7 +130,7 @@ class ModStructure:
 			remove_tree(build_config_path)
 			os.remove(build_config_path)
 		ensure_file_directory(build_config_path)
-		if not GLOBALS.MAKE_CONFIG.is_pack:
+		if GLOBALS.MAKE_CONFIG.project_type == PROJECT_TYPE_MOD:
 			with open(build_config_path, "w", encoding="utf-8") as file:
 				file.write(json.dumps(self.build_config, indent=" " * 2, ensure_ascii=False))
 

@@ -3,8 +3,8 @@ from os.path import basename, isdir, isfile, join
 from typing import Iterable, MutableMapping, Optional, Union, override
 
 from .config import Config, FileConfig
-from .language import (MakeAssetData, MakeDataConfig, MakeModpackData,
-                       MakeResourceData)
+from .language import (PROJECT_TYPE_MODPACK, MakeAssetData, MakeDataConfig,
+                       MakeModpackData, MakeResourceData)
 from .project_graph import Artifact
 
 DECLARED_MODPACK_DIRECTORY_TYPES = ("resource", "user_data", "config", "cache", "invalid")
@@ -12,6 +12,11 @@ DECLARED_MODPACK_DIRECTORY_TYPES = ("resource", "user_data", "config", "cache", 
 class ModpackConfig(MakeDataConfig):
 	def __init__(self, path: str, defaults: FileConfig) -> None:
 		super().__init__(path, defaults)
+
+	@property
+	@override
+	def project_type(self) -> int:
+		return PROJECT_TYPE_MODPACK
 
 	@override
 	def iterate_dependencies(self) -> Iterable[Union[MakeDataConfig, Artifact]]:

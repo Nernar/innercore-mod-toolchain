@@ -10,7 +10,7 @@ from zipfile import ZipFile
 
 from . import GLOBALS, PROPERTIES
 from .config import Config
-from .language import MakeJavaData
+from .language import PROJECT_TYPE_PACK, MakeJavaData
 from .output_directory import expand_paths
 from .shell import abort, debug, error, info, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory, ensure_file,
@@ -47,7 +47,7 @@ def collect_classpath_files(directories: Collection[str]) -> List[str]:
 		classpath_directory = join(get_config_directory(), "classpath")
 		if isdir(classpath_directory):
 			TOOLCHAIN_CLASSPATH = get_all_files(classpath_directory, (".jar"))
-			if GLOBALS.MAKE_CONFIG.is_pack:
+			if GLOBALS.MAKE_CONFIG.project_type == PROJECT_TYPE_PACK:
 				innercore_test = join(classpath_directory, "innercore-test.jar")
 				try:
 					TOOLCHAIN_CLASSPATH.remove(innercore_test)
@@ -541,7 +541,7 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 		if not built_successfully:
 			warn(f"* Directory {target.relative_directory!r} is empty.")
 
-	if GLOBALS.MAKE_CONFIG.is_pack:
+	if GLOBALS.MAKE_CONFIG.project_type == PROJECT_TYPE_PACK:
 		target_output_path = GLOBALS.MOD_STRUCTURE.get_target_output_directory("java")
 		order = [relpath(target.output_directory, target_output_path) for target in targets]
 		order_path = join(target_output_path, "order.txt")

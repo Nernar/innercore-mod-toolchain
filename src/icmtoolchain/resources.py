@@ -2,11 +2,9 @@ import os
 from itertools import tee
 from os.path import basename, exists, isdir, isfile, join
 from shutil import make_archive
-from typing import MutableMapping
 
 from . import GLOBALS
-from .config import FileConfig
-from .language import MakeModData, MakeModpackData, MakePackData
+from .language import PROJECT_TYPE_MOD
 from .output_directory import expand_paths
 from .shell import debug, pretty_print, warn
 from .utils import (copy_directory, copy_file, ensure_directory,
@@ -125,7 +123,7 @@ def build_package() -> int:
 	output_temporary_file = join(output_directory, "package.zip")
 	ensure_file_directory(output_temporary_file)
 	remove_tree(output_temporary_file)
-	output_file = GLOBALS.MAKE_CONFIG.get_relative_path(name + ".zip" if GLOBALS.MAKE_CONFIG.is_pack else name + ".icmod")
+	output_file = GLOBALS.MAKE_CONFIG.get_relative_path(name + ".zip" if GLOBALS.MAKE_CONFIG.project_type != PROJECT_TYPE_MOD else name + ".icmod")
 	ensure_file_directory(output_file)
 	remove_tree(output_file)
 

@@ -4,10 +4,11 @@ from typing import (Any, Iterable, MutableMapping, MutableSequence, Optional,
                     Union, override)
 
 from .config import Config, FileConfig
-from .language import (MakeAssetData, MakeDataConfig, MakeJavaData,
-                       MakeModData, MakeNativeData, MakePackData,
-                       MakePackGraphicsData, MakeResourceData, MakeScriptData,
-                       MakeSharedObjectData)
+from .language import (PROJECT_TYPE_MOD, PROJECT_TYPE_MODPACK,
+                       PROJECT_TYPE_PACK, FlushableMakeProjectData,
+                       MakeAssetData, MakeDataConfig, MakeJavaData,
+                       MakeNativeData, MakePackGraphicsData, MakeResourceData,
+                       MakeScriptData, MakeSharedObjectData)
 from .project_graph import Artifact
 from .shell import pretty_print_attention
 from .utils import ensure_not_whitespace
@@ -65,8 +66,12 @@ class MakeConfig(MakeDataConfig):
 
 	@property
 	@override
-	def is_pack(self) -> bool:
-		return "manifest" in self
+	def project_type(self) -> int:
+		if "manifest" in self:
+			return PROJECT_TYPE_PACK
+		if "modpack" in self:
+			return PROJECT_TYPE_MODPACK
+		return PROJECT_TYPE_MOD
 
 	@override
 	def iterate_dependencies(self) -> Iterable[Union[MakeDataConfig, Artifact]]:
@@ -99,11 +104,16 @@ class MakeConfig(MakeDataConfig):
 			raise ValueError(f"Invalid dependency {dependency!r}, it should be relative project path, id or repository url!")
 
 	@override
-	def obtain_project_data(self) -> Optional[Union[MakeModData, MakePackData]]:
-		if not self.is_pack and "info" in self:
+	def obtain_project_data(self) -> Optional[FlushableMakeProjectData]:
+		if self.project_type == PROJECT_TYPE_MOD and "info" in self:
 			mod_info = self.obtain_config("info")
 			return self.obtain_mod_data(mod_info)
-		if self.is_pack and "manifest" in self:
+		if self.project_type == PROJECT_TYPE_MODPACK and "modpack" in self:
+			modpack_relative_path = self.get_value("modpack")
+			modpack_path = self.get_relative_path(modpack_relative_path)
+			modpack = FileConfig(modpack_path, raise_non_existing=True)
+			return self.obtain_modpack_data(modpack)
+		if self.project_type == PROJECT_TYPE_PACK and "manifest" in self:
 			manifest_relative_path = self.get_value("manifest")
 			manifest_path = self.get_relative_path(manifest_relative_path)
 			manifest = FileConfig(manifest_path, raise_non_existing=True)
@@ -112,7 +122,7 @@ class MakeConfig(MakeDataConfig):
 	@property
 	@override
 	def supports_scripts(self) -> bool:
-		return not self.is_pack
+		return self.project_type == PROJECT_TYPE_MOD
 
 	@override
 	def iterate_scripts(self) -> Iterable[MakeScriptData]:
@@ -158,7 +168,7 @@ class MakeConfig(MakeDataConfig):
 	@property
 	@override
 	def supports_java(self) -> bool:
-		return True
+		return self.project_type in (PROJECT_TYPE_MOD, PROJECT_TYPE_PACK)
 
 	@override
 	def iterate_java(self, defaults: Optional[Config] = None) -> Iterable[MakeJavaData]:
@@ -189,7 +199,7 @@ class MakeConfig(MakeDataConfig):
 	@property
 	@override
 	def supports_native(self) -> bool:
-		return True
+		return self.project_type in (PROJECT_TYPE_MOD, PROJECT_TYPE_PACK)
 
 	@override
 	def iterate_native(self, defaults: Optional[Config] = None) -> Iterable[MakeNativeData]:
@@ -220,7 +230,7 @@ class MakeConfig(MakeDataConfig):
 	@property
 	@override
 	def supports_shared_objects(self) -> bool:
-		return self.is_pack
+		return self.project_type == PROJECT_TYPE_PACK
 
 	@override
 	def iterate_shared_objects(self) -> Iterable[MakeSharedObjectData]:
@@ -243,7 +253,7 @@ class MakeConfig(MakeDataConfig):
 	@property
 	@override
 	def supports_resources(self) -> bool:
-		return not self.is_pack
+		return self.project_type in (PROJECT_TYPE_MOD, PROJECT_TYPE_MODPACK)
 
 	@override
 	def iterate_resources(self) -> Iterable[MakeResourceData]:
@@ -269,7 +279,7 @@ class MakeConfig(MakeDataConfig):
 	@property
 	@override
 	def supports_pack_graphics(self) -> bool:
-		return True
+		return self.project_type == PROJECT_TYPE_PACK
 
 	def iterate_pack_graphics(self) -> Iterable[MakePackGraphicsData]:
 		graphics_groups = self.obtain_config("pack.graphics")

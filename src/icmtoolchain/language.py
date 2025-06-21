@@ -219,6 +219,11 @@ class MakeAssetData:
 
 AVAILABLE_DATA_CONFIGS: Dict[Union[str, Callable[[str], str]], type['MakeDataConfig']] = {}
 
+PROJECT_TYPE_UNIVERSAL = 0
+PROJECT_TYPE_MOD = 1
+PROJECT_TYPE_MODPACK = 2
+PROJECT_TYPE_PACK = 3
+
 class MakeDataConfig(RuleSetConfig, FileConfig, RuleSetHolder, metaclass=ABCMeta):
 	defaults: FileConfig
 	current_project: Final[str]
@@ -239,13 +244,13 @@ class MakeDataConfig(RuleSetConfig, FileConfig, RuleSetHolder, metaclass=ABCMeta
 		return join(get_temporary_directory(), "build", self.project_unique_name, *components)
 
 	@property
-	def is_pack(self) -> bool:
-		"""Packs should describe extra build data through special files that are only available to them.
+	def project_type(self) -> int:
+		"""Defines project type that can be used by some sources at build time.
 
 		Returns:
-			bool: whether or not to create a pack structure
+			int: one of obviously existing PROJECT_TYPEs, or something else
 		"""
-		return False
+		return PROJECT_TYPE_UNIVERSAL
 
 	def iterate_dependencies(self) -> Iterable[Union['MakeDataConfig', 'Artifact']]:
 		"""Each project may contain dependencies that must be compiled before that project itself.

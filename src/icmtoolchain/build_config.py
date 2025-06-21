@@ -3,9 +3,9 @@ from os.path import basename, isfile, join, splitext
 from typing import Iterable, Optional, override
 
 from .config import Config, FileConfig
-from .language import (MakeAssetData, MakeDataConfig, MakeJavaData,
-                       MakeModData, MakeNativeData, MakeResourceData,
-                       MakeScriptData)
+from .language import (PROJECT_TYPE_MOD, MakeAssetData, MakeDataConfig,
+                       MakeJavaData, MakeModData, MakeNativeData,
+                       MakeResourceData, MakeScriptData)
 from .utils import ensure_not_whitespace
 
 VALID_SOURCE_TYPES = ("mod", "launcher", "preloader", "instant", "custom", "library")
@@ -14,6 +14,11 @@ VALID_RESOURCE_TYPES = ("resource", "gui")
 class BuildConfig(MakeDataConfig):
 	def __init__(self, path: str, defaults: FileConfig) -> None:
 		super().__init__(path, defaults)
+
+	@property
+	@override
+	def project_type(self) -> int:
+		return PROJECT_TYPE_MOD
 
 	@override
 	def obtain_project_data(self) -> Optional[MakeModData]:
