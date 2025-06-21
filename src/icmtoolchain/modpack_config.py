@@ -1,11 +1,12 @@
 from os import scandir
-from os.path import basename, isdir, isfile, join
+from os.path import basename, exists, isdir, isfile, join
 from typing import Iterable, MutableMapping, Optional, Union, override
 
 from .config import Config, FileConfig
 from .language import (PROJECT_TYPE_MODPACK, MakeAssetData, MakeDataConfig,
-                       MakeModpackData, MakeResourceData)
+                       MakeModpackData)
 from .project_graph import Artifact
+from .shell import pretty_print_attention
 
 DECLARED_MODPACK_DIRECTORY_TYPES = ("resource", "user_data", "config", "cache", "invalid")
 
@@ -66,7 +67,10 @@ class ModpackConfig(MakeDataConfig):
 			if not isinstance(directory, MutableMapping):
 				continue
 			directory_config = Config(map=directory)
-			yield self.obtain_asset_data(directory_config)
+			try:
+				yield self.obtain_asset_data(directory_config)
+			except ValueError as exc:
+				pretty_print_attention(exc)
 		external_servers = self.get_relative_path("external_servers.txt")
 		if isfile(external_servers):
 			yield MakeAssetData(
@@ -98,6 +102,8 @@ class ModpackConfig(MakeDataConfig):
 		if not type in DECLARED_MODPACK_DIRECTORY_TYPES:
 			raise ValueError(f"Modpack directory {relative_path!r} has invalid type, it should be one of: {', '.join(DECLARED_MODPACK_DIRECTORY_TYPES)}!")
 		absolute_path = self.get_path(relative_path)
+		if not exists(absolute_path):
+			raise ValueError(f"Modpack directory {relative_path} does not exist!")
 		return MakeAssetData(
 			relative_path=relative_path,
 			output_path=join("mod_assets", relative_path),
