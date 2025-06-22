@@ -44,7 +44,13 @@ Repository requires [Python 3.9 or higher](https://www.python.org/downloads/) in
 python -m pip install pdm
 ```
 
-Restart terminal and/or IDE to update system variables, then finally install necessary dependencies for project:
+Restart terminal and/or IDE to update system variables, then install minimum python version:
+
+```sh
+pdm python install --min
+```
+
+Now, you can finally install necessary dependencies for project:
 
 ```sh
 pdm install
