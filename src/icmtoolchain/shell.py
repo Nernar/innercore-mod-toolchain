@@ -177,7 +177,7 @@ def clear_application(*content: Optional[AnyContainer], force_exit: bool = False
 
 _SCT = TypeVar("_SCT", bound=Optional[AnyContainer])
 
-class InteractiveSession(dict[str, _SCT]):
+class InteractiveSession(Dict[str, _SCT]):
 	application: Application
 
 	def __init__(self, **content: _SCT) -> None:

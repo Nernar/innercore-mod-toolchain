@@ -1,6 +1,6 @@
 from os import scandir
 from os.path import basename, exists, isdir, isfile, join
-from typing import Iterable, MutableMapping, Optional, Union, override
+from typing import Iterable, MutableMapping, Optional, Union
 
 from .config import Config, FileConfig
 from .language import (PROJECT_TYPE_MODPACK, MakeAssetData, MakeDataConfig,
@@ -14,11 +14,9 @@ class ModpackConfig(MakeDataConfig):
 		super().__init__(path, defaults)
 
 	@property
-	@override
 	def project_type(self) -> int:
 		return PROJECT_TYPE_MODPACK
 
-	@override
 	def iterate_dependencies(self) -> Iterable[Union[MakeDataConfig, Artifact]]:
 		mod_directory = self.get_relative_path("mods")
 		if not isdir(mod_directory):
@@ -30,31 +28,25 @@ class ModpackConfig(MakeDataConfig):
 			if dependency is not None:
 				yield dependency
 
-	@override
 	def obtain_project_data(self) -> Optional[MakeModpackData]:
 		return self.obtain_modpack_data(self)
 
 	@property
-	@override
 	def supports_scripts(self) -> bool:
 		return False
 
 	@property
-	@override
 	def supports_java(self) -> bool:
 		return False
 
 	@property
-	@override
 	def supports_native(self) -> bool:
 		return False
 
 	@property
-	@override
 	def supports_resources(self) -> bool:
 		return False
 
-	@override
 	def iterate_assets(self) -> Iterable[MakeAssetData]:
 		modpack_assets = self.get_relative_path("mod_assets")
 		if isdir(modpack_assets):

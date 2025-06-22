@@ -4,8 +4,9 @@ from json import dump as dump_json
 from json import load as load_json
 from os.path import (abspath, basename, dirname, exists, isfile, join,
                      normpath, relpath)
-from typing import (Any, Callable, Iterable, MutableMapping, MutableSequence,
-                    Optional, Protocol, TypeVar, Union, cast, override)
+from typing import (Any, Callable, Dict, Iterable, MutableMapping,
+                    MutableSequence, Optional, Protocol, Type, TypeVar, Union,
+                    cast)
 
 
 class ConfigSupportsKeysAndGetItem(Protocol):
@@ -14,7 +15,7 @@ class ConfigSupportsKeysAndGetItem(Protocol):
 
 ConfigResultType = TypeVar("ConfigResultType")
 
-class Config(dict[str, Any]):
+class Config(Dict[str, Any]):
 	def __init__(self, map: Optional[ConfigSupportsKeysAndGetItem] = None, defaults: Optional['Config'] = None):
 		if map is not None:
 			super().__init__(map)
@@ -56,14 +57,13 @@ class Config(dict[str, Any]):
 
 		return namespace.get_value_unsafe(namespace_keys[2])
 
-	@override
 	def __getitem__(self, key: str, /) -> Any:
 		return self.get_value_unsafe(key)
 
 	def obtain(
 		self,
 		key: str,
-		result_type: type[ConfigResultType],
+		result_type: Type[ConfigResultType],
 		fallback: Optional[Union[ConfigResultType, Callable[[], ConfigResultType]]] = None,
 		*,
 		implace_fallback: bool = True,
@@ -149,7 +149,6 @@ class Config(dict[str, Any]):
 			obj.defaults = fallback
 		return obj
 
-	@override
 	def __setitem__(self, key: str, value: Any, /) -> None:
 		self.set_value_unsafe(key, value, replace_mismatched_types=True)
 
@@ -204,7 +203,6 @@ class Config(dict[str, Any]):
 				return
 			self.delete_dict_value(key)
 
-	@override
 	def __delitem__(self, key: str, /) -> None:
 		self.delete_value_unsafe(key, remove_mismatched_types=True)
 

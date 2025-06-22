@@ -5,7 +5,7 @@ from functools import cmp_to_key
 from itertools import chain
 from os.path import abspath, basename, exists, isdir, isfile, join
 from typing import (Any, Callable, Dict, Final, List, MutableSequence,
-                    MutableSet, Optional, Tuple, Union, override)
+                    MutableSet, Optional, Tuple, Type, Union)
 
 from . import GLOBALS
 from .config import Config
@@ -13,7 +13,7 @@ from .language import MakeDataConfig
 from .shell import abort, attention, confirm_prompt, pretty_print
 from .utils import ensure_not_whitespace, remove_tree
 
-AVAILABLE_ARTIFACTS: Dict[Union[type, Callable[[Any], bool]], Union[Callable[[Any], 'Artifact'], type['Artifact']]] = {}
+AVAILABLE_ARTIFACTS: Dict[Union[type, Callable[[Any], bool]], Union[Callable[[Any], 'Artifact'], Type['Artifact']]] = {}
 
 class Artifact(metaclass=ABCMeta):
 	def __init__(self, description: Any) -> None:
@@ -28,7 +28,7 @@ class Artifact(metaclass=ABCMeta):
 		...
 
 	@staticmethod
-	def register(criteria: Union[type, Callable[[Any], bool]], data: Union[Callable[[Any], 'Artifact'], type['Artifact']]) -> None:
+	def register(criteria: Union[type, Callable[[Any], bool]], data: Union[Callable[[Any], 'Artifact'], Type['Artifact']]) -> None:
 		"""Here you can match right artifact to different types of dependencies.
 
 		Args:
@@ -61,11 +61,9 @@ class ModBrowserArtifact(Artifact):
 	def __init__(self, remote_id: int) -> None:
 		super().__init__(remote_id)
 
-	@override
 	def fetch(self) -> None:
 		pass
 
-	@override
 	def as_project(self) -> Optional['MakeDataConfig']:
 		raise NotImplementedError()
 
@@ -78,11 +76,9 @@ class RepositoryArtifact(Artifact):
 	def __init__(self, remote_url: str) -> None:
 		super().__init__(remote_url)
 
-	@override
 	def fetch(self) -> None:
 		pass
 
-	@override
 	def as_project(self) -> Optional['MakeDataConfig']:
 		raise NotImplementedError()
 
@@ -107,7 +103,7 @@ class ProjectEdge:
 	def __str__(self) -> str:
 		return f"Project {self.project} ({len(self.dependencies)} dependencies)"
 
-class ProjectGraph(dict[Union[MakeDataConfig, Artifact], ProjectEdge]):
+class ProjectGraph(Dict[Union[MakeDataConfig, Artifact], ProjectEdge]):
 	def __init__(self, project: MakeDataConfig) -> None:
 		self.project = project
 		self.obtain_edge(project)
@@ -293,7 +289,7 @@ class ProjectGraph(dict[Union[MakeDataConfig, Artifact], ProjectEdge]):
 			index += 1
 		return dependencies	
 
-	def find_circular_reference(self, node: Optional[ProjectEdge] = None, visited: Optional[MutableSequence[ProjectEdge]] = None) -> Optional[tuple[ProjectEdge, ProjectEdge]]:
+	def find_circular_reference(self, node: Optional[ProjectEdge] = None, visited: Optional[MutableSequence[ProjectEdge]] = None) -> Optional[Tuple[ProjectEdge, ProjectEdge]]:
 		if not node:
 			node = self.root
 		if not visited:

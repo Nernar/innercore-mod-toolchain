@@ -3,7 +3,7 @@ import subprocess
 from itertools import tee
 from os.path import abspath, basename, exists, isdir, isfile, join, relpath
 from typing import (Collection, Iterable, List, MutableSequence, NamedTuple,
-                    Optional)
+                    Optional, Tuple)
 
 from . import GLOBALS
 from .config import Config, FileConfig
@@ -248,7 +248,7 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 	linking_command += dependencies
 	return subprocess.call(linking_command)
 
-def build_native_directories(directories: Iterable[MakeNativeData], directory_tuples: Iterable[tuple[str, Iterable[MakeNativeData]]], target_directory: str) -> int:
+def build_native_directories(directories: Iterable[MakeNativeData], directory_tuples: Iterable[Tuple[str, Iterable[MakeNativeData]]], target_directory: str) -> int:
 	targets = get_native_build_targets(directories)
 	abi_targets = [(
 		directory[0],

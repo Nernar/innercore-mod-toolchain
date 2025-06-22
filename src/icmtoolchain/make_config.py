@@ -1,7 +1,7 @@
 from functools import cmp_to_key
 from os.path import basename, isfile, join, splitext
 from typing import (Any, Iterable, MutableMapping, MutableSequence, Optional,
-                    Union, override)
+                    Union)
 
 from .config import Config, FileConfig
 from .language import (PROJECT_TYPE_MOD, PROJECT_TYPE_MODPACK,
@@ -48,7 +48,6 @@ class MakeConfig(MakeDataConfig):
 			config.save_as_file()
 		return changes
 
-	@override
 	def update_properties(self) -> None:
 		configurations = self.get_value("configurations")
 		if not isinstance(configurations, MutableMapping):
@@ -64,7 +63,6 @@ class MakeConfig(MakeDataConfig):
 		self.overrides = overrides
 
 	@property
-	@override
 	def project_type(self) -> int:
 		if "manifest" in self:
 			return PROJECT_TYPE_PACK
@@ -72,7 +70,6 @@ class MakeConfig(MakeDataConfig):
 			return PROJECT_TYPE_MODPACK
 		return PROJECT_TYPE_MOD
 
-	@override
 	def iterate_dependencies(self) -> Iterable[Union[MakeDataConfig, Artifact]]:
 		dependencies = self.obtain_list("dependencies")
 		for dependency in dependencies:
@@ -103,7 +100,6 @@ class MakeConfig(MakeDataConfig):
 				continue
 			raise ValueError(f"Invalid dependency {dependency!r}, it should be relative project path, id or repository url!")
 
-	@override
 	def obtain_project_data(self) -> Optional[FlushableMakeProjectData]:
 		if self.project_type == PROJECT_TYPE_MOD and "info" in self:
 			mod_info = self.obtain_config("info")
@@ -120,11 +116,9 @@ class MakeConfig(MakeDataConfig):
 			return self.obtain_pack_data(manifest)
 
 	@property
-	@override
 	def supports_scripts(self) -> bool:
 		return self.project_type == PROJECT_TYPE_MOD
 
-	@override
 	def iterate_scripts(self) -> Iterable[MakeScriptData]:
 		sources_list = filter(
 			lambda source: isinstance(source, Config),
@@ -166,11 +160,9 @@ class MakeConfig(MakeDataConfig):
 		)
 
 	@property
-	@override
 	def supports_java(self) -> bool:
 		return self.project_type in (PROJECT_TYPE_MOD, PROJECT_TYPE_PACK)
 
-	@override
 	def iterate_java(self, defaults: Optional[Config] = None) -> Iterable[MakeJavaData]:
 		java_config = self.get_value("java")
 		# Obtain properties from deprecated `gradle` config.
@@ -197,11 +189,9 @@ class MakeConfig(MakeDataConfig):
 		return self.obtain_java_manifest_data(relative_path=relative_path, output_path=output_path, config=config)
 
 	@property
-	@override
 	def supports_native(self) -> bool:
 		return self.project_type in (PROJECT_TYPE_MOD, PROJECT_TYPE_PACK)
 
-	@override
 	def iterate_native(self, defaults: Optional[Config] = None) -> Iterable[MakeNativeData]:
 		native_config = self.obtain_config("native")
 		# Obtain deprecated config `linkNative` property.
@@ -228,11 +218,9 @@ class MakeConfig(MakeDataConfig):
 		return self.obtain_native_manifest_data(relative_path=relative_path, output_path=output_path, config=config)
 
 	@property
-	@override
 	def supports_shared_objects(self) -> bool:
 		return self.project_type == PROJECT_TYPE_PACK
 
-	@override
 	def iterate_shared_objects(self) -> Iterable[MakeSharedObjectData]:
 		for shared_object in self.obtain_list("native.sharedObjects"):
 			if not isinstance(shared_object, str):
@@ -251,11 +239,9 @@ class MakeConfig(MakeDataConfig):
 		)
 
 	@property
-	@override
 	def supports_resources(self) -> bool:
 		return self.project_type in (PROJECT_TYPE_MOD, PROJECT_TYPE_MODPACK)
 
-	@override
 	def iterate_resources(self) -> Iterable[MakeResourceData]:
 		for source in self.obtain_list("resources"):
 			if not isinstance(source, Config):
@@ -277,7 +263,6 @@ class MakeConfig(MakeDataConfig):
 		)
 
 	@property
-	@override
 	def supports_pack_graphics(self) -> bool:
 		return self.project_type == PROJECT_TYPE_PACK
 
@@ -297,7 +282,6 @@ class MakeConfig(MakeDataConfig):
 			images=data
 		)
 
-	@override
 	def iterate_assets(self) -> Iterable[MakeAssetData]:
 		for source in self.obtain_list("additional"):
 			if not isinstance(source, Config):

@@ -3,7 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from os.path import abspath, basename, dirname, isdir, isfile, join
 from typing import (TYPE_CHECKING, Any, Callable, Dict, Final, Iterable,
-                    MutableMapping, Optional, Union)
+                    MutableMapping, Optional, Type, Union)
 
 from .config import Config, FileConfig
 from .output_directory import expand_paths
@@ -217,7 +217,7 @@ class MakeAssetData:
 	push_unchanged_files: bool = True
 	cleanup_remote: bool = True
 
-AVAILABLE_DATA_CONFIGS: Dict[Union[str, Callable[[str], str]], type['MakeDataConfig']] = {}
+AVAILABLE_DATA_CONFIGS: Dict[Union[str, Callable[[str], str]], Type['MakeDataConfig']] = {}
 
 PROJECT_TYPE_UNIVERSAL = 0
 PROJECT_TYPE_MOD = 1
@@ -463,7 +463,7 @@ class MakeDataConfig(RuleSetConfig, FileConfig, RuleSetHolder, metaclass=ABCMeta
 		...
 
 	@staticmethod
-	def register(criteria: Union[str, Callable[[str], str]], data: type['MakeDataConfig']) -> None:
+	def register(criteria: Union[str, Callable[[str], str]], data: Type['MakeDataConfig']) -> None:
 		"""Here you can check if this project can be loaded with this config.
 
 		Args:

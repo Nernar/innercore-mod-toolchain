@@ -3,7 +3,7 @@ import os
 import time
 from io import BytesIO
 from os.path import getsize, isfile, join
-from typing import IO, Callable, Optional
+from typing import IO, Callable, Optional, Tuple
 from urllib.error import URLError
 from urllib.response import addinfourl
 
@@ -54,7 +54,7 @@ def retrieve_stream(input: IO[bytes], output: Optional[IO[bytes]] = None, /, chu
 				output.write(chunk)
 	return received
 
-def retrieve_fetch_request(url: str, data: Optional[bytes] = None, /, timeout: float = 10, seconds_between_requests: float = 0.5, attempts: int = 2) -> tuple[int, addinfourl]:
+def retrieve_fetch_request(url: str, data: Optional[bytes] = None, /, timeout: float = 10, seconds_between_requests: float = 0.5, attempts: int = 2) -> Tuple[int, addinfourl]:
 	from urllib.request import urlopen
 	with HttpConnection10():
 		responce: addinfourl = urlopen(url, data, timeout)

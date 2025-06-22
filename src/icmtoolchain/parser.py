@@ -4,7 +4,7 @@ import sys
 from collections import namedtuple
 from types import (BuiltinMethodType, ClassMethodDescriptorType,
                    DynamicClassAttribute)
-from typing import Any, Callable, List, Mapping, Optional, Tuple
+from typing import Any, Callable, Mapping, MutableSequence, Optional, Tuple
 
 from .shell import attention, pretty_print, stringify
 from .task import Task
@@ -31,7 +31,7 @@ except ImportError:
 Attribute = namedtuple("Attribute", "name kind defining_class object type")
 
 
-def classify_attrs(obj: object) -> List[Attribute]:
+def classify_attrs(obj: object) -> MutableSequence[Attribute]:
 	"""
 	Return list of attribute-descriptor tuples.
 
@@ -128,7 +128,7 @@ def is_builtin(attribute: Attribute) -> bool:
 def dump_instance_or_type(what: object, stack: int = 0, *, exclude_builtins: bool = True, recursive: bool = True, sort_by_kinds: bool = True, inter_subclasses: bool = True, limit_depth: int = 3) -> None:
 	if getattr(type(what), "__module__", None) == "typing" or inspect.isclass(what):
 		return
-	attributes = classify_attrs(what)
+	attributes = list(classify_attrs(what))
 	if exclude_builtins:
 		attributes = list(filter(lambda attribute: not is_builtin(attribute), attributes))
 	if sort_by_kinds:
@@ -202,7 +202,7 @@ def parse_argument_value(what: str, target: type, default: Any) -> Any:
 	except BaseException:
 		pass
 
-def parse_argument(argv: List[str], mappings: Mapping[str, inspect.Parameter]) -> Optional[Tuple[str, Any]]:
+def parse_argument(argv: MutableSequence[str], mappings: Mapping[str, inspect.Parameter]) -> Optional[Tuple[str, Any]]:
 	argument = argv[0]
 	buffer = argument.lstrip("-")
 	whitespace = len(argument) - len(buffer)
@@ -266,7 +266,7 @@ def parse_argument(argv: List[str], mappings: Mapping[str, inspect.Parameter]) -
 
 	return name, value
 
-def parse_callable_arguments(argv: List[str], callable: Callable, signature: inspect.Signature, bind_wrapped: bool = False) -> Callable:
+def parse_callable_arguments(argv: MutableSequence[str], callable: Callable, signature: inspect.Signature, bind_wrapped: bool = False) -> Callable:
 	parameters = signature.parameters
 	linked_positionals = dict()
 	positionals, keywords = list(), dict()
@@ -345,7 +345,7 @@ def apply_properties(**kwargs) -> int:
 	apply_environment_properties(ignore_config=True)
 	return 0
 
-def parse_arguments(argv: List[str], mappings: Mapping[str, Task], fallback: Optional[Callable[[str, Callable, List[NamedCallable]], None]] = None) -> List[NamedCallable]:
+def parse_arguments(argv: MutableSequence[str], mappings: Mapping[str, Task], fallback: Optional[Callable[[str, Callable, MutableSequence[NamedCallable]], None]] = None) -> MutableSequence[NamedCallable]:
 	from . import GLOBALS
 	callables = list()
 

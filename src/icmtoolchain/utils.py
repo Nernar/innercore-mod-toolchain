@@ -5,7 +5,7 @@ import shutil
 import subprocess
 from os.path import abspath, exists, isdir, isfile, islink, join
 from typing import (Any, Callable, Dict, Iterable, List, Optional, TextIO,
-                    Union, overload)
+                    Tuple, Union, overload)
 from zipfile import ZipFile, ZipInfo
 
 from .shell import failure
@@ -305,7 +305,7 @@ def request_executable_version(executable: Union[str, List[str]]) -> float:
 			return float(result.group())
 	return 0.0
 
-def parse_properties_property(line: str) -> tuple[str, str]:
+def parse_properties_property(line: str) -> Tuple[str, str]:
 	try:
 		key, value = line.strip().split("=", 1)
 		return key.rstrip(), value.lstrip()

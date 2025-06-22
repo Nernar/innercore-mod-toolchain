@@ -1,6 +1,6 @@
 from functools import cmp_to_key
 from os.path import basename, isfile, join, splitext
-from typing import Iterable, Optional, override
+from typing import Iterable, Optional
 
 from .config import Config, FileConfig
 from .language import (PROJECT_TYPE_MOD, MakeAssetData, MakeDataConfig,
@@ -16,11 +16,9 @@ class BuildConfig(MakeDataConfig):
 		super().__init__(path, defaults)
 
 	@property
-	@override
 	def project_type(self) -> int:
 		return PROJECT_TYPE_MOD
 
-	@override
 	def obtain_project_data(self) -> Optional[MakeModData]:
 		mod_info_file = self.get_relative_path("mod.info")
 		if isfile(mod_info_file):
@@ -28,11 +26,9 @@ class BuildConfig(MakeDataConfig):
 			return self.obtain_mod_data(mod_info)
 
 	@property
-	@override
 	def supports_scripts(self) -> bool:
 		return True
 
-	@override
 	def iterate_scripts(self) -> Iterable[MakeScriptData]:
 		if self.get_value("defaultConfig.buildType") == "release":
 			# XXX: Perhaps we should do something, but scripts may no longer exist.
@@ -88,11 +84,9 @@ class BuildConfig(MakeDataConfig):
 		)
 
 	@property
-	@override
 	def supports_java(self) -> bool:
 		return True
 
-	@override
 	def iterate_java(self, defaults: Optional[Config] = None) -> Iterable[MakeJavaData]:
 		java_directories = self.obtain_list("javaDirs")
 		for config in java_directories:
@@ -117,11 +111,9 @@ class BuildConfig(MakeDataConfig):
 		return self.obtain_java_manifest_data(relative_path=relative_path, output_path=output_path, config=config)
 
 	@property
-	@override
 	def supports_native(self) -> bool:
 		return True
 
-	@override
 	def iterate_native(self, defaults: Optional[Config] = None) -> Iterable[MakeNativeData]:
 		native_directories = self.obtain_list("nativeDirs")
 		for config in native_directories:
@@ -146,11 +138,9 @@ class BuildConfig(MakeDataConfig):
 		return self.obtain_native_manifest_data(relative_path=relative_path, output_path=output_path, config=config)
 
 	@property
-	@override
 	def supports_resources(self) -> bool:
 		return True
 
-	@override
 	def iterate_resources(self) -> Iterable[MakeResourceData]:
 		resource_directories = self.obtain_list("resources")
 		for source in resource_directories:
@@ -188,7 +178,6 @@ class BuildConfig(MakeDataConfig):
 			cleanup_remote=source.get_value("cleanupRemote")
 		)
 
-	@override
 	def iterate_assets(self) -> Iterable[MakeAssetData]:
 		# TODO: Probably do something like resource copying, probably keep them in place...
 		...

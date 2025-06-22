@@ -1,6 +1,6 @@
 import sys
 from itertools import tee
-from typing import MutableSet, Optional
+from typing import MutableSequence, MutableSet, Optional
 
 from .project_graph import ProjectEdge, ProjectGraph
 from .shell import (abort, attention, failure, pretty_error, pretty_print,
@@ -46,7 +46,7 @@ def resolve_circular_references(graph: ProjectGraph) -> bool:
 		raise RuntimeCodeError(255, "Cannot build a project with unresolved dependencies!")
 	return True
 
-def run(argv: Optional[list[str]] = None):
+def run(argv: Optional[MutableSequence[str]] = None):
 	if not argv or len(argv) == 0:
 		argv = sys.argv
 	if "--help" in argv or len(argv) <= 1:

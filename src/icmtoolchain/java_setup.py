@@ -45,7 +45,7 @@ def get_gradle_distribution_url(spec: GradleVersion, type: str = "bin") -> str:
 def url_as_gradle_checksum(url: str) -> str:
 	ascii_url = bytes(url, "ascii")
 	md5_hash = md5(ascii_url).digest()
-	md5_checksum = int.from_bytes(md5_hash)
+	md5_checksum = int.from_bytes(md5_hash, "big")
 	return encode_int(md5_checksum, 36)
 
 def url_to_local_gradle_distribution(url: str) -> str:
