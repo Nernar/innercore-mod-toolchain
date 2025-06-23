@@ -1,10 +1,13 @@
 import sys
 from itertools import tee
-from typing import MutableSequence, MutableSet, Optional
+from typing import TYPE_CHECKING, MutableSequence, MutableSet, Optional
 
 from .project_graph import ProjectEdge, ProjectGraph
 from .shell import (abort, attention, failure, pretty_error, pretty_print,
                     pretty_warn, success)
+
+if TYPE_CHECKING:
+	from .parser import NamedCallable
 
 
 def show_help():
@@ -46,6 +49,19 @@ def resolve_circular_references(graph: ProjectGraph) -> bool:
 		raise RuntimeCodeError(255, "Cannot build a project with unresolved dependencies!")
 	return True
 
+def execute_task(callable: 'NamedCallable') -> None:
+	try:
+		result = callable.callable()
+		if result != 0:
+			abort(f"Task {callable.name} failed with result {result}.", code=result)
+	except BaseException as err:
+		if isinstance(err, SystemExit):
+			raise err
+		from .utils import RuntimeCodeError
+		if isinstance(err, RuntimeCodeError):
+			abort(f"Task {callable.name} failed with error code #{err.code}: {err}")
+		abort(f"Task {callable.name} failed with unexpected error!", cause=err)
+
 def run(argv: Optional[MutableSequence[str]] = None):
 	if not argv or len(argv) == 0:
 		argv = sys.argv
@@ -82,35 +98,35 @@ def run(argv: Optional[MutableSequence[str]] = None):
 		exit(0)
 
 	from . import GLOBALS
-	graph = ProjectGraph(GLOBALS.MAKE_CONFIG)
-	graph.collect_dependencies(GLOBALS.MAKE_CONFIG)
-	unresolved_artifacts = graph.resolve_dependencies()
-	show_unresolved_dependencies(unresolved_artifacts)
-	resolve_circular_references(graph)
+	if GLOBALS.is_project_available():
+		graph = ProjectGraph(GLOBALS.MAKE_CONFIG)
+		graph.collect_dependencies(GLOBALS.MAKE_CONFIG)
+		unresolved_artifacts = graph.resolve_dependencies()
+		show_unresolved_dependencies(unresolved_artifacts)
+		resolve_circular_references(graph)
 
-	from .language import MakeDataConfig
-	for edge in graph.traverse_dependencies():
-		GLOBALS.shutdown_project()
-		assert isinstance(edge.project, MakeDataConfig)
-		GLOBALS.make_config = edge.project
-		targets, tasks = tee(targets)
+		from .language import MakeDataConfig
+		for edge in graph.traverse_dependencies():
+			GLOBALS.shutdown_project()
+			assert isinstance(edge.project, MakeDataConfig)
+			GLOBALS.make_config = edge.project
+			targets, tasks = tee(targets)
+			while True:
+				try:
+					callable = next(tasks)
+				except StopIteration:
+					break
+				else:
+					execute_task(callable)
+
+	else:
 		while True:
 			try:
-				callable = next(tasks)
+				callable = next(targets)
 			except StopIteration:
 				break
 			else:
-				try:
-					result = callable.callable()
-					if result != 0:
-						abort(f"Task {callable.name} failed with result {result}.", code=result)
-				except BaseException as err:
-					if isinstance(err, SystemExit):
-						raise err
-					from .utils import RuntimeCodeError
-					if isinstance(err, RuntimeCodeError):
-						abort(f"Task {callable.name} failed with error code #{err.code}: {err}")
-					abort(f"Task {callable.name} failed with unexpected error!", cause=err)
+				execute_task(callable)
 
 	startup_millis = time() - startup_millis
 	success(f"Tasks successfully completed in {startup_millis:.2f}s!")

@@ -92,7 +92,7 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 
 	default_name = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.name")
 	create_review = Review(
-		template=create_template_chooser(),
+		template=lambda _: create_template_chooser(),
 		name=Input("Decide a name for your project:", on_input=update_project_name, default_text=default_name, hint="Template Mod"),
 		author=Input("Author who crafted this creation:", default_text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.author")),
 		version=Input("What version a project starts from:", default_text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.version"), hint="1.0"),
