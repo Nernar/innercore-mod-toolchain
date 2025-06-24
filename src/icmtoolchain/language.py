@@ -224,7 +224,7 @@ PROJECT_TYPE_MOD = 1
 PROJECT_TYPE_MODPACK = 2
 PROJECT_TYPE_PACK = 3
 
-class MakeDataConfig(RuleSetConfig, FileConfig, RuleSetHolder, metaclass=ABCMeta):
+class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, metaclass=ABCMeta):
 	defaults: FileConfig
 	current_project: Final[str]
 	project_unique_name: Final[str]
