@@ -3,19 +3,22 @@ from itertools import tee
 from typing import TYPE_CHECKING, MutableSequence, MutableSet, Optional
 
 from .project_graph import ProjectEdge, ProjectGraph
-from .shell import (abort, attention, failure, pretty_error, pretty_print,
-                    pretty_warn, success)
+from .shell import (abort, attention, failure, pretty_ansi_layers,
+                    pretty_error, pretty_print, pretty_warn, success)
 
 if TYPE_CHECKING:
 	from .parser import NamedCallable
 
 
-def show_help():
+def show_help(requires_art: bool = False):
+	if requires_art:
+		show_ansi_toolchain()
+		pretty_print()
 	pretty_print("Usage: icmtoolchain [options] ... <task1> [arguments1] ...")
 	pretty_print(" " * 2 + "--help: Display this message.")
 	pretty_print(" " * 2 + "--list: See available tasks.")
 	pretty_print("Perform commands marked with a special decorator @task.")
-	pretty_print("Example: icmtoolchain selectProject --path mod1 pushEverything selectProject --path mod2 pushEverything launchApplication")
+	pretty_print("Example: icmtoolchain pushEverything launchApplication")
 
 def show_available_tasks():
 	from .task import TASKS
@@ -25,6 +28,26 @@ def show_available_tasks():
 		if task.description:
 			pretty_print(": " + task.description, end="")
 		pretty_print()
+
+def show_ansi_toolchain():
+	pretty_ansi_layers(
+		[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 124, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+		[0, 0, 0, 0, 0, 0, 0, 0, 196, 160, 196, 196, 196, 196, 0, 0, 0, 0, 0, 0, 196, 160, 0, 0, 0, 0, 0, 0, 0],
+		[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 196, 196, 196, 196, 160, 0, 0, 0, 0, 196, 0, 0, 0, 0, 0, 0, 0],
+		[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 196, 196, 196, 196, 0, 0, 0, 196, 196, 0, 0, 0, 0, 0, 0],
+		[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 160, 196, 196, 160, 196, 160, 160, 0, 160, 0, 0, 196, 196, 0, 0, 0, 0, 0],
+		[0, 0, 0, 0, 0, 160, 196, 196, 196, 196, 0, 0, 160, 196, 196, 196, 0, 220, 0, 160, 196, 0, 196, 196, 0, 0, 0, 0, 0],
+		[0, 0, 0, 160, 196, 196, 196, 196, 196, 0, 0, 0, 226, 220, 196, 196, 196, 214, 220, 0, 196, 160, 196, 196, 196, 0, 0, 0, 0],
+		[0, 0, 196, 196, 196, 160, 0, 196, 196, 196, 202, 208, 220, 226, 226, 202, 202, 196, 226, 226, 196, 196, 196, 196, 196, 0, 0, 0, 160],
+		[0, 196, 196, 0, 0, 160, 196, 196, 196, 196, 196, 208, 214, 214, 214, 220, 2, 214, 220, 226, 196, 196, 0, 160, 196, 0, 0, 0, 196],
+		[160, 160, 0, 0, 160, 196, 160, 172, 202, 214, 214, 2, 2, 7, 7, 7, 2, 7, 2, 214, 196, 196, 0, 0, 196, 0, 0, 0, 196],
+		[0, 0, 0, 0, 0, 0, 0, 0, 226, 226, 2, 7, 7, 7, 7, 7, 7, 7, 7, 2, 214, 196, 0, 0, 0, 160, 0, 160, 196],
+		[0, 0, 0, 160, 196, 0, 0, 166, 208, 226, 2, 7, 7, 7, 7, 7, 7, 7, 7, 2, 220, 208, 226, 0, 196, 196, 0, 196, 196],
+		[0, 0, 0, 196, 196, 0, 196, 196, 214, 226, 7, 7, " I", "nn", "er", " C", "or", "e ", 7, 7, 214, 226, 226, 124, 196, 196, 0, 196, 160],
+		[0, 0, 196, 196, 196, 160, 196, 196, 214, 2, 7, 7, " M", "od", 7, 7, 7, 7, 7, 7, 2, 226, 208, 196, 196, 0, 196, 196, 0],
+		[0, 0, 196, 196, 0, 196, 196, 214, 220, 2, 7, 7, " T", "oo", "lc", "ha", "in", 7, 7, 7, 2, 214, 196, 196, 196, 196, 196, 196, 0],
+		[0, 160, 196, 0, 196, 196, 124, 226, 220, 2, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 2, 214, 196, 202, 0, 196, 196, 0, 0]
+	)
 
 def show_unresolved_dependencies(dependencies: MutableSet[ProjectEdge]) -> None:
 	if not any(dependencies):
@@ -66,7 +89,7 @@ def run(argv: Optional[MutableSequence[str]] = None):
 	if not argv or len(argv) == 0:
 		argv = sys.argv
 	if "--help" in argv or len(argv) <= 1:
-		show_help()
+		show_help(requires_art=len(argv) <= 1)
 		exit(0)
 	if "--list" in argv:
 		show_available_tasks()

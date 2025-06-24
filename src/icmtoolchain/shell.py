@@ -2,8 +2,8 @@ import os
 import platform
 from datetime import datetime, timedelta
 from io import StringIO
-from typing import (Any, Callable, Dict, List, Literal, NoReturn, Optional,
-                    TypeVar, Union, overload)
+from typing import (Any, Callable, Dict, Iterable, List, Literal, NoReturn,
+                    Optional, TypeVar, Union, overload)
 
 from prompt_toolkit import Application, print_formatted_text
 from prompt_toolkit.buffer import (Buffer, BufferAcceptHandler,
@@ -860,6 +860,17 @@ def pretty_answer(prompt: AnyFormattedText, *values: object, sep: str=", ", end:
 	if prompt:
 		success(prompt, end=prompt_end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 	pretty_print(*values, style="class:print.answer", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+
+def pretty_ansi_layers(*layers: Iterable[Union[int, str]], end: Optional[str] = "", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+	from prompt_toolkit import ANSI
+	for layer in layers:
+		for symbol in layer:
+			prefix = "" if symbol == 0 or symbol == 7 else "7m" if not isinstance(symbol, int) else "7m\x1b[" if symbol == 2 else "48;5;"
+			postfix = "m  " if isinstance(symbol, int) else ""
+			pretty_print(ANSI(f"\x1b[{prefix}{symbol}{postfix}"), end="", file=file, flush=flush, include_default_pygments_style=include_default_pygments_style) # "\x1b[0m"
+		pretty_print(file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+	if end:
+		pretty_print(end, end="", file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 
 def success(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
 	pretty_print(UNICODE_CHECK_MARK, style="class:print.success", end=" ")
