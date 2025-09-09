@@ -32,7 +32,9 @@ class BuildConfig(MakeDataConfig):
 	def iterate_scripts(self) -> Iterable[MakeScriptData]:
 		if self.get_value("defaultConfig.buildType") == "release":
 			# XXX: Perhaps we should do something, but scripts may no longer exist.
-			# It is important to leave a `compile`` field to load them.
+			# It is important to leave a `compile` field to load them.
+			from .shell import frozen
+			frozen("Project is set to release mode, building scripts will be skipped.")
 			return
 
 		library_path = self.get_value("defaultConfig.libraryDir")
@@ -56,7 +58,7 @@ class BuildConfig(MakeDataConfig):
 
 	def obtain_script_data(self, source: Config) -> MakeScriptData:
 		relative_path = source.get_value_unsafe("path")
-		type = source.get_value_unsafe("type")
+		type = source.get_value_unsafe("sourceType")
 		if not type in VALID_SOURCE_TYPES:
 			raise ValueError(f"Script {relative_path!r} has invalid type, it should be one of: {', '.join(VALID_SOURCE_TYPES)}!")
 

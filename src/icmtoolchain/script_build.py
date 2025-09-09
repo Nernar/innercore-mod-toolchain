@@ -158,7 +158,7 @@ def copy_build_targets(composite: List[Tuple[str, str, str]], includes: List[Tup
 				continue
 
 		if not GLOBALS.BUILD_STORAGE.is_path_changed(temporary_script):
-			failure(f"Build target {basename(temporary_script)!r} is not changed.")
+			frozen(f"Build target {basename(temporary_script)!r} is not changed.")
 
 	GLOBALS.BUILD_STORAGE.save()
 

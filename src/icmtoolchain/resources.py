@@ -16,8 +16,8 @@ def build_resources() -> int:
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("gui")
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("minecraft_resource_pack")
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("minecraft_behavior_pack")
-	overall_result = 0
 
+	overall_result = 0
 	for resource in GLOBALS.MAKE_CONFIG.iterate_resources():
 		resource_files = expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(resource.relative_path))
 		if len(resource_files) == 0:
@@ -91,7 +91,6 @@ def build_pack_graphics() -> int:
 
 def build_additional_resources() -> int:
 	overall_result = 0
-
 	for asset in GLOBALS.MAKE_CONFIG.iterate_assets():
 		additional_files = expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(asset.relative_path))
 		if len(additional_files) == 0:
