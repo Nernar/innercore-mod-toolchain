@@ -3,6 +3,7 @@ import os
 import platform
 import re
 import subprocess
+from itertools import tee
 from os.path import basename, exists, isdir, isfile, join, relpath, splitext
 from typing import (Collection, Dict, Iterable, List, MutableSequence,
                     NamedTuple)
@@ -572,14 +573,6 @@ def compile_java(tool: str = "gradle") -> int:
 	ensure_directory(target_directory)
 	GLOBALS.MOD_STRUCTURE.cleanup_build_target("java")
 
-	from .output_directory import get_config_directory
-	r8_executable = join(get_config_directory(), "r8", "r8.jar")
-	if not isfile(r8_executable):
-		from .component import install_components
-		install_components("java")
-	if not isfile(r8_executable):
-		abort("Component 'java' is required for compilation, nothing to do.")
-
 	classpath_directories = list()
 	classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("classpath")
 	if not isdir(classpath_directory):
@@ -591,11 +584,27 @@ def compile_java(tool: str = "gradle") -> int:
 	if exists(project_classpath_directory):
 		classpath_directories.append(project_classpath_directory)
 
+	toolchain_config = None
 	if len(classpath_directories) > 0:
-		defaults = Config()
-		defaults.set_value("classpath", classpath_directories)
+		toolchain_config = Config()
+		toolchain_config.set_value("classpath", classpath_directories)
 
-	directories = GLOBALS.MAKE_CONFIG.iterate_java(defaults=defaults)
+	directories = GLOBALS.MAKE_CONFIG.iterate_java(defaults=toolchain_config)
+	directories, has_anything = tee(directories)
+	try:
+		next(has_anything)
+	except StopIteration:
+		GLOBALS.MOD_STRUCTURE.update_build_config_list("javaDirs")
+		return 0
+
+	from .output_directory import get_config_directory
+	r8_executable = join(get_config_directory(), "r8", "r8.jar")
+	if not isfile(r8_executable):
+		from .component import install_components
+		install_components("java")
+	if not isfile(r8_executable):
+		abort("Component 'java' is required for compilation, nothing to do.")
+
 	overall_result = build_java_directories(tool, directories, target_directory)
 
 	GLOBALS.MOD_STRUCTURE.update_build_config_list("javaDirs")
