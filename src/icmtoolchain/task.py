@@ -129,7 +129,8 @@ def task_compile_native() -> int:
 		if len(abis) == 0:
 			abis = GLOBALS.MAKE_CONFIG.obtain_list("abis")
 	if len(abis) == 0:
-		abort(f"No `abis` value in 'toolchain.json' config, nothing will happened.")
+		attention(f"No `abis` value in 'toolchain.json' config, using defaults otherwise.")
+		abis = ["arm64-v8a", "armeabi-v7a"]
 	from .native_build import compile_native, copy_shared_objects
 	result = compile_native(abis)
 	if result == 0 and GLOBALS.MAKE_CONFIG.supports_shared_objects:

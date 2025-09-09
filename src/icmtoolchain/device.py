@@ -22,8 +22,12 @@ def get_adb_executable() -> str:
 		pass
 	from .output_directory import get_config_directory
 	if platform.system() == "Windows":
-		return join(get_config_directory(), "adb", "adb.exe")
-	return join(get_config_directory(), "adb", "adb")
+		adb_executable = join(get_config_directory(), "adb", "adb.exe")
+	else:
+		adb_executable = join(get_config_directory(), "adb", "adb")
+	if not isfile(adb_executable):
+		abort("Component 'adb' is required for pushing, nothing to do.")
+	return adb_executable
 
 def get_modpack_push_directory() -> Optional[str]:
 	directory = GLOBALS.PREFERRED_CONFIG.get_value("pushTo", allow_prototype=False)

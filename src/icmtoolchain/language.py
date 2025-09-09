@@ -259,7 +259,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, metaclass=ABCMeta
 		Returns:
 			Iterable[MakeDataConfig]: optional project data on which manifest is based
 		"""
-		...
+		return []
 
 	@abstractmethod
 	def obtain_project_data(self) -> Optional[FlushableMakeProjectData]:
@@ -339,7 +339,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, metaclass=ABCMeta
 		Returns:
 			Iterable[MakeScriptData]: iterable which can be used in compilers
 		"""
-		...
+		return []
 
 	@property
 	def supports_java(self) -> bool:
@@ -353,7 +353,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, metaclass=ABCMeta
 		Returns:
 			Iterable[MakeJavaData]: iterable which can be used in compilers
 		"""
-		...
+		return []
 
 	def obtain_java_manifest_data(self, relative_path: str, output_path: str, config: Config) -> MakeJavaData:
 		return MakeJavaData(
@@ -380,7 +380,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, metaclass=ABCMeta
 		Returns:
 			Iterable[MakeNativeData]: iterable which can be used in compilers
 		"""
-		...
+		return []
 
 	def obtain_native_manifest_data(self, relative_path: str, output_path: str, config: Config) -> MakeNativeData:
 		# Obtain deprecated `rules` property to being merged.
@@ -421,7 +421,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, metaclass=ABCMeta
 		Returns:
 			Iterable[MakeSharedObjectData]: iterable which can be used in compilers
 		"""
-		...
+		return []
 
 	@property
 	def supports_resources(self) -> bool:
@@ -435,7 +435,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, metaclass=ABCMeta
 		Returns:
 			Iterable[MakeResourceData]: iterable which can be used in compilers
 		"""
-		...
+		return []
 
 	@property
 	def supports_pack_graphics(self) -> bool:
@@ -449,7 +449,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, metaclass=ABCMeta
 		Returns:
 			Iterable[MakePackGraphicsData]: iterable which can be used in compilers
 		"""
-		...
+		return []
 
 	@abstractmethod
 	def iterate_assets(self) -> Iterable[MakeAssetData]:
@@ -460,7 +460,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, metaclass=ABCMeta
 		Returns:
 			Iterable[MakeAssetData]: iterable which can be used in compilers
 		"""
-		...
+		return []
 
 	@staticmethod
 	def register(criteria: Union[str, Callable[[str], str]], data: Type['MakeDataConfig']) -> None:

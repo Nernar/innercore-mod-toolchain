@@ -17,11 +17,10 @@ ConfigResultType = TypeVar("ConfigResultType")
 
 class Config(Dict[str, Any]):
 	def __init__(self, map: Optional[ConfigSupportsKeysAndGetItem] = None, defaults: Optional['Config'] = None):
-		if map is not None:
-			super().__init__(map)
-		else:
-			super().__init__()
+		super().__init__()
 		self.defaults = defaults
+		if map is not None:
+			self.update(map)
 
 	def __hash__(self):
 		return hash(frozenset(self))
@@ -105,6 +104,13 @@ class Config(Dict[str, Any]):
 			if len(prototype_sequence) > 0:
 				return list(chain(sequence, prototype_sequence))
 		return sequence
+
+	def update_values(self, map: ConfigSupportsKeysAndGetItem, *, replace_mismatched_types: bool = False, strip_none_from_lists: bool = False) -> None:
+		for key in map.keys():
+			self.set_value_unsafe(key, map[key], replace_mismatched_types=replace_mismatched_types, strip_none_from_lists=strip_none_from_lists)
+
+	def update(self, map: ConfigSupportsKeysAndGetItem) -> None:
+		self.update_values(map, replace_mismatched_types=True)
 
 	def set_dict_value(self, key: str, value: Any) -> None:
 		super().__setitem__(key, value)
@@ -246,7 +252,7 @@ class FileConfig(Config):
 			try:
 				config = load_json(file)
 				if not merge_with_existing:
-					self.update(config)
+					self.update_values(config, replace_mismatched_types=True)
 					return
 				self.merge_config(Config(config))
 			except JSONDecodeError as exc:
