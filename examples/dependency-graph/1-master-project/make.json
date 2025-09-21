@@ -1,0 +1,11 @@
+{
+	"info": {
+		"name": "1. Master Project",
+		"author": "Horizon Team"
+	},
+	"dependencies": [
+		"../2-circular-reference",
+		"../5-simple-dependency",
+		"../8-multi-reference"
+	]
+}

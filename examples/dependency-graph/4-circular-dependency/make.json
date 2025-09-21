@@ -1,0 +1,9 @@
+{
+	"info": {
+		"name": "4. Circular Dependency",
+		"author": "Horizon Team"
+	},
+	"dependencies": [
+		"../2-circular-reference"
+	]
+}

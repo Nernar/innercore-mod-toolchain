@@ -1,0 +1,11 @@
+{
+	"info": {
+		"name": "6. Multi Dependency",
+		"author": "Horizon Team"
+	},
+	"dependencies": [
+		"../3-cross-reference",
+		"../7-simple-reference",
+		"../8-multi-reference"
+	]
+}

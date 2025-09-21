@@ -1,0 +1,9 @@
+{
+	"info": {
+		"name": "5. Simple Dependency",
+		"author": "Horizon Team"
+	},
+	"dependencies": [
+		"../6-multi-dependency"
+	]
+}
