@@ -1,5 +1,7 @@
 import sys
 from itertools import tee
+from os import listdir
+from os.path import dirname, isdir, isfile, join
 from typing import TYPE_CHECKING, MutableSequence, MutableSet, Optional
 
 from .project_graph import ProjectEdge, ProjectGraph
@@ -95,7 +97,11 @@ def run(argv: Optional[MutableSequence[str]] = None):
 		show_available_tasks()
 		exit(0)
 	if "--cli-test" in argv:
-		run_test()
+		run_cli_test()
+		exit(0)
+	if "--example" in argv:
+		example_offset = argv.index("--example")
+		run_example_test(argv[example_offset + 1] if len(argv) > example_offset + 1 else "complex")
 		exit(0)
 
 	from time import time
@@ -154,7 +160,7 @@ def run(argv: Optional[MutableSequence[str]] = None):
 	startup_millis = time() - startup_millis
 	success(f"Tasks successfully completed in {startup_millis:.2f}s!")
 
-def run_test():
+def run_cli_test():
 	import asyncio
 	from itertools import cycle
 	from random import randint, random
@@ -346,5 +352,24 @@ def run_test():
 	except (KeyboardInterrupt, EOFError):
 		pretty_print("Tasks stopped gracefully.")
 
+def run_example_test(name: str):
+	examples_directory = join(dirname(__file__), "..", "..", "examples")
+	if not isdir(examples_directory):
+		failure("Examples directory is not available.")
+		return
+	example_executable = join(examples_directory, name, "__main__.py")
+	if not isfile(example_executable):
+		failure(f"No such example {name!r}. It should be one of: {', '.join(listdir(examples_directory))}.")
+		return
+
+	from importlib.util import module_from_spec, spec_from_file_location
+	example_name = f"{__name__[:__name__.rindex('.')]}.examples.{name}"
+	example_spec = spec_from_file_location(example_name, example_executable)
+	assert example_spec
+	example_module = module_from_spec(example_spec)
+	sys.modules[example_name] = example_module
+	assert example_spec.loader
+	example_spec.loader.exec_module(example_module)
+
 if __name__ == "__main__":
-	run_test()
+	run_cli_test()

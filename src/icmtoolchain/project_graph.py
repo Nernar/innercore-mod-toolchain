@@ -8,7 +8,7 @@ from typing import (Any, Callable, Dict, Final, List, MutableSequence,
                     MutableSet, Optional, Tuple, Type, Union)
 
 from . import GLOBALS
-from .config import Config
+from .config import Config, FileConfig
 from .language import MakeDataConfig
 from .shell import abort, attention, confirm_prompt, pretty_print
 from .utils import ensure_not_whitespace, remove_tree
@@ -101,7 +101,7 @@ class ProjectEdge:
 		return f"ProjectEdge(project={self.project}, dependencies=({', '.join(str(edge.project) for edge in self.dependencies)}), references=({', '.join(str(edge.project) for edge in self.references)}))"
 
 	def __str__(self) -> str:
-		return f"Project {self.project} ({len(self.dependencies)} dependencies)"
+		return f"Project {basename(self.project.directory) if isinstance(self.project, FileConfig) else self.project} ({len(self.dependencies)} dependencies)"
 
 class ProjectGraph(Dict[Union[MakeDataConfig, Artifact], ProjectEdge]):
 	def __init__(self, project: MakeDataConfig) -> None:
@@ -169,10 +169,9 @@ class ProjectGraph(Dict[Union[MakeDataConfig, Artifact], ProjectEdge]):
 		if not parent:
 			parent = self.root
 		for dependency in config.iterate_dependencies():
-			child = self.obtain_edge(dependency)
-			if isinstance(dependency, MakeDataConfig):
-				self.collect_dependencies(dependency, child)
-			self.depend_on(parent, child)
+			if isinstance(dependency, MakeDataConfig) and not dependency in self:
+				self.collect_dependencies(dependency, self.obtain_edge(dependency))
+			self.depend_on(parent, self.obtain_edge(dependency))
 
 	def resolve_dependencies(self, edge: Optional[ProjectEdge] = None, keep_unused: bool = False, traversed_references: Optional[MutableSet[ProjectEdge]] = None) -> MutableSet[ProjectEdge]:
 		if not edge:
