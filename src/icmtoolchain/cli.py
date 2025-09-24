@@ -70,8 +70,7 @@ def resolve_circular_references(graph: ProjectGraph) -> bool:
 	if any(unused_edges):
 		repr_unused_edges = [f"{edge}" for edge in unused_edges]
 		failure(f"Following dependencies have been removed as there is no further connection in them to other projects: {', '.join(repr_unused_edges)}!")
-		from .utils import RuntimeCodeError
-		raise RuntimeCodeError(255, "Cannot build a project with unresolved dependencies!")
+		raise RuntimeError("Cannot build a project with unresolved dependencies!")
 	return True
 
 def execute_task(callable: 'NamedCallable') -> None:
@@ -355,20 +354,20 @@ def run_cli_test():
 def run_example_test(name: str):
 	examples_directory = join(dirname(__file__), "..", "..", "examples")
 	if not isdir(examples_directory):
-		failure("Examples directory is not available.")
-		return
+		raise RuntimeError("Examples directory is not available.")
 	example_executable = join(examples_directory, name, "__main__.py")
 	if not isfile(example_executable):
-		failure(f"No such example {name!r}. It should be one of: {', '.join(listdir(examples_directory))}.")
-		return
+		raise RuntimeError(f"No such example {name!r}. It should be one of: {', '.join(listdir(examples_directory))}.")
 
 	from importlib.util import module_from_spec, spec_from_file_location
 	example_name = f"{__name__[:__name__.rindex('.')]}.examples.{name}"
 	example_spec = spec_from_file_location(example_name, example_executable)
-	assert example_spec
+	if not example_spec:
+		raise RuntimeError(f"Cannot obtain example {name!r} spec.")
 	example_module = module_from_spec(example_spec)
 	sys.modules[example_name] = example_module
-	assert example_spec.loader
+	if not example_spec.loader:
+		raise RuntimeError(f"Cannot obtain example {name!r} module loader.")
 	example_spec.loader.exec_module(example_module)
 
 if __name__ == "__main__":
