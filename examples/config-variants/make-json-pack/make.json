@@ -1,0 +1,8 @@
+{
+	"manifest": "manifest.json",
+	"pack": {
+		"graphics": {
+			"background": ["graphics/background/*"]
+		}
+	}
+}

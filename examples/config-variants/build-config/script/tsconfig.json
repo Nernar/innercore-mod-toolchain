@@ -1,0 +1,12 @@
+{
+	"extends": "..\\.toolchain.tsconfig.json",
+	"compilerOptions": {
+		"outFile": "C:\\Users\\RislaeD\\AppData\\Local\\icmtoolchain\\Cache\\build\\build-config-871a6\\sources\\main.js"
+	},
+	"exclude": [],
+	"include": [
+		"header.js",
+		"feature/block.js",
+		"translation.js"
+	]
+}

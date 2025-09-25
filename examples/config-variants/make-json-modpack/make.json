@@ -1,0 +1,7 @@
+{
+	"modpack": "modpack.json",
+	"dependencies": [
+		"../build-config",
+		"../make-json-mod"
+	]
+}

@@ -1,0 +1,27 @@
+{
+	"info": {
+		"name": "Toolchain Mod",
+		"author": "Horizon Team"
+	},
+	"sources": [
+		{
+			"type": "launcher",
+			"source": "launcher.js"
+		},
+		{
+			"type": "main",
+			"source": "script/",
+			"target": "main.js"
+		},
+		{
+			"type": "library",
+			"source": "library/*"
+		}
+	],
+	"resources": [
+		{
+			"type": "resource_directory",
+			"path": "resources/"
+		}
+	]
+}
