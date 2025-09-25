@@ -108,7 +108,7 @@ class MakeModpackData(FlushableMakeProjectData):
 	version_name: Union[MutableMapping[str, str], str] = "1.0"
 	version_code: int = 1
 	description: Union[MutableMapping[str, str], str] = ""
-	icon: Optional[str] = "pack_icon.png"
+	icon: Optional[str] = None
 
 	def flush_to_output(self, directory: str) -> int:
 		manifest_file = join(directory, "modpack.json")

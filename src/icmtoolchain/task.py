@@ -200,6 +200,7 @@ def task_update_includes() -> int:
 def task_resources() -> int:
 	from .resources import (build_additional_resources, build_pack_graphics,
 	                        build_resources)
+	overall_result = 0
 	if GLOBALS.MAKE_CONFIG.supports_resources:
 		overall_result = build_resources()
 	if overall_result == 0 and GLOBALS.MAKE_CONFIG.supports_pack_graphics:

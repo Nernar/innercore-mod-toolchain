@@ -191,8 +191,7 @@ class Globals:
 		return self.parameter_signature
 
 	def is_project_available(self, which_project: Optional[str] = None):
-		from .make_config import MakeConfig
-		if not isinstance(self.PREFERRED_CONFIG, MakeConfig):
+		if not isinstance(self.PREFERRED_CONFIG, MakeDataConfig):
 			return False
 		return which_project is None or which_project == self.MAKE_CONFIG.current_project
 

@@ -197,7 +197,7 @@ class LinkedResourceStorage:
 	def append_resource(self, relative_path: str, output_path: str, **properties: Any) -> None:
 		for linked_resource in self.contents:
 			if relative_path == linked_resource["relative_path"] and output_path == linked_resource["output_path"]:
-				attention(f"Duplicate resource directory {relative_path}, skipping it...")
+				attention(f"Duplicate resource directory {relative_path!r}, skipping it...")
 				return
 		self.contents.append({
 			"relative_path": relative_path,
