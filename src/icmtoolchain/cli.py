@@ -1,9 +1,11 @@
+import asyncio
 import sys
 from itertools import tee
 from os import listdir
 from os.path import dirname, isdir, isfile, join
 from typing import TYPE_CHECKING, MutableSequence, MutableSet, Optional
 
+from .config import FileConfig
 from .project_graph import ProjectEdge, ProjectGraph
 from .shell import (abort, attention, failure, pretty_ansi_layers,
                     pretty_error, pretty_print, pretty_warn, success)
@@ -98,6 +100,9 @@ def run(argv: Optional[MutableSequence[str]] = None):
 	if "--cli-test" in argv:
 		run_cli_test()
 		exit(0)
+	if "--concurrent-test" in argv:
+		asyncio.run(run_concurrent_test(), debug=True)
+		exit(0)
 	if "--example" in argv:
 		example_offset = argv.index("--example")
 		run_example_test(argv[example_offset + 1] if len(argv) > example_offset + 1 else "complex")
@@ -158,6 +163,92 @@ def run(argv: Optional[MutableSequence[str]] = None):
 
 	startup_millis = time() - startup_millis
 	success(f"Tasks successfully completed in {startup_millis:.2f}s!")
+
+def perform_concurrent_tasks(slave: FileConfig):
+	return f"{slave.path}: {slave.as_json()}"
+
+async def run_concurrent_test():
+	import multiprocessing
+	if multiprocessing.get_start_method() == "fork":
+		preferred_method = "spawn"
+		if "forkserver" in multiprocessing.get_all_start_methods():
+			preferred_method = "forkserver"
+		multiprocessing.set_start_method(preferred_method, True)
+
+	from concurrent.futures import ProcessPoolExecutor
+	from time import time
+	secs = time()
+	if sys.version_info < (3, 13):
+		from os import cpu_count as _cpu_count
+		cpu_count = _cpu_count()
+	else:
+		from os import process_cpu_count
+		cpu_count = process_cpu_count()
+	max_workers = cpu_count // 2 if cpu_count else 1
+	index = 0
+
+	def fetch_available_projects(index):
+		from . import GLOBALS
+
+		if index == 0:
+			for _ in range(max_workers):
+				yield GLOBALS.PREFERRED_CONFIG
+			return
+		elif index >= 50:
+			return
+
+		yield GLOBALS.PREFERRED_CONFIG
+
+	with ProcessPoolExecutor(max_workers=max_workers) as executor:
+		loop = asyncio.get_event_loop()
+		scheduled_queue = asyncio.Queue()
+
+		warmup_projects = fetch_available_projects(index)
+		for project in warmup_projects:
+			await scheduled_queue.put(project)
+			index += 1
+
+		semaphore = asyncio.Semaphore(max_workers)
+
+		async def process_project(config: FileConfig):
+			nonlocal index
+			async with semaphore:
+				result = await loop.run_in_executor(
+					executor,
+					perform_concurrent_tasks,
+					config
+				)
+				print(result)
+
+				available_projects = fetch_available_projects(index)
+				for project in available_projects:
+					await scheduled_queue.put(project)
+					index += 1
+
+				return result
+
+		tasks = set()
+
+		async def worker():
+			while tasks or not scheduled_queue.empty():
+				try:
+					project = await asyncio.wait_for(scheduled_queue.get(), timeout=1.0)
+				except asyncio.TimeoutError:
+					if not tasks and scheduled_queue.empty():
+						return
+					continue
+
+				task = asyncio.create_task(process_project(project))
+				tasks.add(task)
+				task.add_done_callback(lambda task: tasks.discard(task))
+
+		worker_tasks = [asyncio.create_task(worker()) for _ in range(max_workers)]
+
+		await asyncio.gather(*worker_tasks)
+		if tasks:
+			await asyncio.gather(*tasks)
+
+	print(f"Completed {index} tasks in {time() - secs:.2f}ms on {max_workers} CPUs.")
 
 def run_cli_test():
 	import asyncio
