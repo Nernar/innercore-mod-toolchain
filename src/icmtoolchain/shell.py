@@ -893,7 +893,7 @@ def abort(*values: object, sep: Optional[str] = " ", code: int = 255, cause: Opt
 		from traceback import print_exception
 		buffer = StringIO()
 		print_exception(cause.__class__, cause, cause.__traceback__, file=buffer)
-		pretty_error(*buffer.getvalue().rsplit("\n", 9)[1:-1], sep="\n")
+		pretty_error(*buffer.getvalue().rsplit("\n", 13)[1:-1], sep="\n")
 	if len(values) != 0:
 		pretty_print(UNICODE_BALLOT_X, style="class:print.failure", end=" ")
 		pretty_print(*values, sep=sep, style="class:print.abort-message")

@@ -107,8 +107,8 @@ class BuildConfig(MakeDataConfig):
 
 		manifest_path = join(directory, "manifest")
 		manifest = FileConfig(manifest_path, raise_non_existing=True)
-		manifest.delete_value("path")
 		config.merge_config(manifest, exclusive_lists=True)
+		config.delete_value("path")
 
 		return self.obtain_java_manifest_data(relative_path=relative_path, output_path=output_path, config=config)
 
