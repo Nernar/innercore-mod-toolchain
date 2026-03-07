@@ -266,6 +266,33 @@ def task_monkey_launcher() -> int:
 		"shell", "input",
 		"keyevent", "KEYCODE_WAKEUP"
 	], stdout=DEVNULL, stderr=DEVNULL)
+
+	preferred_launcher = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherPackage")
+	preferred_activity = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherActivity")
+	if preferred_launcher:
+		try:
+			process = run(GLOBALS.ADB_COMMAND + [
+				"shell", "am", "start",
+				"-n", f"{preferred_launcher}/{preferred_activity or 'com.zhekasmirnov.horizon.activity.main.StartupWrapperActivity'}",
+				"--ez", "autoLaunchFlag", "true"
+			], check=True, capture_output=True, text=True)
+			# XXX: Always echoes starting, outputs only happened errors.
+			# Starting: Intent { cmp=com.zheka.horizon/com.zhekasmirnov.horizon.activity.main.StartupWrapperActivity (has extras) }
+			# Error type 3
+			# Error: Activity class {com.zheka.horizon/com.zhekasmirnov.horizon.activity.main.StartupWrapperActivity} does not exist.
+		except BaseException:
+			try:
+				process = run(GLOBALS.ADB_COMMAND + [
+					"shell", "monkey",
+					"-p", preferred_launcher,
+					"-c", "android.intent.category.LAUNCHER", "1"
+				], check=True, capture_output=True, text=True)
+				# XXX: Injected or no activities, somewhere between empty lines.
+				# Events injected: 1
+				# ** No activities found to run, monkey aborted.
+			except BaseException:
+				pass
+
 	try:
 		process = run(GLOBALS.ADB_COMMAND + [
 			"shell", "monkey",
@@ -311,15 +338,13 @@ def task_monkey_launcher() -> int:
 )
 def task_stop_launcher() -> int:
 	from subprocess import CalledProcessError, run
+	preferred_launcher = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherPackage")
+	packages = (preferred_launcher, ) if preferred_launcher else ("com.zheka.horizon", "com.zheka.horizon64", "com.zheka.horizon32", "com.zhekasmirnov.innercore")
 	try:
-		run(GLOBALS.ADB_COMMAND + [
-			"shell", "am",
-			"force-stop", "com.zheka.horizon"
-		], check=True, stdout=DEVNULL, stderr=DEVNULL)
-		run(GLOBALS.ADB_COMMAND + [
-			"shell", "am",
-			"force-stop", "com.zhekasmirnov.innercore"
-		], check=True, stdout=DEVNULL, stderr=DEVNULL)
+		for package in packages:
+			run(GLOBALS.ADB_COMMAND + [
+				"shell", "am", "force-stop", package
+			], check=True, stdout=DEVNULL, stderr=DEVNULL)
 	except CalledProcessError as err:
 		return err.returncode
 	return 0
