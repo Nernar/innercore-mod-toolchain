@@ -36,7 +36,7 @@ def get_modpack_push_directory() -> Optional[str]:
 		if directory:
 			if not GLOBALS.is_project_available() or not GLOBALS.MAKE_CONFIG.current_project:
 				return None
-			directory = join(directory, "mods", basename(GLOBALS.MAKE_CONFIG.current_project)) if "/horizon/packs/" in directory \
+			directory = join(directory, "mods", basename(GLOBALS.MAKE_CONFIG.current_project)) if "/packs/" in directory \
 				else join(directory, basename(GLOBALS.MAKE_CONFIG.current_project))
 
 	if not directory:
@@ -101,7 +101,7 @@ def person_readable_modpack_name(path: str) -> str:
 def get_sdcard_directory() -> Optional[str]:
 	locations = GLOBALS.TOOLCHAIN_CONFIG.get_value("storageLocations")
 	if not locations or len(locations) == 0:
-		locations = ["/storage/emulated/0", "/mnt/sdcard", "/sdcard"]
+		locations = ["/sdcard", "/storage/emulated/0", "/mnt/sdcard"]
 	for location in locations:
 		if test_directory_exist(location):
 			return location
@@ -115,7 +115,18 @@ def get_sdcard_directory() -> Optional[str]:
 def setup_modpack_directory() -> Optional[str]:
 	locations = GLOBALS.TOOLCHAIN_CONFIG.get_value("modpackLocations")
 	if not locations or len(locations) == 0:
-		locations = ["games/horizon/packs", "Android/data/com.zheka.horizon/files/horizon/packs"]
+		locations = [
+			"games/horizon/packs",
+			"Android/media/com.zheka.horizon64/packs",
+			"Android/media/com.zheka.horizon/packs",
+			"Android/media/com.zheka.horizon32/packs",
+			"Android/data/com.zheka.horizon64/files/packs",
+			"Android/data/com.zheka.horizon64/files/horizon/packs",
+			"Android/data/com.zheka.horizon/files/packs",
+			"Android/data/com.zheka.horizon/files/horizon/packs",
+			"Android/data/com.zheka.horizon32/files/packs",
+			"Android/data/com.zheka.horizon32/files/horizon/packs",
+		]
 	sdcard_directory = get_sdcard_directory()
 	if not sdcard_directory:
 		pretty_error("We were unable to find storage folder on your device.")
@@ -222,9 +233,9 @@ def push_file(file: str, destination_file: str, push_unchanged: bool = True, cle
 			# return 1
 
 		if result.returncode != 0:
-			cause = result.stdout.splitlines()[-1]
-			if cause and len(cause) > 0:
-				pretty_error(cause)
+			cause = (result.stderr.strip() or result.stdout.strip()).splitlines()
+			if cause and len(cause[-1]) > 0:
+				pretty_error(cause[-1])
 			failure(f"Failed to push file {readable_name!r} with error code {result.returncode}!")
 			return result.returncode
 
@@ -266,9 +277,9 @@ def push_directory(directory: str, destination_directory: str, push_unchanged: b
 			offset += 1
 
 			if result.returncode != 0:
-				cause = result.stdout.strip().splitlines()[-1]
-				if cause and len(cause) > 0:
-					pretty_error(cause)
+				cause = (result.stderr.strip() or result.stdout.strip()).splitlines()
+				if cause and len(cause[-1]) > 0:
+					pretty_error(cause[-1])
 				failure(f"Failed to push directory {readable_name!r} with error code {result.returncode}!")
 				return result.returncode
 
