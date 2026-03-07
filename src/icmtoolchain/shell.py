@@ -170,9 +170,9 @@ def clear_application(*content: Optional[AnyContainer], force_exit: bool = False
 		for control in content:
 			if control and not control in children:
 				children.remove(to_container(control))
-		if len(children) == 0:
+		if force_exit or len(children) == 0:
 			interactive_application.exit()
-	if not interactive_application.is_running:
+	if force_exit or not interactive_application.is_running or interactive_application.is_done:
 		interactive_application = None
 
 _SCT = TypeVar("_SCT", bound=Optional[AnyContainer])
@@ -192,8 +192,9 @@ class InteractiveSession(Dict[str, _SCT]):
 			self.thread.start()
 		return self
 
-	def __exit__(self, *args, **kwargs) -> None:
-		clear_application(*self.values())
+	def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+		is_error = exc_type is not None
+		clear_application(*self.values(), force_exit=is_error)
 		if hasattr(self, "thread"):
 			assert interactive_application is None
 			self.thread.join()
@@ -788,18 +789,18 @@ class Debugger(Interactable):
 
 
 @overload
-def select_prompt(prompt: Optional[str] = None, *variants: str, selected_variant: Optional[Union[str, int]] = None, returns_what: Literal[False] = False, fallback: Optional[Union[str, int]] = None) -> Optional[int]:
+def select_prompt(prompt: Optional[str] = None, *variants: str, selected_variant: Optional[Union[str, int]] = None, returns_what: Literal[False] = False, fallback: Optional[Union[str, int]] = None, prints_abort: bool = True) -> Optional[int]:
 	...
 @overload
-def select_prompt(prompt: Optional[str] = None, *variants: str, selected_variant: Optional[Union[str, int]] = None, returns_what: Literal[True] = True, fallback: Optional[Union[str, int]] = None) -> Optional[str]:
+def select_prompt(prompt: Optional[str] = None, *variants: str, selected_variant: Optional[Union[str, int]] = None, returns_what: Literal[True] = True, fallback: Optional[Union[str, int]] = None, prints_abort: bool = True) -> Optional[str]:
 	...
 
-def select_prompt(prompt: Optional[str] = None, *variants: str, selected_variant: Optional[Union[str, int]] = None, returns_what: bool = False, fallback: Optional[Union[str, int]] = None) -> Optional[Union[int, str]]:
+def select_prompt(prompt: Optional[str] = None, *variants: str, selected_variant: Optional[Union[str, int]] = None, returns_what: bool = False, fallback: Optional[Union[str, int]] = None, prints_abort: bool = True) -> Optional[Union[int, str]]:
 	from .prompt import Select
 	select = Select(prompt=prompt, variants=variants, selected_variant=selected_variant, default_variant=fallback, returns_what=returns_what)
-	return select.request_safe()
+	return select.request_safe(prints_abort=prints_abort)
 
-def input_prompt(prompt: Optional[str] = None, default_text: Optional[str] = None, explanation: Optional[str] = None, on_text_changed: Optional[Callable[[Editable, Interactable], None]] = None, fallback: Optional[str] = None) -> Optional[str]:
+def input_prompt(prompt: Optional[str] = None, default_text: Optional[str] = None, explanation: Optional[str] = None, on_text_changed: Optional[Callable[[Editable, Interactable], None]] = None, fallback: Optional[str] = None, prints_abort: bool = True) -> Optional[str]:
 	from .prompt import Input
 
 	def on_input(input: Input, text: str) -> None:
@@ -807,12 +808,12 @@ def input_prompt(prompt: Optional[str] = None, default_text: Optional[str] = Non
 			on_text_changed(input.input_control, input.explanation_control)
 
 	input = Input(prompt=prompt, hint=fallback, explanation=explanation, default_text=default_text or "", on_input=on_input)
-	return input.request_safe()
+	return input.request_safe(prints_abort=prints_abort)
 
-def confirm_prompt(prompt: Optional[str] = None, fallback: bool = True, explanation: Optional[str] = None) -> bool:
+def confirm_prompt(prompt: Optional[str] = None, fallback: bool = True, explanation: Optional[str] = None, prints_abort: bool = True) -> bool:
 	from .prompt import Confirm
 	confirm = Confirm(prompt=prompt, explanation=explanation, default_value=fallback)
-	return confirm.request_safe()
+	return confirm.request_safe(prints_abort=prints_abort)
 
 def stringify(*values: object, sep: Optional[str] = " ", end: Optional[str] = "") -> str:
 	buffer = StringIO()

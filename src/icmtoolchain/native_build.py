@@ -348,8 +348,6 @@ def compile_native(abis: Collection[str]) -> int:
 	stdincludes_custom = GLOBALS.MAKE_CONFIG.get_relative_path("stdincludes")
 	if exists(stdincludes_custom):
 		stdincludes_directories.append(stdincludes_custom)
-	if not isdir(stdincludes_toolchain):
-		attention("Not found 'stdincludes', in most cases build will be failed, please install it via tasks.")
 
 	toolchain_config = None
 	if any(stdincludes_directories):
@@ -363,6 +361,8 @@ def compile_native(abis: Collection[str]) -> int:
 	except StopIteration:
 		GLOBALS.MOD_STRUCTURE.update_build_config_list("nativeDirs")
 		return 0
+	if not isdir(stdincludes_toolchain):
+		attention("Not found 'stdincludes', in most cases build will be failed, please install it via tasks.")
 
 	directory_tuples: Iterable[tuple[str, Iterable[MakeNativeData]]] = []
 	for abi in abis:

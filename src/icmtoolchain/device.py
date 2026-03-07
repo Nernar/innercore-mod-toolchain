@@ -46,17 +46,19 @@ def get_modpack_push_directory() -> Optional[str]:
 		GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 		return get_modpack_push_directory()
 
-	if "/horizon/packs/" not in directory and not GLOBALS.PREFERRED_CONFIG.get_value("adb.pushAnyLocation", False):
+	if "horizon" not in directory and "innercore" not in directory and not GLOBALS.PREFERRED_CONFIG.get_value("adb.pushAnyLocation", False):
 		pretty_print(
-			f"Push directory {directory} looks suspicious, it does not belong to Horizon packs directory. " +
-			"This action may easily corrupt all content inside, allow it only if you know what are you doing."
+			f"Push directory {directory!r} looks suspicious, it does not belong to Horizon packs directory. " +
+			"This action may easily corrupt all content inside, allow only if you know what are you doing."
 		)
 		which = select_prompt(
 			"What will you do?",
 			"Choice another modpack",
 			"Push it anyway",
 			"No questions, always push",
-			"Nothing", fallback=3
+			"Nothing",
+			fallback=3,
+			prints_abort=False
 		)
 
 		if which == 0:
@@ -69,7 +71,7 @@ def get_modpack_push_directory() -> Optional[str]:
 			GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 			pretty_print("This may be changed in your 'toolchain.json' config.")
 		elif which == 3:
-			pretty_print("Pushing aborted.")
+			attention("Pushing aborted.")
 			return None
 
 	return directory
@@ -168,7 +170,9 @@ def ls(path: str, *args: str) -> Tuple[List[str], List[str]]:
 def push_everything(push_unchanged: bool = True, cleanup_remote: bool = True) -> int:
 	destination_directory = get_modpack_push_directory()
 	if not destination_directory:
+		# probably someday it will return 0, but only when we merge push and launch
 		return 1
+
 	push_unchanged = GLOBALS.PREFERRED_CONFIG.get_value("adb.pushUnchangedFiles", push_unchanged)
 	cleanup_remote = GLOBALS.PREFERRED_CONFIG.get_value("adb.cleanupRemote", cleanup_remote)
 

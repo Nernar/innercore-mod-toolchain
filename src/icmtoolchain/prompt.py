@@ -87,7 +87,7 @@ class Feedback(metaclass=ABCMeta):
 			self.on_pre_request(self)
 
 	def inform_if_already_busy(self) -> None:
-		if self.application.is_running:
+		if self.application.is_running and not self.application.is_done:
 			raise RuntimeError("Feedback is already requested, you cannot requery it until guest responds to ongoing one.")
 
 	async def request_async(self) -> Any:
@@ -106,6 +106,7 @@ class Feedback(metaclass=ABCMeta):
 		except (KeyboardInterrupt, EOFError):
 			if prints_abort:
 				attention("Abort.")
+		return self.fallback
 
 	def request_safe(self, prints_abort: bool = True) -> Any:
 		try:
@@ -113,6 +114,7 @@ class Feedback(metaclass=ABCMeta):
 		except (KeyboardInterrupt, EOFError):
 			if prints_abort:
 				attention("Abort.")
+		return self.fallback
 
 	def print_result(self, result: object) -> object:
 		if result is True:
@@ -135,7 +137,7 @@ class Feedback(metaclass=ABCMeta):
 				pretty_print(result, style="class:print.answer")
 
 	def complete(self, *, result: object = None, print_result: object = None) -> None:
-		if self.application.is_running:
+		if self.application.is_running and not self.application.is_done:
 			self.application.exit(result=result)
 		if result is not None:
 			self.print_result(print_result if print_result else result)

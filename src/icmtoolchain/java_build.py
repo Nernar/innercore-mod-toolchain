@@ -578,8 +578,6 @@ def compile_java(tool: str = "gradle") -> int:
 	if not isdir(classpath_directory):
 		from .output_directory import get_config_directory
 		classpath_directory = join(get_config_directory(), "classpath")
-	if not isdir(classpath_directory):
-		attention("Not found 'classpath', in most cases build will be failed, please install it via tasks.")
 	project_classpath_directory = GLOBALS.MAKE_CONFIG.get_relative_path("classpath")
 	if exists(project_classpath_directory):
 		classpath_directories.append(project_classpath_directory)
@@ -596,6 +594,8 @@ def compile_java(tool: str = "gradle") -> int:
 	except StopIteration:
 		GLOBALS.MOD_STRUCTURE.update_build_config_list("javaDirs")
 		return 0
+	if not isdir(classpath_directory):
+		attention("Not found 'classpath', in most cases build will be failed, please install it via tasks.")
 
 	from .output_directory import get_config_directory
 	r8_executable = join(get_config_directory(), "r8", "r8.jar")
