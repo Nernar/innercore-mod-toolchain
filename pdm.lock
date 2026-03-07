@@ -5,10 +5,10 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:1552949492ceb7e83bd450325139abaf32f11a376ccd18b765ac7d29d0d4a5a9"
+content_hash = "sha256:05389d15d33f67b974ac87cfb447c9a885ad6ca05b695a33a9958263d7816731"
 
 [[metadata.targets]]
-requires_python = ">=3.7"
+requires_python = ">=3.8"
 
 [[package]]
 name = "prompt-toolkit"
