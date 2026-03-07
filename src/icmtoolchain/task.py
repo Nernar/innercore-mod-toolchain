@@ -353,17 +353,6 @@ def task_new_project() -> int:
 	return 0
 
 @task(
-	"importProject",
-	description="Converts a project for utilization with toolchains or creates a merge of several projects."
-)
-def task_import_project(path: str = "", target: str = "") -> int:
-	success("Project successfully imported!")
-	if not confirm_prompt("Select this project?", True):
-		return 0
-	GLOBALS.PROJECT_MANAGER.select_project(folder=relpath(path, GLOBALS.TOOLCHAIN_CONFIG.directory))
-	return 0
-
-@task(
 	"removeProject",
 	locks=["cleanup"],
 	description="Removes a project, selected interactively by user."
@@ -400,13 +389,13 @@ def task_remove_project() -> int:
 def task_select_project(path: str = "") -> int:
 	if len(path) > 0:
 		where = GLOBALS.TOOLCHAIN_CONFIG.get_path(path)
-		if isfile(where) and basename(where) == "make.json":
+		if isfile(where): # and basename(where) == "make.json"
 			where = dirname(where)
 		if isdir(where):
 			if where == GLOBALS.TOOLCHAIN_CONFIG.directory:
 				abort("Requested path must be reference to project, not toolchain itself.")
-			if not isfile(join(where, "make.json")):
-				abort(f"Not found 'make.json' in {path!r}, it not belongs to project yet.")
+			# if not isfile(join(where, "make.json")):
+				# abort(f"Not found 'make.json' in {path!r}, it not belongs to project yet.")
 			GLOBALS.PROJECT_MANAGER.select_project(folder=path)
 			return 0
 		else:
@@ -452,43 +441,44 @@ def task_ensure_project_exists() -> int:
 	description="Configures tasks in most useful IDEs for mods to use from the interface."
 )
 def task_configure_ide() -> int:
-	from .workspace import (flush_compound_tasks, flush_shell_tasks,
-	                        flush_vscode_compound_task, flush_vscode_shell_task)
+	from .workspace import (flush_compound_tasks, flush_toolchain_tasks,
+	                        flush_vscode_compound_task)
 
-	flush_shell_tasks("Select Project", "folder-opened", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/select-project"), focus=True)
-	flush_vscode_shell_task("Select Project by Active File", "repo-force-push", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/select-project"), hidden=True, globbing="**/*", options=("${fileWorkspaceFolder}", ))
-	flush_shell_tasks("Push", "rocket", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/push"))
-	flush_shell_tasks("Assemble Mod for Release", "archive", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/assemble-release"))
+	# flush_toolchain_tasks("Select Project", "folder-opened", "selectProject", focus=True)
+	# flush_vscode_toolchain_task("Select Project by Active File", "repo-force-push", "selectProject --path", hidden=True, glob="**/*", options=("${fileWorkspaceFolder}", ))
+	flush_toolchain_tasks("Push", "rocket", "ensureProjectExists stopApplication pushEverything launchApplication")
+	flush_toolchain_tasks("Assemble Mod for Release", "archive", "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage")
 
-	flush_shell_tasks("Build (No push)", "debug-all", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/build-all"), hidden=True)
+	flush_toolchain_tasks("Build (No push)", "debug-all", "ensureProjectExists clearOutput buildScripts compileNative compileJava buildResources buildInfo", hidden=True)
 	flush_compound_tasks("Build", "debug-all", ("Build (No push)", "Push"))
-	flush_vscode_compound_task("Build by Active File", "debug-all", ("Select Project by Active File", "Build"), hidden=True, globbing="**/*")
+	flush_vscode_compound_task("Build by Active File", "debug-all", ("Select Project by Active File", "Build"), hidden=True, glob="**/*")
 
-	flush_shell_tasks("Build Scripts and Resources (No push)", "debug-alt", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/build-scripts-and-resources"), hidden=True)
+	flush_toolchain_tasks("Build Scripts and Resources (No push)", "debug-alt", "ensureProjectExists clearOutput buildScripts buildResources buildInfo", hidden=True)
 	flush_compound_tasks("Build Scripts and Resources", "debug-alt", ("Build Scripts and Resources (No push)", "Push"))
-	flush_vscode_compound_task("Build Scripts and Resources by Active File", "debug-alt", ("Select Project by Active File", "Build Scripts and Resources"), hidden=True, globbing="**/*")
+	flush_vscode_compound_task("Build Scripts and Resources by Active File", "debug-alt", ("Select Project by Active File", "Build Scripts and Resources"), hidden=True, glob="**/*")
 
-	flush_shell_tasks("Build Java (No push)", "run-above", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/compile-java"), hidden=True)
+	flush_toolchain_tasks("Build Java (No push)", "run-above", "ensureProjectExists compileJava buildInfo", hidden=True)
 	flush_compound_tasks("Build Java", "run-above", ("Build Java (No push)", "Push"))
-	flush_vscode_compound_task("Build Java by Active File", "run-above", ("Select Project by Active File", "Build Java"), hidden=True, globbing="**/*")
+	flush_vscode_compound_task("Build Java by Active File", "run-above", ("Select Project by Active File", "Build Java"), hidden=True, glob="**/*")
 
-	flush_shell_tasks("Build Native (No push)", "run", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/compile-native"), hidden=True)
+	flush_toolchain_tasks("Build Native (No push)", "run", "ensureProjectExists compileNative buildInfo", hidden=True)
 	flush_compound_tasks("Build Native", "run", ("Build Native (No push)", "Push"))
-	flush_vscode_compound_task("Build Native by Active File", "run", ("Select Project by Active File", "Build Native"), hidden=True, globbing="**/*")
+	flush_vscode_compound_task("Build Native by Active File", "run", ("Select Project by Active File", "Build Native"), hidden=True, glob="**/*")
 
-	flush_shell_tasks("Watch Scripts (No push)", "debug-coverage", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/watch-scripts"), hidden=True)
-	flush_compound_tasks("Watch Scripts", "debug-coverage", ("Watch Scripts (No push)", "Push"))
-	flush_vscode_compound_task("Watch Scripts by Active File", "debug-coverage", ("Select Project by Active File", "Watch Scripts"), hidden=True, globbing="**/*")
+	# flush_toolchain_tasks("Watch Scripts (No push)", "debug-coverage", "ensureProjectExists clearOutput watchScripts buildInfo", hidden=True)
+	# flush_compound_tasks("Watch Scripts", "debug-coverage", ("Watch Scripts (No push)", "Push"))
+	# flush_vscode_compound_task("Watch Scripts by Active File", "debug-coverage", ("Select Project by Active File", "Watch Scripts"), hidden=True, glob="**/*")
 
-	flush_shell_tasks("Configure ADB", "device-mobile", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/configure-adb"), focus=True)
-	flush_shell_tasks("New Project", "new-folder", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/new-project"), focus=True)
-	flush_shell_tasks("Import Project", "repo-pull", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/import-project"), focus=True)
-	flush_shell_tasks("Remove Project", "root-folder-opened", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/remove-project"), focus=True)
-	flush_shell_tasks("Rebuild Declarations", "milestone", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/rebuild-declarations"), hidden=True)
-	flush_vscode_compound_task("Rebuild Declarations by Active File", "milestone", ("Select Project by Active File", "Rebuild Declarations"), hidden=True, globbing="**/*")
-	flush_shell_tasks("Check for Updates", "cloud", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/update-toolchain"), focus=True)
-	flush_shell_tasks("Reinstall Components", "package", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/component-integrity"), focus=True)
-	flush_shell_tasks("Invalidate Caches", "flame", GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("python/cleanup"), focus=True)
+	flush_toolchain_tasks("Rebuild Declarations", "milestone", "ensureProjectExists updateIncludes", hidden=True)
+	flush_vscode_compound_task("Rebuild Declarations by Active File", "milestone", ("Select Project by Active File", "Rebuild Declarations"), hidden=True, glob="**/*")
+	flush_toolchain_tasks("Invalidate Caches", "flame", "cleanup", focus=True)
+
+	flush_toolchain_tasks("New Project", "new-folder", "newProject", focus=True)
+	# flush_toolchain_tasks("Import Project", "repo-pull", "importProject", focus=True)
+	# XXX: flush_toolchain_tasks("Remove Project", "root-folder-opened", "removeProject", focus=True)
+	# flush_toolchain_tasks("Check for Updates", "cloud", "updateToolchain", focus=True)
+	flush_toolchain_tasks("Configure ADB", "device-mobile", "configureADB", focus=True)
+	# flush_toolchain_tasks("Reinstall Components", "package", "componentIntegrity", focus=True)
 
 	return 0
 

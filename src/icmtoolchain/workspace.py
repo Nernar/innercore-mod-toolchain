@@ -11,7 +11,7 @@ from .utils import ensure_directory, ensure_file_directory
 
 class WorkspaceNotAvailable(RuntimeError):
 	def __init__(self, *args: object) -> None:
-		RuntimeError.__init__(self, "Workspace is not available", *args)
+		RuntimeError.__init__(self, "Workspace is not available!", *args)
 
 class CodeWorkspace(FileConfig):
 	def __init__(self, path: str) -> None:
@@ -64,8 +64,8 @@ class WorkspaceBuildConfiguration:
 			},
 			"problemMatcher": list()
 		})
-		if "globbing" in kwargs:
-			task["group"]["glob"] = kwargs["globbing"]
+		if "glob" in kwargs:
+			task["group"]["glob"] = kwargs["glob"]
 		return task
 
 	@staticmethod
@@ -86,6 +86,17 @@ class WorkspaceBuildConfiguration:
 				"cwd": task["options"]["cwd"].replace("/", "\\")
 			}
 		}
+		if "options" in kwargs:
+			task["args"] = kwargs["options"]
+		return task
+
+	@staticmethod
+	def get_vscode_toolchain_task(name: str, icon: str, cmd: str, **kwargs):
+		task = WorkspaceBuildConfiguration.get_vscode_task(name, icon, **kwargs)
+		task.update({
+			"type": "shell",
+			"command": f"icmtoolchain {cmd}"
+		})
 		if "options" in kwargs:
 			task["args"] = kwargs["options"]
 		return task
@@ -134,7 +145,7 @@ class WorkspaceBuildConfiguration:
 			tasks.write("\n")
 
 	@staticmethod
-	def get_idea_task(name: str, type: str):
+	def get_idea_task(name: str, type: str, **kwargs):
 		from xml.dom import minidom
 		document = minidom.Document()
 		component = document.createElement("component")
@@ -144,6 +155,8 @@ class WorkspaceBuildConfiguration:
 		configuration.setAttribute("name", name[:-7] if name.endswith(" (Unix)") else name)
 		configuration.setAttribute("default", "false")
 		configuration.setAttribute("type", type)
+		if "focus" in kwargs and kwargs["focus"]:
+			configuration.setAttribute("focusToolWindowBeforeRun", "true")
 		component.appendChild(configuration)
 
 		method = document.createElement("method")
@@ -155,7 +168,7 @@ class WorkspaceBuildConfiguration:
 	@staticmethod
 	def get_idea_shell_task(name: str, path: str, **kwargs):
 		from xml.dom import minidom
-		component = WorkspaceBuildConfiguration.get_idea_task(name, "ShConfigurationType")
+		component = WorkspaceBuildConfiguration.get_idea_task(name, "ShConfigurationType", **kwargs)
 		configuration: minidom.Node = component.childNodes[0]
 		assert component.ownerDocument is not None
 		document: minidom.Document = component.ownerDocument
@@ -184,25 +197,49 @@ class WorkspaceBuildConfiguration:
 		independent_script_working_directory.setAttribute("value", "false")
 		configuration.appendChild(independent_script_working_directory)
 
-		interpreter_path = document.createElement("option")
-		interpreter_path.setAttribute("name", "INTERPRETER_PATH")
-		interpreter_path.setAttribute("value", "")
-		configuration.appendChild(interpreter_path)
-		interpreter_options = document.createElement("option")
-		interpreter_options.setAttribute("name", "INTERPRETER_OPTIONS")
-		interpreter_options.setAttribute("value", "")
-		configuration.appendChild(interpreter_options)
-		independent_interpreter_path = document.createElement("option")
-		independent_interpreter_path.setAttribute("name", "INDEPENDENT_INTERPRETER_PATH")
-		independent_interpreter_path.setAttribute("value", "true")
-		configuration.appendChild(independent_interpreter_path)
+		return component
+
+	@staticmethod
+	def get_idea_toolchain_task(name: str, cmd: str, **kwargs):
+		from xml.dom import minidom
+		component = WorkspaceBuildConfiguration.get_idea_task(name, "ShConfigurationType", **kwargs)
+		configuration: minidom.Node = component.childNodes[0]
+		assert component.ownerDocument is not None
+		document: minidom.Document = component.ownerDocument
+
+		script_path = document.createElement("option")
+		script_path.setAttribute("name", "SCRIPT_TEXT")
+		script_path.setAttribute("value", f"icmtoolchain {cmd}")
+		configuration.appendChild(script_path)
+		script_options = document.createElement("option")
+		script_options.setAttribute("name", "SCRIPT_OPTIONS")
+		script_options.setAttribute("value", " ".join(kwargs["options"]) if "options" in kwargs else "")
+		configuration.appendChild(script_options)
+		independent_script_path = document.createElement("option")
+		independent_script_path.setAttribute("name", "INDEPENDENT_SCRIPT_PATH")
+		independent_script_path.setAttribute("value", "true")
+		configuration.appendChild(independent_script_path)
+
+		script_working_directory = document.createElement("option")
+		script_working_directory.setAttribute("name", "SCRIPT_WORKING_DIRECTORY")
+		script_working_directory.setAttribute("value", "$PROJECT_DIR$")
+		configuration.appendChild(script_working_directory)
+		independent_script_working_directory = document.createElement("option")
+		independent_script_working_directory.setAttribute("name", "INDEPENDENT_SCRIPT_WORKING_DIRECTORY")
+		independent_script_working_directory.setAttribute("value", "true")
+		configuration.appendChild(independent_script_working_directory)
+
+		execute_file = document.createElement("option")
+		execute_file.setAttribute("name", "EXECUTE_SCRIPT_FILE")
+		execute_file.setAttribute("value", "false")
+		configuration.appendChild(execute_file)
 
 		return component
 
 	@staticmethod
-	def get_idea_compound_task(name: str, order: Collection[str]):
+	def get_idea_compound_task(name: str, order: Collection[str], **kwargs):
 		from xml.dom import minidom
-		component = WorkspaceBuildConfiguration.get_idea_task(name, "CompoundRunConfigurationType")
+		component = WorkspaceBuildConfiguration.get_idea_task(name, "CompoundRunConfigurationType", **kwargs)
 		assert component.ownerDocument is not None
 		document: minidom.Document = component.ownerDocument
 		configuration: minidom.Node = component.childNodes[0]
@@ -210,7 +247,7 @@ class WorkspaceBuildConfiguration:
 		for task_name in order:
 			to_run = document.createElement("toRun")
 			to_run.setAttribute("name", task_name)
-			to_run.setAttribute("type", "CompoundRunConfigurationType")
+			to_run.setAttribute("type", "ShConfigurationType")
 			configuration.appendChild(to_run)
 
 		return component
@@ -225,22 +262,32 @@ class WorkspaceBuildConfiguration:
 		with open(join(configurations_path, unescaped_name), "w", encoding="utf-8") as task:
 			task.write(component.toprettyxml(indent=" " * 2))
 
-def flush_vscode_shell_task(name: str, icon: str, path: str, **kwargs):
-	WorkspaceBuildConfiguration.flush_vscode_task(name, icon, WorkspaceBuildConfiguration.get_vscode_shell_task, path, **kwargs)
+# def flush_vscode_shell_task(name: str, icon: str, path: str, **kwargs):
+# 	WorkspaceBuildConfiguration.flush_vscode_task(name, icon, WorkspaceBuildConfiguration.get_vscode_shell_task, path, **kwargs)
+
+def flush_vscode_toolchain_task(name: str, icon: str, cmd: str, **kwargs):
+	WorkspaceBuildConfiguration.flush_vscode_task(name, icon, WorkspaceBuildConfiguration.get_vscode_toolchain_task, cmd, **kwargs)
 
 def flush_vscode_compound_task(name: str, icon: str, order: Collection[str], **kwargs):
 	WorkspaceBuildConfiguration.flush_vscode_task(name, icon, WorkspaceBuildConfiguration.get_vscode_compound_task, order, **kwargs)
 
-def flush_idea_shell_task(name: str, path: str, **kwargs):
-	WorkspaceBuildConfiguration.flush_idea_task(name, WorkspaceBuildConfiguration.get_idea_shell_task, path + ".bat", **kwargs)
-	WorkspaceBuildConfiguration.flush_idea_task(f"{name} (Unix)", WorkspaceBuildConfiguration.get_idea_shell_task, path + ".sh", **kwargs)
+# def flush_idea_shell_task(name: str, path: str, **kwargs):
+# 	WorkspaceBuildConfiguration.flush_idea_task(name, WorkspaceBuildConfiguration.get_idea_shell_task, path + ".bat", **kwargs)
+# 	WorkspaceBuildConfiguration.flush_idea_task(f"{name} (Unix)", WorkspaceBuildConfiguration.get_idea_shell_task, path + ".sh", **kwargs)
+
+def flush_idea_toolchain_task(name: str, cmd: str, **kwargs):
+	WorkspaceBuildConfiguration.flush_idea_task(name, WorkspaceBuildConfiguration.get_idea_toolchain_task, cmd, **kwargs)
 
 def flush_idea_compound_task(name: str, order: Collection[str], **kwargs):
 	WorkspaceBuildConfiguration.flush_idea_task(name, WorkspaceBuildConfiguration.get_idea_compound_task, order, **kwargs)
 
-def flush_shell_tasks(name: str, icon: str, path: str, **kwargs):
-	flush_vscode_shell_task(name, icon, path, **kwargs)
-	flush_idea_shell_task(name, path, **kwargs)
+# def flush_shell_tasks(name: str, icon: str, path: str, **kwargs):
+# 	flush_vscode_shell_task(name, icon, path, **kwargs)
+# 	flush_idea_shell_task(name, path, **kwargs)
+
+def flush_toolchain_tasks(name: str, icon: str, cmd: str, **kwargs):
+	flush_vscode_toolchain_task(name, icon, cmd, **kwargs)
+	flush_idea_toolchain_task(name, cmd, **kwargs)
 
 def flush_compound_tasks(name: str, icon: str, order: Collection[str], **kwargs):
 	flush_vscode_compound_task(name, icon, order, **kwargs)
