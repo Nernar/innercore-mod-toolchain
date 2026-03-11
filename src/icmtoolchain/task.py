@@ -261,91 +261,52 @@ def task_push_everything() -> int:
 	description="Starts launcher with predefined autostart setting on a connected device using ADB."
 )
 def task_monkey_launcher() -> int:
-	from subprocess import run
-	run(GLOBALS.ADB_COMMAND + [
+	preferred_launcher = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherPackage")
+	preferred_activity = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherActivity")
+	from .device import (LAUNCHER_PACKAGES, launch_package_via_am,
+	                     launch_package_via_monkey)
+	packages = (preferred_launcher, ) if preferred_launcher else LAUNCHER_PACKAGES
+
+	import subprocess
+	subprocess.run(GLOBALS.ADB_COMMAND + [
 		"shell", "input",
 		"keyevent", "KEYCODE_WAKEUP"
 	], stdout=DEVNULL, stderr=DEVNULL)
 
-	preferred_launcher = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherPackage")
-	preferred_activity = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherActivity")
-	if preferred_launcher:
-		try:
-			process = run(GLOBALS.ADB_COMMAND + [
-				"shell", "am", "start",
-				"-n", f"{preferred_launcher}/{preferred_activity or 'com.zhekasmirnov.horizon.activity.main.StartupWrapperActivity'}",
-				"--ez", "autoLaunchFlag", "true"
-			], check=True, capture_output=True, text=True)
-			# XXX: Always echoes starting, outputs only happened errors.
-			# Starting: Intent { cmp=com.zheka.horizon/com.zhekasmirnov.horizon.activity.main.StartupWrapperActivity (has extras) }
-			# Error type 3
-			# Error: Activity class {com.zheka.horizon/com.zhekasmirnov.horizon.activity.main.StartupWrapperActivity} does not exist.
-		except BaseException:
-			try:
-				process = run(GLOBALS.ADB_COMMAND + [
-					"shell", "monkey",
-					"-p", preferred_launcher,
-					"-c", "android.intent.category.LAUNCHER", "1"
-				], check=True, capture_output=True, text=True)
-				# XXX: Injected or no activities, somewhere between empty lines.
-				# Events injected: 1
-				# ** No activities found to run, monkey aborted.
-			except BaseException:
-				pass
+	for package in packages:
+		activity = preferred_activity
+		if not activity and "horizon" in package:
+			activity = "com.zhekasmirnov.horizon.activity.main.StartupWrapperActivity"
 
-	try:
-		process = run(GLOBALS.ADB_COMMAND + [
-			"shell", "monkey",
-			"-p", "com.zheka.horizon",
-			"-c", "android.intent.category.LAUNCHER", "1"
-		], check=True, capture_output=True, text=True)
-		successful = False
-		for line in process.stdout.splitlines():
-			if line[:15] == "Events injected":
-				successful = True
-				break
-		if not successful:
-			raise RuntimeError()
-		run(GLOBALS.ADB_COMMAND + [
-			"shell", "touch",
-			"/storage/emulated/0/games/horizon/.flag_auto_launch"
-		], stdout=DEVNULL, stderr=DEVNULL)
-		run(GLOBALS.ADB_COMMAND + [
-			"shell", "touch",
-			"/storage/emulated/0/Android/data/com.zheka.horizon/files/horizon/.flag_auto_launch"
-		], stdout=DEVNULL, stderr=DEVNULL)
-	except BaseException:
-		try:
-			process = run(GLOBALS.ADB_COMMAND + [
-				"shell", "monkey",
-				"-p", "com.zhekasmirnov.innercore",
-				"-c", "android.intent.category.LAUNCHER", "1"
-			], check=True, capture_output=True, text=True)
-			successful = False
-			for line in process.stdout.splitlines():
-				if line[:15] == "Events injected":
-					successful = True
-					break
-			if not successful:
-				raise RuntimeError()
-		except BaseException:
-			attention("Horizon is not installed, nothing to launch.")
-	return 0
+		launched = False
+		if activity:
+			launched = launch_package_via_am(package, activity)
+		if not launched:
+			launched = launch_package_via_monkey(package)
+
+		if launched:
+			success(f"Successfully launched {package!r}!")
+			return 0
+
+	failure("Horizon is not installed, nothing to launch.")
+	return 1
 
 @task(
 	"stopApplication",
 	description="Terminates launcher process on a connected device using ADB."
 )
 def task_stop_launcher() -> int:
-	from subprocess import CalledProcessError, run
 	preferred_launcher = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherPackage")
-	packages = (preferred_launcher, ) if preferred_launcher else ("com.zheka.horizon", "com.zheka.horizon64", "com.zheka.horizon32", "com.zhekasmirnov.innercore")
+	from .device import LAUNCHER_PACKAGES
+	packages = (preferred_launcher, ) if preferred_launcher else LAUNCHER_PACKAGES
+
+	import subprocess
 	try:
 		for package in packages:
-			run(GLOBALS.ADB_COMMAND + [
+			subprocess.run(GLOBALS.ADB_COMMAND + [
 				"shell", "am", "force-stop", package
 			], check=True, stdout=DEVNULL, stderr=DEVNULL)
-	except CalledProcessError as err:
+	except subprocess.CalledProcessError as err:
 		return err.returncode
 	return 0
 

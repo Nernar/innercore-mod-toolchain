@@ -12,6 +12,12 @@ from .shell import (InteractiveSession, Progress, abort, attention,
                     select_prompt, success)
 from .utils import DEVNULL
 
+LAUNCHER_PACKAGES = [
+	"com.zheka.horizon64",
+	"com.zheka.horizon32",
+	"com.zheka.horizon",
+	"com.zhekasmirnov.innercore"
+]
 
 def get_adb_executable() -> str:
 	try:
@@ -751,3 +757,46 @@ def setup_how_to_use() -> Optional[List[str]]:
 	except KeyboardInterrupt:
 		pretty_print()
 	return setup_device_connection()
+
+def launch_package_via_am(package: str, activity: str) -> bool:
+	try:
+		process = subprocess.run(GLOBALS.ADB_COMMAND + [
+			"shell", "am", "start",
+			"-n", f"{package}/{activity}",
+			"--ez", "autoLaunchFlag", "true"
+		], check=True, capture_output=True, text=True)
+
+		output = process.stdout + process.stderr
+		if "does not exist" in output:
+			return False
+		elif "Error" in output:
+			attention(f"Unexpected error while launching {package}:\n{output.strip()}")
+			return False
+		return True
+	except subprocess.CalledProcessError as err:
+		output = err.stdout + err.stderr
+		if "does not exist" not in output:
+			attention(f"Failed to launch {package} (am start) with code {err.returncode}:\n{output.strip()}")
+		return False
+
+def launch_package_via_monkey(package: str) -> bool:
+	try:
+		process = subprocess.run(GLOBALS.ADB_COMMAND + [
+			"shell", "monkey",
+			"-p", package,
+			"-c", "android.intent.category.LAUNCHER", "1"
+		], check=True, capture_output=True, text=True)
+
+		output = process.stdout + process.stderr
+		if "No activities found to run" in output:
+			return False
+		elif "Events injected" in output:
+			return True
+		else:
+			attention(f"Unexpected output from monkey for {package}:\n{output.strip()}")
+			return False
+	except subprocess.CalledProcessError as err:
+		output = err.stdout + err.stderr
+		if "No activities found to run" not in output:
+			attention(f"Failed to launch {package} (monkey) with code {err.returncode}:\n{output.strip()}")
+		return False
