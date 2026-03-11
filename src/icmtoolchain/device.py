@@ -332,7 +332,8 @@ def which_state(what: Optional[str] = None) -> int:
 		return {
 			"no devices": STATE_NO_DEVICES,
 			"device": STATE_DEVICE_CONNECTED,
-			"authorizing": STATE_DEVICE_AUTHORIZING
+			"authorizing": STATE_DEVICE_AUTHORIZING,
+			"unauthorized": STATE_DEVICE_AUTHORIZING
 		}[what]
 	except KeyError: # offline
 		return STATE_DISCONNECTED
@@ -418,6 +419,8 @@ def get_ip() -> str:
 
 def get_adb_command() -> List[str]:
 	ensure_server_running()
+	if get_device_state() == STATE_DEVICE_AUTHORIZING:
+		wait_for_authorization()
 	if get_device_state() == STATE_DEVICE_CONNECTED:
 		return [get_adb_executable()]
 	devices = GLOBALS.TOOLCHAIN_CONFIG.get_value("devices", list())
@@ -471,7 +474,7 @@ def get_adb_command_by_serial(serial: str) -> List[str]:
 def get_adb_command_by_tcp(ip: str, port: Optional[int] = None, skip_error: bool = False) -> Optional[List[str]]:
 	ensure_server_running()
 	if not get_adb_command_by_serialno_type("-e", silent=skip_error):
-		if skip_error or not confirm_prompt("Are you sure want to save it?", False):
+		if skip_error or not confirm_prompt("Are you really want to save it?", False):
 			return None
 	device: dict[str, Any] = {
 		"ip": ip
@@ -498,6 +501,41 @@ def get_adb_command_by_serialno_type(which: str, silent: bool = False) -> Option
 			attention("adb get-serialno failed with code", serial.returncode)
 		return None
 	return get_adb_command_by_serial(serial.stdout.rstrip())
+
+def wait_for_authorization(serial: Optional[str] = None, timeout: float = 15.0) -> bool:
+	from time import sleep, time
+
+	from .shell import attention, success
+	
+	start_time = time()
+	notified = False
+	
+	while time() - start_time < timeout:
+		current_state = STATE_UNKNOWN
+		if serial:
+			devices = device_list()
+			if devices:
+				for device in devices:
+					if device["serial"] == serial:
+						current_state = device["state"]
+						break
+		else:
+			current_state = get_device_state()
+
+		if current_state == STATE_DEVICE_CONNECTED:
+			if notified:
+				success("Device authorized successfully!")
+			return True
+		elif current_state == STATE_DEVICE_AUTHORIZING:
+			if not notified:
+				attention("Device is unauthorized. Please confirm USB debugging on your device screen...")
+				notified = True
+
+		sleep(1.0)
+
+	if notified:
+		attention("Authorization timeout. Device is still unauthorized.")
+	return False
 
 def setup_device_connection() -> Optional[List[str]]:
 	not_connected_any_device = len(GLOBALS.TOOLCHAIN_CONFIG.get_value("devices", list())) == 0
