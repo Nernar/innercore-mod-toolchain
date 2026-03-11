@@ -21,10 +21,11 @@ def unique_folder_name(path: str) -> str:
 def expand_paths(file_or_directory: str, filter: Optional[Callable[[str], bool]] = None) -> List[str]:
 	locations = list()
 	if len(file_or_directory) > 0 and file_or_directory[-1] == "*":
-		if not isdir(file_or_directory):
+		directory = file_or_directory[:-1]
+		if not isdir(directory):
 			return locations
-		for filename in listdir(file_or_directory):
-			file = join(file_or_directory, filename)
+		for filename in listdir(directory):
+			file = join(directory, filename)
 			if not filter or filter(file):
 				locations.append(file)
 	else:
