@@ -539,11 +539,52 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 				relative_directory = relpath(dirpath, target_odex_directory)
 				copy_file(join(dirpath, filename), join(target.output_directory, relative_directory, filename))
 				built_successfully = True
+
 		for filename in os.listdir(target.directory):
 			filepath = join(target.directory, filename)
 			if splitext(filename)[1] == ".dex" and isfile(filepath):
 				copy_file(filepath, join(target.output_directory, get_next_filename(target.output_directory, "classes", extension=".dex", start_index=2)))
 				built_successfully = True
+
+		if built_successfully:
+			target_classes_directory = join(target_directory, "classes", target.relative_directory, "classes")
+			if isdir(target_classes_directory):
+				classpath_jar = join(target.output_directory, "classpath.jar")
+				if isfile(classpath_jar):
+					os.remove(classpath_jar)
+				with ZipFile(classpath_jar, "w") as archive:
+					walk_all_files(target_classes_directory, lambda path: archive.write(path, arcname=relpath(path, target_classes_directory)))
+
+				classes_jar = join(target.output_directory, "classes.jar")
+				if isfile(classes_jar):
+					os.remove(classes_jar)
+				with ZipFile(classes_jar, "w") as archive:
+					walk_all_files(target_classes_directory, lambda path: archive.write(path, arcname=relpath(path, target_classes_directory)))
+
+					lib_classes_dir = join(target_directory, "libraries", "classes", target.relative_directory)
+					if isdir(lib_classes_dir):
+						walk_all_files(lib_classes_dir, lambda path: archive.write(path, arcname=relpath(path, lib_classes_dir)))
+
+			if target.manifest.keep_sources:
+				target_sources_directory = join(target_directory, "classes", target.relative_directory, "generated", "sources")
+				sources_jar = join(target.output_directory, "classpath-sources.jar")
+				if isfile(sources_jar):
+					os.remove(sources_jar)
+
+				with ZipFile(sources_jar, "w") as archive:
+					has_sources = False
+					if isdir(target_sources_directory):
+						walk_all_files(target_sources_directory, lambda path: archive.write(path, arcname=relpath(path, target_sources_directory)))
+						has_sources = True
+
+					for src_dir in target.manifest.sources:
+						abs_src_dir = join(target.directory, src_dir)
+						if isdir(abs_src_dir):
+							walk_all_files(abs_src_dir, lambda path: archive.write(path, arcname=relpath(path, abs_src_dir)))
+							has_sources = True
+
+				if not has_sources and isfile(sources_jar):
+					os.remove(sources_jar)
 
 		if not built_successfully:
 			attention(f"Directory {target.relative_directory!r} is empty.")
