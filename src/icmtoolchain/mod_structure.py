@@ -207,7 +207,7 @@ class LinkedResourceStorage:
 
 	def iterate_resources(self):
 		if len(self.contents) > 0 and hasattr(self, "latest_contents"):
-			attention(f"There is cached and runtime contents at same time, this can lead to duplication of some resources. If you are an add-on developer, please make sure that your LinkedResourceStorage is stored.")
+			attention(f"There is cached and runtime contents at same time, this can lead to duplication of some resources. If you are an extension developer, please make sure that your LinkedResourceStorage is stored.")
 		for linked_resource in self.contents:
 			yield linked_resource
 		if hasattr(self, "latest_contents"):

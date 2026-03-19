@@ -258,7 +258,7 @@ class FileConfig(Config):
 			except JSONDecodeError as exc:
 				raise ValueError(f"Malformed {basename(self.path)!r}, you should fix it! {exc.msg}")
 
-	def save_as_file(self, output_path: Optional[str] = None) -> None:
+	def save_as_file(self, output_path: Optional[str] = None, indent: Optional[Union[int, str]] = None) -> None:
 		path_to_save = output_path or self.path
 		if not isfile(path_to_save):
 			from .utils import ensure_file
@@ -266,7 +266,7 @@ class FileConfig(Config):
 
 		with open(path_to_save, "w", encoding="utf-8") as file:
 			try:
-				dump_json(self.as_json(), file)
+				dump_json(self.as_json(), file, indent=indent, ensure_ascii=False)
 				file.write("\n")
 			except TypeError as exc:
 				raise ValueError(f"Malformed config {path_to_save!r} due to internal error! {exc}")
