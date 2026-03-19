@@ -1,4 +1,4 @@
-from abc import ABCMeta
+from abc import ABC
 from itertools import chain
 from typing import (Any, Dict, MutableMapping, MutableSequence, MutableSet,
                     Optional)
@@ -93,7 +93,7 @@ TOOLCHAIN_RULE_SET.append_set("package_type", "develop", "release")
 TOOLCHAIN_RULE_SET.append_set("java_compiler", "javac", "ecj", "gradle")
 TOOLCHAIN_RULE_SET.append_set("native_architecture", "arm", "arm64", "x86", "x86_64")
 
-class RuleSetHolder(metaclass=ABCMeta):
+class RuleSetHolder(ABC):
 	rule_set: RuleSet
 	properties: MutableSequence[str]
 

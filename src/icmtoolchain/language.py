@@ -1,4 +1,4 @@
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
 from os.path import abspath, basename, dirname, isdir, isfile, join
@@ -65,7 +65,7 @@ def get_language_directories(compile_type: str, language_config: Config, propert
 	return configurables
 
 @dataclass
-class FlushableMakeProjectData(metaclass=ABCMeta):
+class FlushableMakeProjectData(ABC):
 	@abstractmethod
 	def flush_to_output(self, directory: str) -> int:
 		...
@@ -224,7 +224,7 @@ PROJECT_TYPE_MOD = 1
 PROJECT_TYPE_MODPACK = 2
 PROJECT_TYPE_PACK = 3
 
-class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, metaclass=ABCMeta):
+class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ABC):
 	defaults: FileConfig
 	current_project: Final[str]
 	project_unique_name: Final[str]

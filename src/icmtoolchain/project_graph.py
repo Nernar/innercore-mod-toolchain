@@ -1,6 +1,6 @@
 import json
 import os
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from functools import cmp_to_key
 from itertools import chain
 from os.path import abspath, basename, exists, isdir, isfile, join
@@ -15,7 +15,7 @@ from .utils import ensure_not_whitespace, remove_tree
 
 AVAILABLE_ARTIFACTS: Dict[Union[type, Callable[[Any], bool]], Union[Callable[[Any], 'Artifact'], Type['Artifact']]] = {}
 
-class Artifact(metaclass=ABCMeta):
+class Artifact(ABC):
 	def __init__(self, description: Any) -> None:
 		self.description = description
 

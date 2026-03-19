@@ -1,4 +1,4 @@
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from typing import (Any, Callable, Dict, Iterable, List, Optional, Sequence,
                     Sized, Tuple, Union, cast)
 
@@ -19,7 +19,7 @@ from .shell import (Editable, Interactable, Selectable, attention, failure,
                     frozen, get_toolchain_style, pretty_print, success)
 
 
-class Feedback(metaclass=ABCMeta):
+class Feedback(ABC):
 	on_pre_request: Optional[Callable[['Feedback'], None]]
 
 	def __init__(self, prompt: AnyFormattedText = "Ooh, was it supposed to be a query here?", fallback: object = None) -> None:
