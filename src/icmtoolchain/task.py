@@ -221,7 +221,7 @@ def task_build_info() -> int:
 	if project_data is None:
 		attention("Nothing to write in project configurations, project data does not exist.")
 		return 0
-	return project_data.flush_to_output(GLOBALS.MOD_STRUCTURE.directory)
+	return project_data.flush_to_output(GLOBALS.PROJECT_STRUCTURE.directory)
 
 @task(
 	"clearOutput",
@@ -230,7 +230,7 @@ def task_build_info() -> int:
 )
 def task_clear_output(force: bool = False) -> int:
 	if GLOBALS.MAKE_CONFIG.get_value("development.clearOutput", False) or force:
-		remove_tree(GLOBALS.MOD_STRUCTURE.directory)
+		GLOBALS.PROJECT_STRUCTURE.cleanup(clear_output=True)
 	if PROPERTIES.get_value("release"):
 		from .package import pretty_cleanup_directory
 		pretty_cleanup_directory(GLOBALS.MAKE_CONFIG.get_build_path())
@@ -495,7 +495,7 @@ def task_cleanup() -> int:
 	if GLOBALS.is_project_available():
 		if confirm_prompt("Do you want to clear selected project cache?", True):
 			pretty_cleanup_directory(GLOBALS.MAKE_CONFIG.get_build_path())
-			pretty_cleanup_directory(GLOBALS.MOD_STRUCTURE.directory)
+			GLOBALS.PROJECT_STRUCTURE.cleanup(clear_output=True)
 		return 0
 	if not confirm_prompt("Do you want to clear all projects cache?", True):
 		return 0

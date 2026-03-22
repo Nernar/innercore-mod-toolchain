@@ -488,11 +488,11 @@ def get_java_build_targets(directories: Iterable[MakeJavaData]) -> List[BuildTar
 
 	for java_data in directories:
 		directory = GLOBALS.MAKE_CONFIG.get_path(java_data.relative_path)
-		output_directory = GLOBALS.MOD_STRUCTURE.new_build_target("java", java_data.output_path)
-		ensure_directory(output_directory)
+		target = GLOBALS.PROJECT_STRUCTURE.declare_target("java", java_data.output_path)
+		ensure_directory(target.absolute_path)
 		classpath = collect_classpath_files(list(java_data.classpath))
 		# XXX: Probably relative path (second argument) should be relative to project directory.
-		target = BuildTarget(directory, java_data.output_path, output_directory, java_data, classpath)
+		target = BuildTarget(directory, java_data.output_path, target.absolute_path, java_data, classpath)
 		targets.append(target)
 
 	return targets
@@ -590,7 +590,7 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 			attention(f"Directory {target.relative_directory!r} is empty.")
 
 	if GLOBALS.MAKE_CONFIG.project_type == PROJECT_TYPE_PACK:
-		target_output_path = GLOBALS.MOD_STRUCTURE.get_target_output_directory("java")
+		target_output_path = GLOBALS.PROJECT_STRUCTURE.get("java").output_directory
 		order = [relpath(target.output_directory, target_output_path) for target in targets]
 		order_path = join(target_output_path, "order.txt")
 		ensure_file(order_path)
@@ -612,7 +612,7 @@ def compile_java(tool: str = "gradle") -> int:
 	startup_millis = time()
 	target_directory = GLOBALS.MAKE_CONFIG.get_build_path(tool)
 	ensure_directory(target_directory)
-	GLOBALS.MOD_STRUCTURE.cleanup_build_target("java")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("java")
 
 	classpath_directories = list()
 	classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("classpath")
@@ -633,7 +633,7 @@ def compile_java(tool: str = "gradle") -> int:
 	try:
 		next(has_anything)
 	except StopIteration:
-		GLOBALS.MOD_STRUCTURE.update_build_config_list("javaDirs")
+		GLOBALS.project_structure.generate_config()
 		return 0
 	if not isdir(classpath_directory):
 		attention("Not found 'classpath', in most cases build will be failed, please install it via tasks.")
@@ -648,7 +648,7 @@ def compile_java(tool: str = "gradle") -> int:
 
 	overall_result = build_java_directories(tool, directories, target_directory)
 
-	GLOBALS.MOD_STRUCTURE.update_build_config_list("javaDirs")
+	GLOBALS.PROJECT_STRUCTURE.generate_config()
 	if overall_result != -1:
 		startup_millis = time() - startup_millis
 		if overall_result == 0:

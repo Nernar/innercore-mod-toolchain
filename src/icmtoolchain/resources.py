@@ -12,10 +12,11 @@ from .utils import (copy_directory, copy_file, ensure_directory,
 
 
 def build_resources() -> int:
-	GLOBALS.MOD_STRUCTURE.cleanup_build_target("resource_directory")
-	GLOBALS.MOD_STRUCTURE.cleanup_build_target("gui")
-	GLOBALS.MOD_STRUCTURE.cleanup_build_target("minecraft_resource_pack")
-	GLOBALS.MOD_STRUCTURE.cleanup_build_target("minecraft_behavior_pack")
+	# TODO: Separate that shit, we do not need to rebuild EVERYTHING with thousands of resources...
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("resource_directory")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("gui")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("minecraft_resource_pack")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("minecraft_behavior_pack")
 
 	overall_result = 0
 	for resource in GLOBALS.MAKE_CONFIG.iterate_resources():
@@ -27,38 +28,37 @@ def build_resources() -> int:
 		for source_path in resource_files:
 			resource_name = basename(source_path)
 			if resource.type in ("resource_directory", "gui"):
-				target = GLOBALS.MOD_STRUCTURE.create_build_target(
-					resource.type,
-					resource_name,
+				target = GLOBALS.PROJECT_STRUCTURE.declare_target(
+					keyword=resource.type,
+					relative_path=resource_name,
 					declare={
 						"resourceType": "resource" if resource.type == "resource_directory" else resource.type
 					}
 				)
 			else:
-				target = GLOBALS.MOD_STRUCTURE.create_build_target(
-					resource.type,
-					resource_name,
+				target = GLOBALS.PROJECT_STRUCTURE.declare_target(
+					keyword=resource.type,
+					relative_path=resource_name,
 					exclude=True,
 					declare_default={
-						"resourcePacksDir": GLOBALS.MOD_STRUCTURE.get_target_directories("minecraft_resource_pack")[0],
-						"behaviorPacksDir": GLOBALS.MOD_STRUCTURE.get_target_directories("minecraft_behavior_pack")[0]
+						"resourcePacksDir": GLOBALS.PROJECT_STRUCTURE.get("resource_packs").relative_directory,
+						"behaviorPacksDir": GLOBALS.PROJECT_STRUCTURE.get("behavior_packs").relative_directory
 					}
 				)
 
 			relative_path = GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)
-			output_path = GLOBALS.MOD_STRUCTURE.build_targets[resource.type].directory + "/" + target["name"]
 			GLOBALS.LINKED_RESOURCE_STORAGE.append_resource(
 				relative_path,
-				output_path,
+				target.absolute_path,
 				push_unchanged=resource.push_unchanged_files,
 				cleanup_remote=resource.cleanup_remote
 			)
 
-	GLOBALS.MOD_STRUCTURE.update_build_config_list("resources")
+	GLOBALS.PROJECT_STRUCTURE.generate_config()
 	return overall_result
 
 def build_pack_graphics() -> int:
-	graphics_archive = join(GLOBALS.MOD_STRUCTURE.directory, "graphics.zip")
+	graphics_archive = join(GLOBALS.PROJECT_STRUCTURE.directory, "graphics.zip")
 	if exists(graphics_archive):
 		remove_tree(graphics_archive)
 	graphics_groups = GLOBALS.MAKE_CONFIG.iterate_pack_graphics()
@@ -126,7 +126,7 @@ def build_package() -> int:
 	ensure_file_directory(output_file)
 	remove_tree(output_file)
 
-	copy_directory(GLOBALS.MOD_STRUCTURE.directory, output_package_directory)
+	copy_directory(GLOBALS.PROJECT_STRUCTURE.directory, output_package_directory)
 	for linked_resource in GLOBALS.LINKED_RESOURCE_STORAGE.iterate_resources():
 		input_resource = GLOBALS.MAKE_CONFIG.get_relative_path(linked_resource["relative_path"])
 		output_package_resource = join(output_package_directory, linked_resource["output_path"])

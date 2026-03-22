@@ -5,6 +5,7 @@ from os.path import abspath, isfile, join
 from typing import Any, Dict, List, Optional
 
 from .config import FileConfig
+from .hglob import glob
 from .language import MakeDataConfig
 from .utils import ensure_directory, remove_tree
 
@@ -13,9 +14,10 @@ from .utils import ensure_directory, remove_tree
 class BuildTargetEntry:
 	name: str
 	relative_path: str
+	absolute_path: str
 	exclude: bool = False
-	declare: Dict[str, Any] = field(default_factory=dict)
-	declare_default: Dict[str, Any] = field(default_factory=dict)
+	declare: Dict = field(default_factory=dict)
+	declare_default: Dict = field(default_factory=dict)
 
 class BuildTarget:
 	def __init__(self, relative_directory: str, output_directory: str, export_group: str = ""):
@@ -24,20 +26,21 @@ class BuildTarget:
 		self.export_group = export_group
 		self.entries: List[BuildTargetEntry] = []
 
-	def declare(self, name: str, relative_path: str, exclude: bool = False, declare: Optional[Dict] = None, declare_default: Optional[Dict] = None) -> BuildTargetEntry:
-		if "{}" not in name:
-			name += "{}"
+	def declare(self, relative_path: str, exclude: bool = False, declare: Optional[Dict] = None, declare_default: Optional[Dict] = None) -> BuildTargetEntry:
+		if "{}" not in relative_path:
+			relative_path += "{}"
 
 		existing_names = { entry.name for entry in self.entries }
 		index = 0
-		formatted_name = name.format("")
+		formatted_name = relative_path.format("")
 		while formatted_name in existing_names:
-			formatted_name = name.format(index)
+			formatted_name = relative_path.format(index)
 			index += 1
 
 		entry = BuildTargetEntry(
 			name=formatted_name,
-			relative_path=join(relative_path, formatted_name).replace("\\", "/"),
+			relative_path=formatted_name.replace("\\", "/"),
+			absolute_path=join(self.output_directory, formatted_name),
 			exclude=exclude,
 			declare=declare or {},
 			declare_default=declare_default or {}
@@ -48,17 +51,21 @@ class BuildTarget:
 	def cleanup(self, clear_output: bool = True) -> None:
 		ensure_directory(self.output_directory)
 
-	def export(self, default_overrides: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+	def export_entry(self, entry: BuildTargetEntry) -> Optional[Dict]:
+		return {
+			"path": entry.relative_path,
+			**entry.declare
+		}
+
+	def export(self, default_overrides: Optional[Dict] = None) -> List[Dict]:
 		result = []
 		for entry in self.entries:
 			if entry.exclude:
 				continue
-
-			result.append({
-				"path": entry.relative_path,
-				**entry.declare
-			})
-
+			entry_result = self.export_entry(entry)
+			if not entry_result:
+				continue
+			result.append(entry_result)
 			if default_overrides is not None and entry.declare_default:
 				default_overrides.update(entry.declare_default)
 		return result
@@ -66,34 +73,64 @@ class BuildTarget:
 class IsolatedTarget(BuildTarget):
 	def cleanup(self, clear_output: bool = True) -> None:
 		self.entries.clear()
-		if clear_output:
+		if clear_output: # XXX: GLOBALS.PREFERRED_CONFIG.get_value("development.clearOutput")
 			remove_tree(self.output_directory)
 		super().cleanup(clear_output=clear_output)
 
+class ResourceIsolatedTarget(IsolatedTarget):
+	def __init__(self, relative_directory: str, output_directory: str, resource_type: str = "resource", export_group: str = ""):
+		self.resource_type = resource_type
+		super().__init__(relative_directory=relative_directory, output_directory=output_directory, export_group=export_group)
+
+	def export_entry(self, entry: BuildTargetEntry) -> Optional[Dict]:
+		return {
+			"resourceType": self.resource_type,
+			"path": entry.relative_path,
+			**entry.declare
+		}
+
 class InplaceTarget(BuildTarget):
+	def __init__(self, relative_directory: str, output_directory: str, allow_cleanup: bool = False, export_group: str = ""):
+		self.allow_cleanup = allow_cleanup
+		super().__init__(relative_directory=relative_directory, output_directory=output_directory, export_group=export_group)
+
 	def cleanup(self, clear_output: bool = True) -> None:
-		if clear_output:
+		if clear_output and self.allow_cleanup:
 			for entry in self.entries:
 				self.cleanup_entry(entry)
 		self.entries.clear()
 		super().cleanup(clear_output=clear_output)
 
 	def cleanup_entry(self, entry: BuildTargetEntry) -> None:
-		file_path = join(self.output_directory, entry.name)
-		if isfile(file_path):
-			os.remove(file_path)
+		entry_directory = join(self.output_directory, entry.relative_path)
+		if isfile(entry_directory):
+			os.remove(entry_directory)
 
-class ScriptInplaceTarget(InplaceTarget):
-	def cleanup_entry(self, entry: BuildTargetEntry) -> None:
-		file_path = join(self.output_directory, entry.name)
-		if file_path.endswith(".js") and isfile(file_path):
-			os.remove(file_path)
+class ResourceInplaceTarget(InplaceTarget):
+	def __init__(self, relative_directory: str, output_directory: str, allow_cleanup: bool = False, resource_type: str = "resource", export_group: str = ""):
+		self.resource_type = resource_type
+		super().__init__(relative_directory=relative_directory, output_directory=output_directory, allow_cleanup=allow_cleanup, export_group=export_group)
+
+	def export_entry(self, entry: BuildTargetEntry) -> Optional[Dict]:
+		return {
+			"resourceType": self.resource_type,
+			"path": entry.relative_path,
+			**entry.declare
+		}
 
 class JavaInplaceTarget(InplaceTarget):
 	def cleanup_entry(self, entry: BuildTargetEntry) -> None:
-		dex_path = join(self.output_directory, "classes.dex")
-		if isfile(dex_path):
-			os.remove(dex_path)
+		entry_directory = join(self.output_directory, entry.relative_path)
+		for classes_dex in glob(join(entry_directory, "classes*.*dex")):
+			if isfile(classes_dex):
+				os.remove(classes_dex)
+
+class NativeInplaceTarget(InplaceTarget):
+	def cleanup_entry(self, entry: BuildTargetEntry) -> None:
+		entry_directory = join(self.output_directory, entry.relative_path)
+		for library_executable in glob(join(entry_directory, "lib*.so")):
+			if isfile(library_executable):
+				os.remove(library_executable)
 
 class ProjectStructure(ABC):
 	def __init__(self, output_directory: str):
@@ -101,7 +138,7 @@ class ProjectStructure(ABC):
 		self.targets: Dict[str, BuildTarget] = {}
 		self.setup_targets()
 
-	def register(self, keyword: str, target: BuildTarget) -> BuildTarget:
+	def append(self, keyword: str, target: BuildTarget) -> BuildTarget:
 		if keyword in self.targets:
 			raise ValueError(f"Project target {keyword!r} already used within structure!")
 		self.targets[keyword] = target
@@ -112,18 +149,24 @@ class ProjectStructure(ABC):
 			raise KeyError(f"Project target {keyword!r} cannot be satisfied!")
 		return self.targets[keyword]
 
+	def declare_target(self, keyword: str, relative_path: str, exclude: bool = False, declare: Optional[Dict] = None, declare_default: Optional[Dict] = None) -> BuildTargetEntry:
+		return self.get(keyword).declare(relative_path=relative_path, exclude=exclude, declare=declare, declare_default=declare_default)
+
 	@abstractmethod
 	def setup_targets(self) -> None: ...
 
 	@abstractmethod
 	def generate_config(self) -> None: ...
 
-	def export_group(self, group: str, default_overrides: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+	def export_targets(self, group: str, default_overrides: Optional[Dict] = None) -> List[Dict]:
 		result = []
 		for target in self.targets.values():
 			if target.export_group == group:
 				result.extend(target.export(default_overrides))
 		return result
+
+	def cleanup_target(self, keyword: str, clear_output: bool = True) -> None:
+		self.get(keyword).cleanup(clear_output=clear_output)
 
 	def cleanup(self, clear_output: bool = True) -> None:
 		for target in self.targets.values():
@@ -178,31 +221,57 @@ class BuildConfigStructure(ProjectStructure, ABC):
 				config.set_value("buildDirs", [])
 		default_config = config.get_value("defaultConfig")
 
-		self.merge_target_group(config, "compile", self.export_group("compile", default_config))
-		self.merge_target_group(config, "resources", self.export_group("resources"))
-		self.merge_target_group(config, "javaDirs", self.export_group("javaDirs"))
-		self.merge_target_group(config, "nativeDirs", self.export_group("nativeDirs"))
+		self.merge_target_group(config, "compile", self.export_targets("compile", default_config))
+		self.merge_target_group(config, "resources", self.export_targets("resources"))
+		self.merge_target_group(config, "javaDirs", self.export_targets("javaDirs"))
+		self.merge_target_group(config, "nativeDirs", self.export_targets("nativeDirs"))
 
 		config.save_as_file(indent=" " * 2)
 
 class IsolatedBuildConfigStructure(BuildConfigStructure):
 	def setup_targets(self) -> None:
-		source_path = self.make_config.get_value("target.source", "source")
-		self.register("scripts", IsolatedTarget(
-			relative_directory=source_path,
-			output_directory=join(self.directory, source_path),
-			export_group="compile"
-		))
+		resource_path = self.make_config.get_value("target.resource_directory", "resources")
+		self.append("resources", ResourceIsolatedTarget(resource_path, join(self.directory, resource_path), export_group="resources"))
+		gui_path = self.make_config.get_value("target.gui", "gui")
+		self.append("gui", ResourceIsolatedTarget(gui_path, join(self.directory, gui_path), resource_type="gui", export_group="resources"))
 
-		# TODO
+		script_path = self.make_config.get_value("target.source", "source")
+		self.append("scripts", IsolatedTarget(script_path, join(self.directory, script_path), export_group="compile"))
+		library_path = self.make_config.get_value("target.library", "library")
+		self.append("libraries", IsolatedTarget(library_path, join(self.directory, library_path), export_group="compile"))
+
+		java_path = self.make_config.get_value("target.java", "java")
+		self.append("java", IsolatedTarget(java_path, join(self.directory, java_path), export_group="javaDirs"))
+		native_path = self.make_config.get_value("target.native", "native")
+		self.append("native", IsolatedTarget(native_path, join(self.directory, native_path), export_group="nativeDirs"))
+		shared_object_path = self.make_config.get_value("target.shared_object", "so")
+		self.append("shared_objects", IsolatedTarget(shared_object_path, join(self.directory, shared_object_path), export_group="sharedObjects"))
+
+		resource_packs_path = self.make_config.get_value("target.minecraft_resource_pack", "resource_packs")
+		self.append("resource_packs", IsolatedTarget(resource_packs_path, join(self.directory, resource_packs_path)))
+		behavior_packs_path = self.make_config.get_value("target.minecraft_behavior_pack", "behavior_packs")
+		self.append("behavior_packs", IsolatedTarget(behavior_packs_path, join(self.directory, behavior_packs_path)))
 
 class InplaceBuildConfigStructure(BuildConfigStructure):
 	def setup_targets(self) -> None:
-		source_path = self.make_config.get_value("target.source", "source")
-		self.register("scripts", ScriptInplaceTarget(
-			relative_directory=source_path,
-			output_directory=join(self.directory, source_path),
-			export_group="compile"
-		))
+		resource_path = self.make_config.get_value("target.resource_directory", "resources")
+		self.append("resources", ResourceInplaceTarget(resource_path, join(self.directory, resource_path), export_group="resources"))
+		gui_path = self.make_config.get_value("target.gui", "gui")
+		self.append("gui", ResourceInplaceTarget(gui_path, join(self.directory, gui_path), resource_type="gui", export_group="resources"))
 
-		# TODO
+		script_path = self.make_config.get_value("target.source", "source")
+		self.append("scripts", InplaceTarget(script_path, join(self.directory, script_path), export_group="compile"))
+		library_path = self.make_config.get_value("target.library", "library")
+		self.append("libraries", InplaceTarget(library_path, join(self.directory, library_path), export_group="compile"))
+
+		java_path = self.make_config.get_value("target.java", "java")
+		self.append("java", JavaInplaceTarget(java_path, join(self.directory, java_path), allow_cleanup=True, export_group="javaDirs"))
+		native_path = self.make_config.get_value("target.native", "native")
+		self.append("native", NativeInplaceTarget(native_path, join(self.directory, native_path), allow_cleanup=True, export_group="nativeDirs"))
+		shared_object_path = self.make_config.get_value("target.shared_object", "so")
+		self.append("shared_objects", InplaceTarget(shared_object_path, join(self.directory, shared_object_path), export_group="sharedObjects"))
+
+		resource_packs_path = self.make_config.get_value("target.minecraft_resource_pack", "resource_packs")
+		self.append("resource_packs", InplaceTarget(resource_packs_path, join(self.directory, resource_packs_path)))
+		behavior_packs_path = self.make_config.get_value("target.minecraft_behavior_pack", "behavior_packs")
+		self.append("behavior_packs", InplaceTarget(behavior_packs_path, join(self.directory, behavior_packs_path)))

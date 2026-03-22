@@ -106,10 +106,10 @@ def get_native_build_targets(directories: Iterable[MakeNativeData]) -> List[Buil
 
 	for native_data in directories:
 		directory = GLOBALS.MAKE_CONFIG.get_path(native_data.relative_path)
-		output_directory = GLOBALS.MOD_STRUCTURE.new_build_target("native", native_data.output_path)
-		ensure_directory(output_directory)
+		target = GLOBALS.PROJECT_STRUCTURE.declare_target("native", native_data.output_path)
+		ensure_directory(target.absolute_path)
 		stdincludes = collect_stdincludes_directories(list(native_data.stdincludes))
-		target = BuildTarget(directory, native_data.output_path, output_directory, native_data, stdincludes)
+		target = BuildTarget(directory, native_data.output_path, target.absolute_path, native_data, stdincludes)
 		targets.append(target)
 
 	return targets
@@ -336,7 +336,7 @@ def compile_native(abis: Collection[str]) -> int:
 	overall_result = CODE_OK
 	target_directory = GLOBALS.MAKE_CONFIG.get_build_path("gcc")
 	ensure_directory(target_directory)
-	GLOBALS.MOD_STRUCTURE.cleanup_build_target("native")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("native")
 
 	stdincludes_directories = list()
 	stdincludes_toolchain = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("stdincludes")
@@ -359,7 +359,7 @@ def compile_native(abis: Collection[str]) -> int:
 	try:
 		next(has_anything)
 	except StopIteration:
-		GLOBALS.MOD_STRUCTURE.update_build_config_list("nativeDirs")
+		GLOBALS.PROJECT_STRUCTURE.generate_config()
 		return 0
 	if not isdir(stdincludes_toolchain):
 		attention("Not found 'stdincludes', in most cases build will be failed, please install it via tasks.")
@@ -373,7 +373,7 @@ def compile_native(abis: Collection[str]) -> int:
 
 	overall_result = build_native_directories(directories, directory_tuples, target_directory)
 
-	GLOBALS.MOD_STRUCTURE.update_build_config_list("nativeDirs")
+	GLOBALS.PROJECT_STRUCTURE.generate_config()
 	startup_millis = time() - startup_millis
 	if overall_result == CODE_OK:
 		success(f"Completed native build in {startup_millis:.2f}s!")
@@ -389,7 +389,7 @@ def copy_shared_objects(abis: Collection[str]) -> int:
 		next(has_anything)
 	except StopIteration:
 		return 0
-	GLOBALS.MOD_STRUCTURE.cleanup_build_target("shared_object")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("shared_object")
 	order = set()
 
 	pretty_debug(f"Copying shared objects")
@@ -404,13 +404,13 @@ def copy_shared_objects(abis: Collection[str]) -> int:
 				if shared_object_name in order:
 					attention(f"Found duplicate shared object {formatted_relative_path}, overriding existing one...")
 				output_relative_file = join(abi_to_runtime_architecture(abi), shared_object_name)
-				output_file = GLOBALS.MOD_STRUCTURE.new_build_target("shared_object", output_relative_file)
-				copy_file(shared_object_path, output_file)
+				target = GLOBALS.PROJECT_STRUCTURE.declare_target("shared_object", output_relative_file)
+				copy_file(shared_object_path, target.absolute_path)
 				order.add(shared_object_name)
 		GLOBALS.MAKE_CONFIG.remove_rules("native_architecture")
 
 	if any(order):
-		output_directory = GLOBALS.MOD_STRUCTURE.get_target_output_directory("shared_object")
+		output_directory = GLOBALS.PROJECT_STRUCTURE.get("shared_objects").output_directory
 		with open(join(output_directory, "order.txt"), "w", encoding="utf-8") as order_file:
 			for shared_object in order:
 				order_file.write(shared_object + "\n")

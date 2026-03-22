@@ -12,8 +12,8 @@ from .utils import (RuntimeCodeError, copy_file, ensure_not_whitespace,
 
 
 def build_all_scripts(watch: bool = False) -> int:
-	GLOBALS.MOD_STRUCTURE.cleanup_build_target("script_source")
-	GLOBALS.MOD_STRUCTURE.cleanup_build_target("script_library")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("scripts")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("libraries")
 
 	if request_typescript(only_check=True) and not isdir(GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("declarations")):
 		from .output_directory import get_config_directory
@@ -36,12 +36,11 @@ def rebuild_build_target(source: MakeScriptData, target_path: str) -> str:
 		declare["sourceName"] = source.source_name
 
 	target_type = "script_library" if source.type == "library" else "script_source"
-	return GLOBALS.MOD_STRUCTURE.new_build_target(
-		target_type,
-		target_path,
-		source_type=source.type,
+	return GLOBALS.PROJECT_STRUCTURE.declare_target(
+		keyword=target_type,
+		relative_path=target_path,
 		declare=declare
-	)
+	).absolute_path
 
 def compute_and_capture_changed_scripts() -> Tuple[List[Tuple[str, str, str]], List[Tuple[str, str, str]], List[Tuple[Includes, str, str]], List[Tuple[str, str]]]:
 	composite = list()
@@ -217,7 +216,7 @@ def build_composite_project() -> int:
 			return overall_result
 
 	copy_build_targets(computed_composite, computed_includes)
-	GLOBALS.MOD_STRUCTURE.update_build_config_list("compile")
+	GLOBALS.PROJECT_STRUCTURE.generate_config()
 	return overall_result
 
 def watch_composite_project() -> int:
@@ -231,8 +230,8 @@ def watch_composite_project() -> int:
 	compute_and_capture_changed_scripts()
 	GLOBALS.TSC_COMPOSITE.flush()
 	GLOBALS.TSC_COMPOSITE.watch()
-	GLOBALS.MOD_STRUCTURE.cleanup_build_target("script_source")
-	GLOBALS.MOD_STRUCTURE.cleanup_build_target("script_library")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("scripts")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("libraries")
 	GLOBALS.TSC_COMPOSITE.reset()
 
 	composite, computed_composite, includes, computed_includes = compute_and_capture_changed_scripts()
@@ -244,5 +243,5 @@ def watch_composite_project() -> int:
 		return overall_result
 
 	copy_build_targets(computed_composite, computed_includes)
-	GLOBALS.MOD_STRUCTURE.update_build_config_list("compile")
+	GLOBALS.PROJECT_STRUCTURE.generate_config()
 	return overall_result

@@ -121,11 +121,16 @@ class Globals:
 		return self.TOOLCHAIN_CONFIG
 
 	@property
-	def MOD_STRUCTURE(self):
-		if not hasattr(self, "mod_structure"):
-			from .mod_structure import ModStructure
-			self.mod_structure = ModStructure(self.MAKE_CONFIG.get_value("outputDirectory", "output"))
-		return self.mod_structure
+	def PROJECT_STRUCTURE(self):
+		if not hasattr(self, "project_structure"):
+			from .project_structure import BuildConfigStructure
+			output_directory = self.MAKE_CONFIG.get_value("outputDirectory", "output")
+			self.project_structure = BuildConfigStructure.resolve_strategy(
+				project_directory=self.MAKE_CONFIG.directory,
+				output_directory=GLOBALS.MAKE_CONFIG.get_path(output_directory),
+				make_config=self.MAKE_CONFIG
+			)
+		return self.project_structure
 
 	@property
 	def PROJECT_MANAGER(self):
@@ -215,8 +220,8 @@ class Globals:
 			del self.build_storage
 		if hasattr(self, "make_config"):
 			del self.make_config
-		if hasattr(self, "mod_structure"):
-			del self.mod_structure
+		if hasattr(self, "project_structure"):
+			del self.project_structure
 		if hasattr(self, "output_storage"):
 			del self.output_storage
 		if hasattr(self, "tsconfig_dependents"):

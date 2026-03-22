@@ -193,7 +193,7 @@ def push_everything(push_unchanged: bool = True, cleanup_remote: bool = True) ->
 	push_unchanged = GLOBALS.PREFERRED_CONFIG.get_value("adb.pushUnchangedFiles", push_unchanged)
 	cleanup_remote = GLOBALS.PREFERRED_CONFIG.get_value("adb.cleanupRemote", cleanup_remote)
 
-	result = push_directory(GLOBALS.MOD_STRUCTURE.directory, destination_directory, push_unchanged=push_unchanged, cleanup_remote=cleanup_remote)
+	result = push_directory(GLOBALS.PROJECT_STRUCTURE.directory, destination_directory, push_unchanged=push_unchanged, cleanup_remote=cleanup_remote)
 	if result > 0:
 		return result
 	for linked_resource in GLOBALS.LINKED_RESOURCE_STORAGE.iterate_resources():
