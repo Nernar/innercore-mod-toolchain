@@ -5,23 +5,23 @@
 groups = ["default"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:05389d15d33f67b974ac87cfb447c9a885ad6ca05b695a33a9958263d7816731"
+content_hash = "sha256:b3b4b11e3e059111567fb36e5a12ce5f12cf96e168e15d5a1e9cc91d3934cde4"
 
 [[metadata.targets]]
 requires_python = ">=3.8"
 
 [[package]]
 name = "prompt-toolkit"
-version = "3.0.48"
-requires_python = ">=3.7.0"
+version = "3.0.52"
+requires_python = ">=3.8"
 summary = "Library for building powerful interactive command lines in Python"
 groups = ["default"]
 dependencies = [
     "wcwidth",
 ]
 files = [
-    {file = "prompt_toolkit-3.0.48-py3-none-any.whl", hash = "sha256:f49a827f90062e411f1ce1f854f2aedb3c23353244f8108b89283587397ac10e"},
-    {file = "prompt_toolkit-3.0.48.tar.gz", hash = "sha256:d6623ab0477a80df74e646bdbc93621143f5caf104206aa29294d53de1a03d90"},
+    {file = "prompt_toolkit-3.0.52-py3-none-any.whl", hash = "sha256:9aac639a3bbd33284347de5ad8d68ecc044b91a762dc39b7c21095fcd6a19955"},
+    {file = "prompt_toolkit-3.0.52.tar.gz", hash = "sha256:28cde192929c8e7321de85de1ddbe736f1375148b02f2e17edd840042b1be855"},
 ]
 
 [[package]]
