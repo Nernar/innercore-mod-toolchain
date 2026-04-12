@@ -3,8 +3,9 @@ from os.path import isdir, isfile, join
 from typing import Final, List, Optional
 
 from . import GLOBALS
+from .script_setup import request_typescript
 from .shell import abort, attention, frozen, pretty_print, success
-from .utils import ensure_not_whitespace, request_typescript
+from .utils import ensure_not_whitespace
 
 
 class Component():
@@ -37,10 +38,8 @@ def which_installed() -> List[str]:
 	installed = list()
 	for componentname in COMPONENTS:
 		component = COMPONENTS[componentname]
-		path = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(component.location)
-		if not isdir(path):
-			from .output_directory import get_config_directory
-			path = join(get_config_directory(), component.location)
+		from .output_directory import get_config_directory
+		path = join(get_config_directory(), component.location)
 		if isdir(path):
 			if component.keyword == "cpp":
 				installed.append("cpp")
@@ -152,7 +151,105 @@ def startup() -> None:
 	success(f"Setup procedure is completed, Inner Core Mod Toolchain has been installed to {get_script_directory()!r} directory. Execute `icmtoolchain --help` to obtain a list of available commands. You may need to restart your console to be able to access any commands.")
 
 def upgrade() -> int:
-	pretty_print("Nothing to perform.")
+	from .device import download_adb
+	from .java_setup import download_jdk
+	from .native_setup import check_installation, install_gcc
+	from .prompt import Input, Select
+	from .script_setup import download_node, fetch_declarations
+
+	while True:
+		options = [
+			"Node.js & TypeScript",
+			"Java & JDK",
+			"Android NDK & GCC",
+			"Android Debug Bridge (ADB)",
+			"TypeScript Declarations",
+			# "C++ Headers",
+			"Exit"
+		]
+
+		choice = Select("Which component should be modified?", options).request()
+		if choice == 5 or choice is None:
+			break
+
+		elif choice == 0: # Node.js
+			custom_node = GLOBALS.TOOLCHAIN_CONFIG.get_value("tools.node")
+			status = "Custom Path: " + custom_node if custom_node else ("Installed" if isdir(join(GLOBALS.TOOLCHAIN_CONFIG.directory, "node")) else "Using System or Not Installed")
+			pretty_print(f"Node.js Status: {status}")
+
+			action = Select(variants=("Install Node.js", "Install Node.js (LTS)", "Set Custom Path", "Clear Custom Path", "Back")).request()
+			if action == 0 or action == 1:
+				download_node(lts=action == 1)
+			elif action == 2:
+				path = Input("Enter path to Node.js installation:").request()
+				if path:
+					GLOBALS.TOOLCHAIN_CONFIG.set_value("tools.node", path)
+					GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
+			elif action == 3:
+				GLOBALS.TOOLCHAIN_CONFIG.delete_value("tools.node")
+				GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
+
+		elif choice == 1: # Java
+			custom_jdk = GLOBALS.TOOLCHAIN_CONFIG.get_value("java.jdkPath")
+			status = "Custom Path: " + custom_jdk if custom_jdk else ("Installed" if isdir(join(GLOBALS.TOOLCHAIN_CONFIG.directory, "java")) else "Using System or Not Installed")
+			pretty_print(f"Java Status: {status}")
+
+			action = Select(variants=("Install Temurin JDK 8", "Set Custom Path", "Clear Custom Path", "Back")).request()
+			if action == 0:
+				download_jdk()
+			elif action == 1:
+				path = Input("Enter path to JDK installation:").request()
+				if path:
+					GLOBALS.TOOLCHAIN_CONFIG.set_value("java.jdkPath", path)
+					GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
+			elif action == 2:
+				GLOBALS.TOOLCHAIN_CONFIG.delete_value("java.jdkPath")
+				GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
+
+		elif choice == 2: # NDK
+			custom_ndk = GLOBALS.TOOLCHAIN_CONFIG.get_value("native.ndkPath", GLOBALS.TOOLCHAIN_CONFIG.get_value("ndkPath"))
+			installed_arm = check_installation(["arm", "arm64"])
+			status = "Custom Path: " + custom_ndk if custom_ndk else ("Installed" if installed_arm else "Not Installed")
+			pretty_print(f"NDK Status: {status}")
+
+			action = Select(variants=("Install NDK (arm/arm64)", "Set Custom Path", "Clear Custom Path", "Back")).request()
+			if action == 0:
+				install_gcc(["arm", "arm64"], reinstall=True)
+			elif action == 1:
+				path = Input("Enter path to NDK installation:").request()
+				if path:
+					GLOBALS.TOOLCHAIN_CONFIG.set_value("native.ndkPath", path)
+					GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
+			elif action == 2:
+				GLOBALS.TOOLCHAIN_CONFIG.delete_value("native.ndkPath")
+				GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
+
+		elif choice == 3: # ADB
+			custom_adb = GLOBALS.TOOLCHAIN_CONFIG.get_value("adb.path")
+			status = "Custom Path: " + custom_adb if custom_adb else ("Installed" if isdir(join(GLOBALS.TOOLCHAIN_CONFIG.directory, "adb")) else "Using System or Not Installed")
+			pretty_print(f"ADB Status: {status}")
+
+			action = Select(variants=("Install ADB", "Set Custom Path", "Clear Custom Path", "Back")).request()
+			if action == 0:
+				download_adb()
+			elif action == 1:
+				path = Input("Enter path to ADB executable:").request()
+				if path:
+					GLOBALS.TOOLCHAIN_CONFIG.set_value("adb.path", path)
+					GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
+			elif action == 2:
+				GLOBALS.TOOLCHAIN_CONFIG.delete_value("adb.path")
+				GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
+
+		elif choice == 4: # Declarations
+			decl_dir = join(GLOBALS.TOOLCHAIN_CONFIG.directory, "declarations")
+			status = "Installed" if isdir(decl_dir) else "Not Installed"
+			pretty_print(f"Declarations Status: {status}")
+
+			action = Select(variants=("Fetch Declarations", "Back")).request()
+			if action == 0:
+				fetch_declarations()
+
 	return 0
 
 

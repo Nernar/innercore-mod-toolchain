@@ -7,7 +7,6 @@ from os.path import dirname, exists, isdir, join, relpath
 from typing import Any, Dict, List
 
 from . import GLOBALS, PROPERTIES
-from .utils import request_typescript
 
 # The TypeScript Compiler - Version 4.8.3
 TSCONFIG: Dict[str, Any] = {
@@ -261,6 +260,7 @@ class CompositeProject:
 			tsconfig.write(json.dumps(template, indent="\t", ensure_ascii=False) + "\n")
 
 	def build(self, *args: str) -> int:
+		from .script_setup import request_typescript
 		tsc = request_typescript()
 		if not tsc:
 			raise RuntimeError("A tsc is required to build project, make sure it is present before calling this function.")
@@ -272,6 +272,7 @@ class CompositeProject:
 		], shell=platform.system() == "Windows")
 
 	def watch(self, *args: str) -> int:
+		from .script_setup import request_typescript
 		tsc = request_typescript()
 		if not tsc:
 			raise RuntimeError("A tsc is required to watch project, make sure it is present before calling this function.")

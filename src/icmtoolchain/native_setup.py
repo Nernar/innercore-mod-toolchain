@@ -112,7 +112,7 @@ def read_ndk_source_version(ndk_path: str) -> Optional[str]:
 		pass
 
 def get_ndk_path(ndk_version: Optional[str] = None) -> Optional[str]:
-	relative_path = GLOBALS.TOOLCHAIN_CONFIG.get_value("native.ndkPath", GLOBALS.TOOLCHAIN_CONFIG.get_value("ndkPath"))
+	relative_path = GLOBALS.TOOLCHAIN_CONFIG.get_value("tools.ndk", GLOBALS.TOOLCHAIN_CONFIG.get_value("native.ndkPath", GLOBALS.TOOLCHAIN_CONFIG.get_value("ndkPath")))
 	if ensure_not_whitespace(relative_path):
 		ndk_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(relative_path)
 		if not isdir(ndk_path):
@@ -209,13 +209,21 @@ def download_gcc(ndk_version: Optional[str] = None) -> Optional[str]:
 		return None
 
 	with InteractiveSession(progress=Progress("Extracting NDK/GCC")) as session:
-		from .output_directory import get_temporary_directory
-		extract_path = join(get_temporary_directory(), f"ndk")
+		try:
+			from os import environ
+			from os.path import expanduser
+			home_directory = expanduser("~")
+			android_tools = environ.get("ANDROID_SDK_ROOT") or environ.get("ANDROID_HOME") or join(home_directory, "Android", "Sdk")
+			extract_path = join(android_tools, "ndk")
+		except:
+			from .output_directory import get_temporary_directory
+			extract_path = join(get_temporary_directory(), f"ndk")
+		
 		makedirs(extract_path, exist_ok=True)
 		try:
 			with AttributeZipFile(archive_path, "r") as archive:
 				archive.extractall(extract_path)
-			success("Extracted NDK/GCC into temporary directory.")
+			success(f"Extracted NDK/GCC into {extract_path}.")
 		except OSError as exc:
 			failure(f"#{exc.errno}: {basename(exc.filename)}")
 			try:

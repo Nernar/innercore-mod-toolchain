@@ -264,27 +264,6 @@ def request_tool(name: str) -> Optional[str]:
 		return None
 	return abspath(relative_path)
 
-def request_typescript(only_check: bool = False) -> Optional[str]:
-	"""
-	Utility to check and install tsc with npm.
-	"""
-	from . import GLOBALS
-	if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
-		return None
-	from .shell import confirm_prompt, pretty_debug
-	tsc = shutil.which("tsc") or request_tool("tsc")
-	if tsc or only_check:
-		return tsc
-	if not confirm_prompt("Do you want to enable TypeScript and ES6+ support (requires Node.js to build project)?", True):
-		return None
-	pretty_debug("Updating TypeScript globally via npm...")
-	subprocess.run("npm install -g typescript")
-	tsc = shutil.which("tsc") or request_tool("tsc")
-	if tsc:
-		return tsc
-	failure("Something went wrong when trying to install TypeScript Compiler, please check your Node.js and npm installation and try again.")
-	return None
-
 def request_executable_version(executable: Union[str, List[str]]) -> float:
 	pattern_version = re.compile(r"\d+\.\d+")
 	if isinstance(executable, str):
@@ -293,16 +272,16 @@ def request_executable_version(executable: Union[str, List[str]]) -> float:
 		"--version"
 	], text=True, capture_output=True)
 	if result.returncode == 0 and result.stdout:
-		result = pattern_version.search(result.stdout)
-		if result:
-			return float(result.group())
+		match = pattern_version.search(result.stdout)
+		if match:
+			return float(match.group())
 	result = subprocess.run(executable + [
 		"-version"
 	], text=True, capture_output=True)
 	if result.returncode == 0 and result.stdout:
-		result = pattern_version.search(result.stdout)
-		if result:
-			return float(result.group())
+		match = pattern_version.search(result.stdout)
+		if match:
+			return float(match.group())
 	return 0.0
 
 def parse_properties_property(line: str) -> Tuple[str, str]:

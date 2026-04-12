@@ -8,7 +8,8 @@ from .output_directory import expand_paths
 from .shell import (attention, failure, frozen, pretty_debug, pretty_print,
                     success)
 from .utils import (RuntimeCodeError, copy_file, ensure_not_whitespace,
-                    request_typescript, walk_all_files)
+                    walk_all_files)
+from .script_setup import request_typescript
 
 
 def build_all_scripts(watch: bool = False) -> int:

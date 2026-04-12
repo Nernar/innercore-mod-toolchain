@@ -1,11 +1,15 @@
+import platform
 import re
+import shutil
 from hashlib import md5, sha256
 from os import environ, walk
 from os.path import basename, dirname, isdir, isfile, join, splitext
 from typing import NamedTuple, Optional
 
 from .fetch import queue_download_request, retrieve_bytes
-from .output_directory import FileLock
+from .output_directory import (FileLock, get_config_directory,
+                               get_temporary_directory)
+from .shell import InteractiveSession, Progress, abort, success
 from .utils import AttributeZipFile, encode_int, ensure_directory, remove_tree
 
 # (numeric part, major version, minor version), (stage part, stage, patch number), (commit part, commit/date, timezone)
@@ -134,3 +138,68 @@ def resolve_gradle_version(version: str) -> str:
 		if not gradle_home:
 			gradle_home = download_gradle_version(archive_path, distribution_url)
 	return gradle_home
+
+def download_jdk() -> str:
+	system = platform.system().lower()
+	if system == "windows":
+		url = "https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u412-b08/OpenJDK8U-jdk_x64_windows_hotspot_8u412b08.zip"
+	elif system == "darwin":
+		url = "https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u412-b08/OpenJDK8U-jdk_x64_mac_hotspot_8u412b08.tar.gz"
+	else:
+		url = "https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u412-b08/OpenJDK8U-jdk_x64_linux_hotspot_8u412b08.tar.gz"
+
+	archive_path = queue_download_request(url)
+	if not archive_path:
+		abort("JDK cannot be installed or being cancelled.")
+	jdk_dir = join(get_config_directory(), "java")
+
+	with InteractiveSession(progress=Progress("Extracting JDK...")):
+		if archive_path.endswith(".zip"):
+			with AttributeZipFile(archive_path, "r") as archive:
+				archive.extractall(get_temporary_directory())
+		else:
+			import tarfile
+			with tarfile.open(archive_path, "r:gz") as archive:
+				archive.extractall(get_temporary_directory())
+
+	import shutil
+	from os import listdir
+	extracted_folders = [f for f in listdir(get_temporary_directory()) if f.startswith("jdk8u") or f.startswith("jdk")]
+	if not extracted_folders:
+		raise RuntimeError("Failed to extract JDK!")
+
+	extracted_dir = join(get_temporary_directory(), extracted_folders[0])
+	if system == "darwin" and isdir(join(extracted_dir, "Contents", "Home")):
+		extracted_dir = join(extracted_dir, "Contents", "Home")
+
+	remove_tree(jdk_dir)
+	shutil.move(extracted_dir, jdk_dir)
+	remove_tree(archive_path)
+
+	success("Successfully downloaded and installed JDK 8.")
+	return jdk_dir
+
+def get_jdk_executable(executable: str = "java", install_allowed: bool = True) -> str:
+	from . import GLOBALS
+
+	custom_path = GLOBALS.TOOLCHAIN_CONFIG.get_value("tools.jdk", GLOBALS.TOOLCHAIN_CONFIG.get_value("java.jdkPath"))
+	ext = ".exe" if platform.system() == "Windows" else ""
+	if custom_path:
+		custom_exe = join(custom_path, "bin", f"{executable}{ext}")
+		if isfile(custom_exe):
+			return custom_exe
+
+	sys_path = shutil.which(executable)
+	if sys_path:
+		return sys_path
+
+	local_path = join(get_config_directory(), "java", "bin", f"{executable}{ext}")
+	if isfile(local_path):
+		return local_path
+
+	if install_allowed:
+		download_jdk()
+		if isfile(local_path):
+			return local_path
+
+	raise RuntimeError(f"Could not find or install {executable}. Please install JDK 1.8.")

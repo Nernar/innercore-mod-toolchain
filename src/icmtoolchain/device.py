@@ -6,11 +6,13 @@ from os.path import basename, isdir, isfile, join, relpath
 from typing import Any, Dict, List, Optional, Tuple
 
 from . import GLOBALS
+from .fetch import queue_download_request
 from .hglob import glob
+from .output_directory import get_config_directory, get_temporary_directory
 from .shell import (InteractiveSession, Progress, abort, attention,
                     confirm_prompt, failure, pretty_error, pretty_print,
                     select_prompt, success)
-from .utils import DEVNULL
+from .utils import DEVNULL, AttributeZipFile, remove_tree
 
 LAUNCHER_PACKAGES = [
 	"com.zheka.horizon64",
@@ -19,19 +21,57 @@ LAUNCHER_PACKAGES = [
 	"com.zhekasmirnov.innercore"
 ]
 
-def get_adb_executable() -> str:
+def download_adb() -> str:
+	system = platform.system().lower()
+	if system == "windows":
+		url = "https://dl.google.com/android/repository/platform-tools-latest-windows.zip"
+	elif system == "darwin":
+		url = "https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"
+	else:
+		url = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip"
+
+	archive_path = join(get_temporary_directory(), "platform-tools.zip")
+	should_ok = queue_download_request(url, output_path=archive_path)
+	if not should_ok:
+		raise RuntimeError("ADB cannot be installed or being cancelled.")
+
+	adb_dir = join(get_config_directory(), "adb")
+	with AttributeZipFile(archive_path, "r") as archive:
+		archive.extractall(get_temporary_directory())
+
+	import shutil
+	extracted_dir = join(get_temporary_directory(), "platform-tools")
+	remove_tree(adb_dir)
+	shutil.move(extracted_dir, adb_dir)
+	remove_tree(archive_path)
+
+	success("Successfully downloaded and installed ADB (platform-tools).")
+
+	if system == "windows":
+		return join(adb_dir, "adb.exe")
+	return join(adb_dir, "adb")
+
+def get_adb_executable(install_allowed: bool = True) -> str:
+	from . import GLOBALS
+	custom_path = GLOBALS.TOOLCHAIN_CONFIG.get_value("tools.adb", GLOBALS.TOOLCHAIN_CONFIG.get_value("adb.path"))
+	if custom_path:
+		from os.path import isfile
+		if isfile(custom_path):
+			return custom_path
 	try:
 		import shutil
 		if shutil.which("adb"):
 			return "adb"
 	except:
 		pass
-	from .output_directory import get_config_directory
+
 	if platform.system() == "Windows":
 		adb_executable = join(get_config_directory(), "adb", "adb.exe")
 	else:
 		adb_executable = join(get_config_directory(), "adb", "adb")
 	if not isfile(adb_executable):
+		if install_allowed:
+			return download_adb()
 		abort("Component 'adb' is required for pushing, nothing to do.")
 	return adb_executable
 

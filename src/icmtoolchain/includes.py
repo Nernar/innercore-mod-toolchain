@@ -11,7 +11,7 @@ from .config import FileConfig
 from .hglob import glob
 from .shell import attention, failure, frozen, pretty_debug, success
 from .tsconfig import TSCONFIG
-from .utils import ensure_file_directory, request_typescript
+from .utils import ensure_file_directory
 
 
 class Includes:
@@ -204,6 +204,7 @@ class Includes:
 		ensure_file_directory(temporary_path)
 
 		if language.lower() == "typescript":
+			from .script_setup import request_typescript
 			tsc = request_typescript()
 			if not tsc:
 				raise RuntimeError("A tsc is required to build this source, make sure it is present before calling this function.")
