@@ -1,24 +1,42 @@
-from os.path import basename, dirname, isdir, isfile, join, relpath
+import subprocess
+from os.path import dirname, isdir, isfile, join
 from typing import Any, Callable, Dict, Final, List, Optional
 
 from . import GLOBALS, PROPERTIES
-from .output_directory import get_temporary_directory, lock_file, unlock_file
+from .output_directory import (get_temporary_directory, lock_file,
+                               unique_folder_name, unlock_file)
 from .shell import (abort, attention, confirm_prompt, failure, pretty_print,
                     success)
-from .utils import DEVNULL, remove_tree
+from .utils import DEVNULL
 
 
 class Task:
 	name: Final[str]
 	description: str = ""
+	_status: Optional[str] = None
 	callable: Callable
 	locks: Optional[List[str]] = None
+	on_status_changed: Optional[Callable[[str], None]] = None
+
+	@property
+	def status(self) -> str:
+		if not self._status:
+			return f"Running task {self.name}..."
+		return self._status
+
+	@status.setter
+	def status(self, value: str) -> None:
+		self._status = value
+		if self.on_status_changed:
+			self.on_status_changed(value)
 
 	def __init__(
 		self,
 		name: str,
 		description: Optional[str] = None,
+		status: Optional[str] = None,
 		locks: Optional[List[str]] = None,
+		*,
 		yield_message: Optional[str] = "Task is already running by another process, wait for unlocking.",
 		continue_message: Optional[str] = "Lock is released, resuming task..."
 	) -> None:
@@ -32,6 +50,8 @@ class Task:
 		self.name = name
 		if description:
 			self.description = description
+		if status:
+			self.status = status
 		if locks:
 			self.locks = locks
 		self.yield_message = yield_message
@@ -96,8 +116,8 @@ def execute_task(name: str, silent: bool = True, *args, **kwargs) -> Any:
 	return assure_task(name) \
 		.execute(silent=silent, *args, **kwargs)
 
-def task(name: str, description: Optional[str] = None, locks: Optional[List[str]] = None) -> Callable[[Callable], Callable]:
-	task = Task(name, description, locks)
+def task(name: str, description: Optional[str] = None, status: Optional[str] = None, locks: Optional[List[str]] = None) -> Callable[[Callable], Callable]:
+	task = Task(name, description, status, locks)
 
 	def decorator(callable: Callable) -> Callable:
 		task.callable = callable
@@ -267,7 +287,6 @@ def task_monkey_launcher() -> int:
 	                     launch_package_via_monkey)
 	packages = (preferred_launcher, ) if preferred_launcher else LAUNCHER_PACKAGES
 
-	import subprocess
 	subprocess.run(GLOBALS.ADB_COMMAND + [
 		"shell", "input",
 		"keyevent", "KEYCODE_WAKEUP"
@@ -300,7 +319,6 @@ def task_stop_launcher() -> int:
 	from .device import LAUNCHER_PACKAGES
 	packages = (preferred_launcher, ) if preferred_launcher else LAUNCHER_PACKAGES
 
-	import subprocess
 	try:
 		for package in packages:
 			subprocess.run(GLOBALS.ADB_COMMAND + [
@@ -315,8 +333,8 @@ def task_stop_launcher() -> int:
 	description="Adds a new connection to a mobile device/emulator via cable or network."
 )
 def task_configure_adb() -> int:
-	from . import device
-	device.setup_device_connection()
+	from .device import setup_device_connection
+	setup_device_connection()
 	return 0
 
 ### PROJECTS
@@ -358,7 +376,6 @@ def task_remove_project() -> int:
 	try:
 		location = GLOBALS.TOOLCHAIN_CONFIG.get_path(who)
 		GLOBALS.PROJECT_MANAGER.remove_project(folder=who)
-		from .output_directory import get_temporary_directory, unique_folder_name
 		from .package import pretty_cleanup_directory
 		temporary_project_directory = join(get_temporary_directory(), "build", unique_folder_name(location))
 		pretty_cleanup_directory(temporary_project_directory)
@@ -480,11 +497,12 @@ def task_update_toolchain() -> int:
 	description="Installs additional components required for compilation or performs a initial setup."
 )
 def task_component_integrity(startup: bool = False) -> int:
-	from . import component
 	if startup:
-		component.startup()
+		from .component import startup as component_startup
+		component_startup()
 		return 0
-	return component.upgrade()
+	from .component import upgrade as component_upgrade
+	return component_upgrade()
 
 @task(
 	"cleanup",
@@ -499,6 +517,5 @@ def task_cleanup() -> int:
 		return 0
 	if not confirm_prompt("Do you want to clear all projects cache?", True):
 		return 0
-	from .output_directory import get_temporary_directory
 	pretty_cleanup_directory(get_temporary_directory())
 	return 0

@@ -873,6 +873,16 @@ def pretty_ansi_layers(*layers: Iterable[Union[int, str]], end: Optional[str] = 
 	if end:
 		pretty_print(end, end="", file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 
+def pretty_exception(cause: BaseException, is_error: bool = True, sep: Optional[str] = "\n", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
+	from traceback import print_exception
+	buffer = StringIO()
+	print_exception(cause.__class__, cause, cause.__traceback__, file=buffer)
+	lines = buffer.getvalue().rsplit("\n", 13)[1:-1]
+	if is_error:
+		pretty_error(*lines, sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+	else:
+		pretty_warn(*lines, sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
+
 def success(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
 	pretty_print(UNICODE_CHECK_MARK, style="class:print.success", end=" ")
 	pretty_print(*values, style="class:print.success", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
@@ -891,10 +901,7 @@ def frozen(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Opt
 
 def abort(*values: object, sep: Optional[str] = " ", code: int = 255, cause: Optional[BaseException] = None) -> NoReturn:
 	if cause:
-		from traceback import print_exception
-		buffer = StringIO()
-		print_exception(cause.__class__, cause, cause.__traceback__, file=buffer)
-		pretty_error(*buffer.getvalue().rsplit("\n", 13)[1:-1], sep="\n")
+		pretty_exception(cause, is_error=True)
 	if len(values) != 0:
 		pretty_print(UNICODE_BALLOT_X, style="class:print.failure", end=" ")
 		pretty_print(*values, sep=sep, style="class:print.abort-message")

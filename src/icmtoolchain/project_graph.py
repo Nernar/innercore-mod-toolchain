@@ -302,6 +302,41 @@ class ProjectGraph(Dict[Union[MakeDataConfig, Artifact], ProjectEdge]):
 				return cross_references
 		visited.remove(node)
 
+class ConcurrentScheduler:
+	def __init__(self, graph: ProjectGraph, edge: Optional[ProjectEdge] = None) -> None:
+		self.graph = graph
+		self.pending: MutableSet[ProjectEdge] = set(graph.traverse_dependencies(edge))
+		self.in_progress: MutableSet[ProjectEdge] = set()
+		self.completed: MutableSet[ProjectEdge] = set()
+
+	def fetch_ready_nodes(self) -> MutableSequence[ProjectEdge]:
+		ready = []
+		for node in self.pending:
+			unresolved = False
+			for dependency in node.dependencies:
+				if dependency not in self.completed:
+					unresolved = True
+					break
+			if not unresolved:
+				ready.append(node)
+		return ready
+
+	def acquire_node(self, node: ProjectEdge) -> None:
+		if node in self.pending:
+			self.pending.remove(node)
+			self.in_progress.add(node)
+
+	def complete_node(self, node: ProjectEdge) -> None:
+		if node in self.in_progress:
+			self.in_progress.remove(node)
+			self.completed.add(node)
+
+	def has_unfinished_tasks(self) -> bool:
+		return len(self.pending) > 0 or len(self.in_progress) > 0
+
+	def is_empty(self) -> bool:
+		return not self.has_unfinished_tasks()
+
 class ProjectManager:
 	projects: Final[List[str]]
 	templates: Final[List[str]]
