@@ -1,3 +1,4 @@
+from .context import GLOBALS, PROPERTIES
 import json
 import os
 import platform
@@ -6,7 +7,7 @@ import subprocess
 from os.path import basename, isdir, isfile, join, normpath, relpath
 from typing import Any, Final, List, MutableMapping, MutableSequence, Optional
 
-from . import GLOBALS, PROPERTIES
+pass
 from .config import FileConfig
 from .hglob import glob
 from .shell import attention, failure, frozen, pretty_debug, success

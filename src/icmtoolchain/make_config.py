@@ -1,3 +1,4 @@
+from .context import GLOBALS
 from functools import cmp_to_key
 from os.path import basename, isfile, join, splitext
 from typing import (Any, Iterable, MutableMapping, MutableSequence, Optional,
@@ -84,7 +85,7 @@ class MakeConfig(MakeDataConfig):
 				if project:
 					yield project
 					continue
-				from . import GLOBALS
+				pass
 				absolute_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(path)
 				project = MakeDataConfig.of(absolute_path)
 				if project:

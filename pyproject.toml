@@ -43,6 +43,9 @@ icmtoolchain = "icmtoolchain.cli:run"
 requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
+[tool.pyright]
+typeCheckingMode = "basic"
+
 [tool.pdm]
 distribution = true
 

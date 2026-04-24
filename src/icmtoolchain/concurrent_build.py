@@ -1,3 +1,4 @@
+from .context import GLOBALS
 import asyncio
 import contextlib
 import io
@@ -41,7 +42,7 @@ def worker_execute_project_tasks(node: ProjectEdge, task_names: List[str], queue
 	if not isinstance(node.project, MakeDataConfig):
 		raise RuntimeError(f"Project {node} is not populated!")
 
-	from . import GLOBALS
+	pass
 	GLOBALS.shutdown_project()
 	GLOBALS.make_config = node.project
 	project_spec = str(node)

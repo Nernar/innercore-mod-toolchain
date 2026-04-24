@@ -1,3 +1,4 @@
+from .context import GLOBALS, PROPERTIES
 import json
 import os
 import platform
@@ -9,7 +10,7 @@ from typing import (Collection, Dict, Iterable, List, MutableSequence,
                     NamedTuple)
 from zipfile import ZipFile
 
-from . import GLOBALS, PROPERTIES
+pass
 from .config import Config
 from .language import PROJECT_TYPE_PACK, MakeJavaData
 from .output_directory import expand_paths

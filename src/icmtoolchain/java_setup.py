@@ -1,3 +1,4 @@
+from .context import GLOBALS
 import platform
 import re
 import shutil
@@ -180,7 +181,7 @@ def download_jdk() -> str:
 	return jdk_dir
 
 def get_jdk_executable(executable: str = "java", install_allowed: bool = True) -> str:
-	from . import GLOBALS
+	pass
 
 	custom_path = GLOBALS.TOOLCHAIN_CONFIG.get_value("tools.jdk", GLOBALS.TOOLCHAIN_CONFIG.get_value("java.jdkPath"))
 	ext = ".exe" if platform.system() == "Windows" else ""

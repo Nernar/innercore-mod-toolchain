@@ -1,3 +1,4 @@
+from .context import GLOBALS
 import platform
 import re
 import struct
@@ -8,7 +9,7 @@ from os import environ, getenv, listdir, makedirs
 from os.path import abspath, basename, exists, isdir, isfile, join, realpath
 from typing import Any, Generator, List, Optional, Union
 
-from . import GLOBALS
+pass
 from .fetch import queue_download_request
 from .shell import (InteractiveSession, Progress, abort, attention,
                     confirm_prompt, failure, pretty_error, pretty_print,

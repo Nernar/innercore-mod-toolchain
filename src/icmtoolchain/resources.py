@@ -1,9 +1,10 @@
+from .context import GLOBALS
 import os
 from itertools import tee
 from os.path import basename, exists, isdir, isfile, join
 from shutil import make_archive
 
-from . import GLOBALS
+pass
 from .language import PROJECT_TYPE_MOD
 from .output_directory import expand_paths
 from .shell import attention, pretty_debug, pretty_print

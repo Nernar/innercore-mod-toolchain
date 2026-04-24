@@ -1,3 +1,4 @@
+from .context import GLOBALS
 import asyncio
 import sys
 from itertools import tee
@@ -28,6 +29,7 @@ def show_help(requires_art: bool = False):
 
 def show_available_tasks():
 	from .task import TASKS
+	from . import builtin_tasks
 	pretty_print("All available tasks:")
 	for name, task in TASKS.items():
 		pretty_print(" " * 2 + name, end="")
@@ -90,7 +92,7 @@ def execute_task(callable: 'NamedCallable') -> None:
 		abort(f"Task {callable.name} failed with unexpected error!", cause=err)
 
 def build_project_graph() -> ProjectGraph:
-	from . import GLOBALS
+	pass
 	graph = ProjectGraph(GLOBALS.MAKE_CONFIG)
 	graph.collect_dependencies(GLOBALS.MAKE_CONFIG)
 	unresolved_artifacts = graph.resolve_dependencies()
@@ -99,7 +101,7 @@ def build_project_graph() -> ProjectGraph:
 	return graph
 
 def run_sequential_build(graph: ProjectGraph, targets: Any) -> None:
-	from . import GLOBALS
+	pass
 	from .language import MakeDataConfig
 	for edge in graph.traverse_dependencies():
 		GLOBALS.shutdown_project()
@@ -140,6 +142,7 @@ def run(argv: Optional[MutableSequence[str]] = None):
 
 	from .parser import apply_environment_properties, parse_arguments
 	from .task import TASKS
+	from . import builtin_tasks
 
 	try:
 		targets = parse_arguments(argv, TASKS, lambda name, target, callables: attention(f"No such task: {name}."))
@@ -156,7 +159,7 @@ def run(argv: Optional[MutableSequence[str]] = None):
 		attention("No tasks to execute.")
 		exit(0)
 
-	from . import GLOBALS
+	pass
 	if GLOBALS.is_project_available():
 		graph = build_project_graph()
 
@@ -196,7 +199,7 @@ async def run_concurrent_test():
 	index = 0
 
 	def fetch_available_projects(index):
-		from . import GLOBALS
+		pass
 
 		if index == 0:
 			for _ in range(max_workers):

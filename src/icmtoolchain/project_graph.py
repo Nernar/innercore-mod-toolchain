@@ -1,3 +1,4 @@
+from .context import GLOBALS, PROPERTIES
 import json
 import os
 from abc import ABC, abstractmethod
@@ -7,7 +8,7 @@ from os.path import abspath, basename, exists, isdir, isfile, join
 from typing import (Any, Callable, Dict, Final, List, MutableSequence,
                     MutableSet, Optional, Tuple, Type, Union)
 
-from . import GLOBALS
+pass
 from .config import Config, FileConfig
 from .language import MakeDataConfig
 from .shell import abort, attention, confirm_prompt, pretty_print
@@ -459,7 +460,7 @@ class ProjectManager:
 	def select_project_folder(self, folder: Optional[str] = None) -> None:
 		if GLOBALS.is_project_available(which_project=folder):
 			return
-		from . import PROPERTIES
+		pass
 		PROPERTIES.set_value("project", folder)
 		GLOBALS.shutdown_project()
 

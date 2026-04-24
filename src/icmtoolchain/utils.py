@@ -1,3 +1,4 @@
+from .context import GLOBALS
 import os
 import platform
 import re
@@ -250,7 +251,7 @@ def shortcodes(source: str) -> str:
 	return source
 
 def request_tool(name: str) -> Optional[str]:
-	from . import GLOBALS
+	pass
 	relative_path = GLOBALS.TOOLCHAIN_CONFIG.get_value(f"tools.{name}")
 	if ensure_not_whitespace(relative_path):
 		tool_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(relative_path)

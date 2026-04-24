@@ -1,7 +1,8 @@
+from .context import GLOBALS, PROPERTIES
 from os.path import basename, exists, isdir, isfile, join, relpath
 from typing import Any, List, MutableMapping, Tuple
 
-from . import GLOBALS, PROPERTIES
+pass
 from .includes import Includes
 from .language import MakeScriptData
 from .output_directory import expand_paths

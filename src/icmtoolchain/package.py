@@ -1,9 +1,10 @@
+from .context import GLOBALS
 import os
 import time
 from os.path import basename, exists, isdir, join, relpath
 from typing import Any, Dict, List, Optional, cast
 
-from . import GLOBALS
+pass
 from .config import Config, FileConfig
 from .output_directory import expand_paths
 from .shell import (abort, attention, failure, pretty_print, select_prompt,

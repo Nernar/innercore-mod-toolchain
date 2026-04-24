@@ -1,8 +1,9 @@
+from .context import GLOBALS
 import sys
 from os.path import isdir, isfile, join
 from typing import Final, List, Optional
 
-from . import GLOBALS
+pass
 from .script_setup import request_typescript
 from .shell import abort, attention, frozen, pretty_print, success
 from .utils import ensure_not_whitespace

@@ -1,3 +1,4 @@
+from .context import GLOBALS
 import platform
 import shutil
 import subprocess
@@ -68,7 +69,7 @@ def request_typescript(only_check: bool = False) -> Optional[str]:
 	"""
 	Utility to check and install tsc with npm.
 	"""
-	from . import GLOBALS
+	pass
 	if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
 		return None
 	from .shell import confirm_prompt, failure, pretty_debug

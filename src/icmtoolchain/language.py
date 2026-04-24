@@ -1,3 +1,4 @@
+from .context import GLOBALS
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
 
 def get_language_directories(compile_type: str, language_config: Config, properties_merger: Optional[Callable] = None, make_config: Optional['MakeDataConfig'] = None) -> Dict[str, Config]:
 	if not make_config:
-		from . import GLOBALS
+		pass
 		make_config = GLOBALS.MAKE_CONFIG
 
 	directories = language_config.obtain_list("directories")
@@ -91,7 +92,7 @@ class MakeModData(FlushableMakeProjectData):
 			info.set_value("description", self.description)
 		info.save_as_file()
 
-		from . import GLOBALS
+		pass
 		icon_path = GLOBALS.MAKE_CONFIG.get_path(self.icon or "mod_icon.png")
 		output_info_path = join(directory, "mod_icon.png")
 		if isfile(icon_path) and icon_path != output_info_path:
@@ -127,7 +128,7 @@ class MakeModpackData(FlushableMakeProjectData):
 			manifest.set_value("description", self.description)
 		manifest.save_as_file()
 
-		from . import GLOBALS
+		pass
 		icon_path = GLOBALS.MAKE_CONFIG.get_path(self.icon or "pack_icon.png")
 		output_info_path = join(directory, "pack_icon.png")
 		if isfile(icon_path) and icon_path != output_info_path:
@@ -490,5 +491,5 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ABC):
 				continue
 			if not config_file:
 				continue
-			from . import GLOBALS
+			pass
 			return config_type(config_file, defaults=GLOBALS.TOOLCHAIN_CONFIG)
