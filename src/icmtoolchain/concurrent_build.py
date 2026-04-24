@@ -19,9 +19,9 @@ from prompt_toolkit.widgets import TextArea
 
 from .language import MakeDataConfig
 from .project_graph import ConcurrentScheduler, ProjectEdge, ProjectGraph
-from .shell import (Interactable, Progress, abort, attention,
-                    get_toolchain_style, pretty_error, pretty_exception,
-                    pretty_print)
+from .shell import Interactable, Progress, get_toolchain_style, pretty_exception
+from .logger import attention, error, print
+from .errors import abort
 from .task import TASKS
 from .utils import RuntimeCodeError
 
@@ -87,9 +87,9 @@ def worker_execute_project_tasks(node: ProjectEdge, task_names: List[str], queue
 					all_task_logs.append((task_name, buffer.getvalue()))
 					break
 				if isinstance(err, RuntimeCodeError):
-					pretty_error(f"Task {callable_task.name} failed with error code #{err.code}: {err}")
+					error(f"Task {callable_task.name} failed with error code #{err.code}: {err}")
 				else:
-					pretty_error(f"Task {callable_task.name} failed with unexpected error!")
+					error(f"Task {callable_task.name} failed with unexpected error!")
 					pretty_exception(err)
 				overall_result = 255
 				all_task_logs.append((task_name, buffer.getvalue()))
@@ -302,11 +302,11 @@ async def run_concurrent_build(graph: 'ProjectGraph', task_names: List[str]):
 		for project_dir, task_logs in all_logs:
 			has_output = any(logs.strip() for _, logs in task_logs)
 			if has_output:
-				pretty_print(f"--- Logs for {basename(project_dir)} ---", style="class:print.info")
+				print(f"--- Logs for {basename(project_dir)} ---", style="class:print.info")
 				for task_name, logs in task_logs:
 					if logs.strip():
-						pretty_print(f"[{task_name}]:", style="class:print.debug")
+						print(f"[{task_name}]:", style="class:print.debug")
 						print(logs, end="")
-				pretty_print("-" * (18 + len(basename(project_dir))), style="class:print.info")
+				print("-" * (18 + len(basename(project_dir))), style="class:print.info")
 		if build_status.has_failure:
 			abort("Concurrent build failed.", code=build_status.failure_code)

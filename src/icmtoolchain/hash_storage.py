@@ -30,7 +30,7 @@ class HashStorage:
 				try:
 					self.last_hashes = json.load(file)
 				except json.JSONDecodeError:
-					from .shell import attention
+					from .logger import attention
 					attention(f"Malformed {basename(self.path)!r}, prebuilt caches will be ignored...")
 
 	def get_path_hash(self, path: str, force: bool = False) -> str:

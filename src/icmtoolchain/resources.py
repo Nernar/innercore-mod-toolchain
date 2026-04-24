@@ -7,7 +7,7 @@ from shutil import make_archive
 pass
 from .language import PROJECT_TYPE_MOD
 from .output_directory import expand_paths
-from .shell import attention, pretty_debug, pretty_print
+from .logger import attention, debug, print
 from .utils import (copy_directory, copy_file, ensure_directory,
                     ensure_file_directory, ensure_not_whitespace, remove_tree)
 
@@ -87,7 +87,7 @@ def build_pack_graphics() -> int:
 
 	from shutil import make_archive
 	make_archive(graphics_archive[:-4], "zip", graphics_directory)
-	pretty_print(f"Composed a pack with graphics from {group_length} groups!")
+	print(f"Composed a pack with graphics from {group_length} groups!")
 	return 0
 
 def build_additional_resources() -> int:
@@ -103,7 +103,7 @@ def build_additional_resources() -> int:
 			output_relative_filename = ensure_not_whitespace(asset.output_filename, basename(additional_path))
 			output_path = f"{asset.output_path}/{output_relative_filename}"
 
-			pretty_debug(f"Referencing {asset.relative_path!r} to {output_path!r} on remote")
+			debug(f"Referencing {asset.relative_path!r} to {output_path!r} on remote")
 			GLOBALS.LINKED_RESOURCE_STORAGE.append_resource(
 				relative_path,
 				output_path,

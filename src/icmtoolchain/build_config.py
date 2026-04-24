@@ -33,7 +33,7 @@ class BuildConfig(MakeDataConfig):
 		if self.get_value("defaultConfig.buildType") == "release":
 			# XXX: Perhaps we should do something, but scripts may no longer exist.
 			# It is important to leave a `compile` field to load them.
-			from .shell import frozen
+			from .logger import frozen
 			frozen("Project is set to release mode, building scripts will be skipped.")
 			return
 

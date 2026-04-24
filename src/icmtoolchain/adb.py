@@ -7,7 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .fetch import queue_download_request
 from .output_directory import get_config_directory, get_temporary_directory
-from .shell import attention, failure, success, confirm_prompt
+from .shell import confirm_prompt
+from .logger import attention, failure, success
 from .utils import DEVNULL, AttributeZipFile, remove_tree
 
 
@@ -74,7 +75,7 @@ def get_adb_executable(install_allowed: bool = True) -> str:
 	if not isfile(adb_executable):
 		if install_allowed:
 			return download_adb()
-		from .shell import abort
+		from .errors import abort
 		abort("Component 'adb' is required for pushing, nothing to do.")
 	return adb_executable
 
@@ -154,7 +155,7 @@ def device_list() -> Optional[List[Dict[str, Any]]]:
 def wait_for_authorization(serial: Optional[str] = None, timeout: float = 15.0) -> bool:
 	from time import sleep, time
 
-	from .shell import attention, success
+	from .logger import attention, success
 	
 	start_time = time()
 	notified = False

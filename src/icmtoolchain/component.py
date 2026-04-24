@@ -5,7 +5,8 @@ from typing import Final, List, Optional
 
 pass
 from .script_setup import request_typescript
-from .shell import abort, attention, frozen, pretty_print, success
+from .logger import attention, frozen, print, success
+from .errors import abort
 from .utils import ensure_not_whitespace
 
 
@@ -57,7 +58,7 @@ def install_components(*keywords: str) -> None:
 		return
 	for keyword in keywords:
 		if not keyword in COMPONENTS:
-			pretty_print(f"Component {keyword!r} is not available!")
+			print(f"Component {keyword!r} is not available!")
 			continue
 		if keyword == "cpp":
 			continue
@@ -94,7 +95,7 @@ def get_username() -> Optional[str]:
 		return None
 
 def startup() -> None:
-	pretty_print("Welcome to Inner Core Mod Toolchain! Today we will finalize setup of your own modding environment.")
+	print("Welcome to Inner Core Mod Toolchain! Today we will finalize setup of your own modding environment.")
 	tsc_available = request_typescript(only_check=True) is not None
 
 	preffered_components = which_installed()
@@ -176,7 +177,7 @@ def upgrade() -> int:
 		elif choice == 0: # Node.js
 			custom_node = GLOBALS.TOOLCHAIN_CONFIG.get_value("tools.node")
 			status = "Custom Path: " + custom_node if custom_node else ("Installed" if isdir(join(GLOBALS.TOOLCHAIN_CONFIG.directory, "node")) else "Using System or Not Installed")
-			pretty_print(f"Node.js Status: {status}")
+			print(f"Node.js Status: {status}")
 
 			action = Select(variants=("Install Node.js", "Install Node.js (LTS)", "Set Custom Path", "Clear Custom Path", "Back")).request()
 			if action == 0 or action == 1:
@@ -193,7 +194,7 @@ def upgrade() -> int:
 		elif choice == 1: # Java
 			custom_jdk = GLOBALS.TOOLCHAIN_CONFIG.get_value("java.jdkPath")
 			status = "Custom Path: " + custom_jdk if custom_jdk else ("Installed" if isdir(join(GLOBALS.TOOLCHAIN_CONFIG.directory, "java")) else "Using System or Not Installed")
-			pretty_print(f"Java Status: {status}")
+			print(f"Java Status: {status}")
 
 			action = Select(variants=("Install Temurin JDK 8", "Set Custom Path", "Clear Custom Path", "Back")).request()
 			if action == 0:
@@ -211,7 +212,7 @@ def upgrade() -> int:
 			custom_ndk = GLOBALS.TOOLCHAIN_CONFIG.get_value("native.ndkPath", GLOBALS.TOOLCHAIN_CONFIG.get_value("ndkPath"))
 			installed_arm = check_installation(["arm", "arm64"])
 			status = "Custom Path: " + custom_ndk if custom_ndk else ("Installed" if installed_arm else "Not Installed")
-			pretty_print(f"NDK Status: {status}")
+			print(f"NDK Status: {status}")
 
 			action = Select(variants=("Install NDK (arm/arm64)", "Set Custom Path", "Clear Custom Path", "Back")).request()
 			if action == 0:
@@ -228,7 +229,7 @@ def upgrade() -> int:
 		elif choice == 3: # ADB
 			custom_adb = GLOBALS.TOOLCHAIN_CONFIG.get_value("adb.path")
 			status = "Custom Path: " + custom_adb if custom_adb else ("Installed" if isdir(join(GLOBALS.TOOLCHAIN_CONFIG.directory, "adb")) else "Using System or Not Installed")
-			pretty_print(f"ADB Status: {status}")
+			print(f"ADB Status: {status}")
 
 			action = Select(variants=("Install ADB", "Set Custom Path", "Clear Custom Path", "Back")).request()
 			if action == 0:
@@ -245,7 +246,7 @@ def upgrade() -> int:
 		elif choice == 4: # Declarations
 			decl_dir = join(GLOBALS.TOOLCHAIN_CONFIG.directory, "declarations")
 			status = "Installed" if isdir(decl_dir) else "Not Installed"
-			pretty_print(f"Declarations Status: {status}")
+			print(f"Declarations Status: {status}")
 
 			action = Select(variants=("Fetch Declarations", "Back")).request()
 			if action == 0:
@@ -256,8 +257,8 @@ def upgrade() -> int:
 
 if __name__ == "__main__":
 	if "--help" in sys.argv:
-		pretty_print("Usage: python component.py [options] <components>")
-		pretty_print(" " * 2 + "--startup: Initial settings instead of a component updates.")
+		print("Usage: python component.py [options] <components>")
+		print(" " * 2 + "--startup: Initial settings instead of a component updates.")
 		exit(0)
 	if "--startup" in sys.argv or "-s" in sys.argv:
 		startup()

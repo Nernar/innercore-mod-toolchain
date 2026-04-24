@@ -14,8 +14,8 @@ pass
 from .config import Config
 from .language import PROJECT_TYPE_PACK, MakeJavaData
 from .output_directory import expand_paths
-from .shell import (abort, attention, failure, frozen, pretty_debug,
-                    pretty_error, pretty_info, pretty_print, success)
+from .logger import attention, failure, frozen, debug, error, info, print, success
+from .errors import abort
 from .utils import (copy_directory, copy_file, ensure_directory, ensure_file,
                     get_all_files, get_next_filename, remove_tree,
                     request_executable_version, request_tool, walk_all_files)
@@ -69,16 +69,16 @@ def rebuild_library_cache(relative_directory: str, libraries: Collection[str], t
 	target_classes_directory = join(target_directory, "libraries", "classes", relative_directory)
 	compressed_libraries = join(target_directory, "libraries", relative_directory + ".zip")
 
-	pretty_debug(f"Rebuilding library cache: {relative_directory}")
+	debug(f"Rebuilding library cache: {relative_directory}")
 	remove_tree(target_classes_directory)
 	ensure_directory(target_classes_directory)
 
 	import shutil
 	for filename in libraries:
-		pretty_debug(f"Extracting library classes: {basename(filename)}")
+		debug(f"Extracting library classes: {basename(filename)}")
 		shutil.unpack_archive(filename, target_classes_directory, "zip")
 
-	pretty_debug("Zipping extracted cache")
+	debug("Zipping extracted cache")
 	remove_tree(compressed_libraries)
 	shutil.make_archive(compressed_libraries[:-4], "zip", target_classes_directory)
 	return [compressed_libraries]
@@ -163,7 +163,7 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 	from .output_directory import get_config_directory
 	r8_executable = join(get_config_directory(), "r8", "r8.jar")
 
-	pretty_debug("Dexing libraries")
+	debug("Dexing libraries")
 	result = subprocess.run([
 		java_executable,
 		"-classpath", r8_executable,
@@ -176,10 +176,10 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 		"--output", target_d8_directory
 	], text=True, capture_output=True)
 	if result.returncode != 0:
-		pretty_error(result.stderr.strip())
+		error(result.stderr.strip())
 		return result.returncode
 
-	pretty_debug("Dexing classes")
+	debug("Dexing classes")
 	result = subprocess.run([
 		java_executable,
 		"-classpath", r8_executable,
@@ -193,10 +193,10 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 		"--output", target_d8_directory
 	], text=True, capture_output=True)
 	if result.returncode != 0:
-		pretty_error(result.stderr.strip())
+		error(result.stderr.strip())
 		return result.returncode
 
-	pretty_debug("Compressing archives")
+	debug("Compressing archives")
 	with ZipFile(compressed_target, "w") as archive:
 		walk_all_files(target_d8_directory, lambda filename: archive.write(filename, arcname=filename[len(target_d8_directory) + 1:]), (".dex"))
 
@@ -214,7 +214,7 @@ def merge_compressed_dexes(target: BuildTarget, target_directory: str) -> int:
 	from .output_directory import get_config_directory
 	r8_executable = join(get_config_directory(), "r8", "r8.jar")
 
-	pretty_debug("Merging dex")
+	debug("Merging dex")
 	result = subprocess.run([
 		java_executable,
 		"-classpath", r8_executable,
@@ -226,7 +226,7 @@ def merge_compressed_dexes(target: BuildTarget, target_directory: str) -> int:
 		"--output", output_directory
 	], text=True, capture_output=True)
 	if result.returncode != 0:
-		pretty_error(result.stderr.strip())
+		error(result.stderr.strip())
 		return result.returncode
 
 	return 0
@@ -300,7 +300,7 @@ def build_java_with_javac(targets: Collection[BuildTarget], target_directory: st
 		], text=True, capture_output=True)
 		startup_millis = time() - startup_millis
 		if result.returncode != 0:
-			pretty_error(result.stderr.strip())
+			error(result.stderr.strip())
 			failure(f"Failed {target.relative_directory!r} compilation in {startup_millis:.2f}s with result {result.returncode}.")
 			return result.returncode
 		success(f"Completed {target.relative_directory!r} compilation in {startup_millis:.2f}s!")
@@ -387,7 +387,7 @@ def build_java_with_ecj(targets: Collection[BuildTarget], target_directory: str)
 		if result.returncode == 0:
 			success(f"Completed {target.relative_directory!r} compilation in {startup_millis:.2f}s!")
 		else:
-			pretty_error(result.stderr.strip())
+			error(result.stderr.strip())
 			failure(f"Failed {target.relative_directory!r} compilation in {startup_millis:.2f}s with result {result.returncode}.")
 			return result.returncode
 	return 0
@@ -420,7 +420,7 @@ def build_java_with_gradle(targets: Collection[BuildTarget], target_directory: s
 			# else:
 				# failure(result.stderr.strip())
 			# return result.returncode
-		pretty_print()
+		print()
 
 	cleanup_gradle_scripts(targets)
 	return result.returncode if len(targets) != 0 else 0
@@ -520,7 +520,7 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 			if tool == "gradle":
 				frozen(f"Directory {target.relative_directory!r} is not changed.")
 		else:
-			pretty_info(f"* Running d8 with {target.relative_directory!r}")
+			info(f"* Running d8 with {target.relative_directory!r}")
 			result = run_d8(target, modified_targets[target.relative_directory], target.classpath, target_directory)
 			if result != 0:
 				failure(f"Failed to dex {target.relative_directory!r} with result {result}.")

@@ -9,7 +9,7 @@ from typing import (Any, Callable, Dict, Iterable, List, Optional, TextIO,
                     Tuple, Union, overload)
 from zipfile import ZipFile, ZipInfo
 
-from .shell import failure
+from .logger import failure
 
 DEVNULL = open(os.devnull, "w")
 

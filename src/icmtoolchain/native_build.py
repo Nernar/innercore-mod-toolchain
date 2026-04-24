@@ -11,8 +11,7 @@ from .config import Config, FileConfig
 from .language import MakeNativeData
 from .native_setup import arch_to_abi, prepare_compiler_executable
 from .output_directory import expand_paths
-from .shell import (attention, failure, frozen, pretty_debug, pretty_info,
-                    pretty_print, success)
+from .logger import attention, failure, frozen, debug, info, print, success
 from .utils import (copy_directory, copy_file, ensure_directory, ensure_file,
                     ensure_file_directory, ensure_not_whitespace,
                     get_all_files, remove_tree)
@@ -88,7 +87,7 @@ def add_fake_so(executable: str, abi: str, name: str) -> None:
 			"-shared", "-o", file
 		])
 		if result == 0:
-			pretty_debug(f"Created linking fake so {name!r} successfully")
+			debug(f"Created linking fake so {name!r} successfully")
 		else:
 			attention(f"Stubbing fake so failed with result {result}!")
 
@@ -116,13 +115,13 @@ def get_native_build_targets(directories: Iterable[MakeNativeData]) -> List[Buil
 	return targets
 
 def compile_directory_with_gcc(directory: str, target_directory: str, target_so: str, abi: str, stdincludes: Collection[str], manifest: MakeNativeData) -> int:
-	pretty_info(f"* Compiling {manifest.shared_name!r} for {abi}")
+	info(f"* Compiling {manifest.shared_name!r} for {abi}")
 	soname = f"lib{manifest.shared_name}.so"
 
 	options = list(manifest.options)
 	if not options or len(options) == 0:
 		options = ["-std=c++11"]
-	pretty_debug(", ".join(options))
+	debug(", ".join(options))
 
 	executable = prepare_compiler_executable(abi)
 	compiler_command = [executable, "-DANDROID_STL=c++_static"]
@@ -171,7 +170,7 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 
 	for file in source_files:
 		relative_file = relpath(file, directory)
-		pretty_debug(f"Preprocessing {relative_file} ({object_position}/{total_count}){' ' * 48}", end="\r")
+		debug(f"Preprocessing {relative_file} ({object_position}/{total_count}){' ' * 48}", end="\r")
 
 		object_file = join(object_directory, relative_file) + ".o"
 		preprocessed_file = join(preprocessed_directory, relative_file)
@@ -193,7 +192,7 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 				if isfile(object_file):
 					os.remove(object_file)
 
-				pretty_debug(f"Compiling {relative_file} ({object_position}/{total_count}){' ' * 48}", end="\r")
+				debug(f"Compiling {relative_file} ({object_position}/{total_count}){' ' * 48}", end="\r")
 				result = max(result, subprocess.call(compiler_command + [
 					"-c", preprocessed_file, "-o", object_file
 				] + options + ([] if "64" in abi else ["-shared"])))
@@ -210,9 +209,9 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 		object_position += 1
 
 	if overall_result != CODE_OK:
-		pretty_print()
+		print()
 		return overall_result
-	pretty_debug(f"Recompiled {recompiled_count}/{total_count} files with result {overall_result} ({'OK' if overall_result == 0 else 'ERROR'}){' ' * 48}")
+	debug(f"Recompiled {recompiled_count}/{total_count} files with result {overall_result} ({'OK' if overall_result == 0 else 'ERROR'}){' ' * 48}")
 
 	for link in manifest.link_static:
 		link_path = GLOBALS.MAKE_CONFIG.get_relative_path(join("static_libs", abi, link))
@@ -224,7 +223,7 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 		else:
 			attention(f"Skipped static library {link}, because it was not exist.")
 
-	pretty_debug("Linking object files")
+	debug("Linking object files")
 	ensure_file(target_so)
 	linking_command = list()
 	linking_command += compiler_command
@@ -241,7 +240,7 @@ def compile_directory_with_gcc(directory: str, target_directory: str, target_so:
 	linking_command.append("-shared")
 	linking_command.append("-Wl,-soname=" + soname)
 	if "-flto" in options:
-		pretty_debug("Linker time optimization is enabled")
+		debug("Linker time optimization is enabled")
 		linking_command += options
 	linking_command.append("-o")
 	linking_command.append(target_so)
@@ -393,7 +392,7 @@ def copy_shared_objects(abis: Collection[str]) -> int:
 	GLOBALS.PROJECT_STRUCTURE.cleanup_target("shared_object")
 	order = set()
 
-	pretty_debug(f"Copying shared objects")
+	debug(f"Copying shared objects")
 	overall_result = 0
 	for shared_object in shared_objects:
 		relative_path = shared_object.relative_path

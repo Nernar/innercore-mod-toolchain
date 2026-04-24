@@ -96,7 +96,7 @@ class MakeConfig(MakeDataConfig):
 				yield artifact
 				continue
 			if not self.get_value("project.requiredDependencies", True) or isinstance(dependency, Config) and not dependency.get_value("required", True):
-				from .shell import attention
+				from .logger import attention
 				attention(f"Skipping unsatisfied dependency {dependency!r}, since it is optional.")
 				continue
 			raise ValueError(f"Invalid dependency {dependency!r}, it should be relative project path, id or repository url!")

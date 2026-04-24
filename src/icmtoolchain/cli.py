@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, MutableSequence, MutableSet, Optional
 
 from .config import FileConfig
 from .project_graph import ProjectEdge, ProjectGraph
+from .errors import ToolchainError
 from .shell import (abort, attention, failure, pretty_ansi_layers,
                     pretty_error, pretty_print, success)
 from .utils import RuntimeCodeError
@@ -83,13 +84,15 @@ def execute_task(callable: 'NamedCallable') -> None:
 	try:
 		result = callable.callable()
 		if result != 0:
-			abort(f"Task {callable.name} failed with result {result}.", code=result)
+			raise ToolchainError(f"Task {callable.name} failed with result {result}.", code=result)
+	except ToolchainError:
+		raise
 	except BaseException as err:
 		if isinstance(err, SystemExit):
 			raise err
 		if isinstance(err, RuntimeCodeError):
-			abort(f"Task {callable.name} failed with error code #{err.code}: {err}")
-		abort(f"Task {callable.name} failed with unexpected error!", cause=err)
+			raise ToolchainError(f"Task {callable.name} failed with error code #{err.code}: {err}", code=err.code)
+		raise ToolchainError(f"Task {callable.name} failed with unexpected error!", cause=err)
 
 def build_project_graph() -> ProjectGraph:
 	pass
@@ -160,18 +163,21 @@ def run(argv: Optional[MutableSequence[str]] = None):
 		exit(0)
 
 	pass
-	if GLOBALS.is_project_available():
-		graph = build_project_graph()
+	try:
+		if GLOBALS.is_project_available():
+			graph = build_project_graph()
 
-		if is_concurrent:
-			targets, tasks = tee(targets)
-			task_names = [t.name for t in tasks]
-			from .concurrent_build import run_concurrent_build
-			asyncio.run(run_concurrent_build(graph, task_names))
+			if is_concurrent:
+				targets, tasks = tee(targets)
+				task_names = [t.name for t in tasks]
+				from .concurrent_build import run_concurrent_build
+				asyncio.run(run_concurrent_build(graph, task_names))
+			else:
+				run_sequential_build(graph, targets)
 		else:
-			run_sequential_build(graph, targets)
-	else:
-		run_single_build(targets)
+			run_single_build(targets)
+	except ToolchainError as err:
+		abort(err.message, code=err.code, cause=err.cause)
 
 	startup_millis = time() - startup_millis
 	success(f"Tasks successfully completed in {startup_millis:.2f}s!")

@@ -3,7 +3,9 @@ import platform
 import subprocess
 from typing import Any, Dict, List, Optional
 
-from .shell import pretty_print, select_prompt, attention, failure, InteractiveSession, Progress, abort
+from .shell import select_prompt, InteractiveSession, Progress
+from .logger import print, attention, failure
+from .errors import abort
 from .utils import DEVNULL
 from .adb import (
 	get_adb_executable, ensure_server_running, get_device_state, 
@@ -37,7 +39,7 @@ def which_device_will_be_connected(*devices: Dict[str, Any], state_not_matter: b
 def setup_device_connection() -> Optional[List[str]]:
 	not_connected_any_device = len(GLOBALS.TOOLCHAIN_CONFIG.get_value("devices", list())) == 0
 	if not_connected_any_device:
-		pretty_print(
+		print(
 			"Howdy! " +
 			"Before starting we're must set up your devices, don't you think so? " +
 			"Let's configure some connections."
@@ -57,7 +59,7 @@ def setup_device_connection() -> Optional[List[str]]:
 
 def setup_via_usb() -> Optional[List[str]]:
 	try:
-		pretty_print("Listening device via cable...")
+		print("Listening device via cable...")
 		attention(f"Press Ctrl+{'C' if platform.system() == 'Windows' else 'Z'} to leave")
 		subprocess.run([
 			get_adb_executable(),
@@ -69,9 +71,9 @@ def setup_via_usb() -> Optional[List[str]]:
 	except subprocess.CalledProcessError as err:
 		failure("adb wait-for-usb-device failed with code", err.returncode)
 	except subprocess.TimeoutExpired:
-		pretty_print("Timeout")
+		print("Timeout")
 	except KeyboardInterrupt:
-		pretty_print()
+		print()
 	return setup_device_connection()
 
 def setup_via_network() -> Optional[List[str]]:
@@ -89,7 +91,7 @@ def setup_via_network() -> Optional[List[str]]:
 def setup_via_ping_localhost() -> Optional[List[str]]:
 	ip = get_ip().rpartition(".")
 	if len(ip[2]) == 0:
-		pretty_print("Not available right now.")
+		print("Not available right now.")
 		return setup_via_network()
 
 	with InteractiveSession(progress=Progress("Connecting...")) as session:
@@ -112,7 +114,7 @@ def setup_via_ping_localhost() -> Optional[List[str]]:
 			get_adb_executable(),
 			"disconnect"
 		], stdout=DEVNULL, stderr=DEVNULL)
-		pretty_print("Found connections: " + ", ".join(accepted))
+		print("Found connections: " + ", ".join(accepted))
 
 		latest = None
 		for next in accepted:
@@ -126,11 +128,11 @@ def setup_via_ping_localhost() -> Optional[List[str]]:
 					latest = command
 					break
 				else:
-					pretty_print()
+					print()
 			except subprocess.CalledProcessError as err:
 				failure("adb connect failed with code", err.returncode)
 			except subprocess.TimeoutExpired:
-				pretty_print("Timeout")
+				print("Timeout")
 
 		if latest:
 			return latest
@@ -152,13 +154,13 @@ def setup_via_ping_localhost() -> Optional[List[str]]:
 
 def setup_via_tcp_network(ip: Optional[str] = None, port: Optional[str] = None, pairing_code: Optional[str] = None, with_pairing_code: bool = False) -> Optional[List[str]]:
 	if not ip:
-		pretty_print("You are connected via", get_ip())
+		print("You are connected via", get_ip())
 		try:
 			tcp = input("Specify address: IP[:PORT] ")
 			if len(tcp) == 0:
 				return setup_via_network()
 		except KeyboardInterrupt:
-			pretty_print()
+			print()
 			return setup_via_network()
 		parts = tcp.split(":")
 		ip = parts[0]
@@ -168,7 +170,7 @@ def setup_via_tcp_network(ip: Optional[str] = None, port: Optional[str] = None, 
 			try:
 				pairing_code = input("Specify pairing code: ")
 			except KeyboardInterrupt:
-				pretty_print()
+				print()
 				return setup_via_network()
 		try:
 			subprocess.run([
@@ -180,7 +182,7 @@ def setup_via_tcp_network(ip: Optional[str] = None, port: Optional[str] = None, 
 		except subprocess.CalledProcessError as err:
 			failure("adb pair failed with code", err.returncode)
 		except KeyboardInterrupt:
-			pretty_print()
+			print()
 	subprocess.run([
 		get_adb_executable(),
 		"disconnect"
@@ -196,9 +198,9 @@ def setup_via_tcp_network(ip: Optional[str] = None, port: Optional[str] = None, 
 	except subprocess.CalledProcessError as err:
 		failure("adb connect failed with code", err.returncode)
 	except subprocess.TimeoutExpired:
-		pretty_print("Timeout")
+		print("Timeout")
 	except KeyboardInterrupt:
-		pretty_print()
+		print()
 	return setup_via_network()
 
 def setup_externally(skip_input: bool = False) -> Optional[List[str]]:
@@ -210,34 +212,34 @@ def setup_externally(skip_input: bool = False) -> Optional[List[str]]:
 			if not serial in GLOBALS.TOOLCHAIN_CONFIG.get_value("devices", list()):
 				return get_adb_command_by_serial(serial)
 			else:
-				pretty_print("Connected device already saved, maybe another available too.")
+				print("Connected device already saved, maybe another available too.")
 	else:
-		pretty_print("Not found connected devices, resolving everything...")
+		print("Not found connected devices, resolving everything...")
 	devices = device_list()
 	if not devices:
 		return setup_device_connection()
 	device = which_device_will_be_connected(*devices, state_not_matter=True)
 	if not device:
-		pretty_print("Nope, nothing to perform here.")
+		print("Nope, nothing to perform here.")
 		if not skip_input:
 			try:
 				input()
 			except KeyboardInterrupt:
-				pretty_print()
+				print()
 		return setup_device_connection()
 	return get_adb_command_by_serial(device["serial"])
 
 def setup_how_to_use() -> Optional[List[str]]:
-	pretty_print(
+	print(
 		"Android Debug Bridge (adb) is a versatile command-line tool that lets you communicate with a device. " +
 		"The adb command facilitates a variety of device actions, such as installing and debugging apps, " +
 		"and it provides access to a Unix shell that you can use to run a variety of commands on a device."
 	)
-	pretty_print("https://developer.android.com/studio/command-line/adb")
+	print("https://developer.android.com/studio/command-line/adb")
 	try:
 		input()
 	except KeyboardInterrupt:
-		pretty_print()
+		print()
 	return setup_device_connection()
 
 def get_adb_command() -> List[str]:
@@ -261,7 +263,7 @@ def get_adb_command() -> List[str]:
 					"connect", target
 				], timeout=3.0, stdout=DEVNULL, stderr=DEVNULL)
 			except subprocess.TimeoutExpired:
-				pretty_print(f"Connection to {target} timeout")
+				print(f"Connection to {target} timeout")
 	pending = device_list()
 	if pending:
 		itwillbe = list()

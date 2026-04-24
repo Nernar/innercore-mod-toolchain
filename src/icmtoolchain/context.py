@@ -101,7 +101,7 @@ class Globals:
 			if make_config:
 				self.make_config = make_config
 		if not hasattr(self, "make_config"):
-			from .shell import abort
+			from .errors import abort
 			for directory in iterate_config_directories(get_current_directory()):
 				abort("This directory is not a project per se, but perhaps you would like to create a workspace based on it? Unfortunately, this feature is not yet supported.")
 			abort("Not found any opened project, try running this command in project directory.")

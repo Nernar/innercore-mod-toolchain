@@ -2,7 +2,7 @@ import json
 from os.path import basename, isfile
 from typing import Any, Dict, List
 
-from .shell import attention
+from .logger import attention
 from .utils import ensure_file
 
 

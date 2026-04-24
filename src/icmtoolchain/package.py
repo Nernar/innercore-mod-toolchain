@@ -7,8 +7,9 @@ from typing import Any, Dict, List, Optional, cast
 pass
 from .config import Config, FileConfig
 from .output_directory import expand_paths
-from .shell import (abort, attention, failure, pretty_print, select_prompt,
-                    success)
+from .shell import select_prompt
+from .logger import attention, failure, print, success
+from .errors import abort
 from .utils import (copy_file, ensure_not_whitespace, get_all_files,
                     get_project_folder_by_name, name_to_identifier,
                     remove_tree)
@@ -38,7 +39,7 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	always_skip_description = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.skipDescription", False)
 	output_directory = None
 
-	pretty_print("Create new project")
+	print("Create new project")
 	from .prompt import Confirm, Feedback, Input, Review, Select
 
 	def on_validate_template(template: str, select: Optional[Select] = None) -> bool:
@@ -129,9 +130,9 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	if always_skip_description:
 		attention("Property `template.skipDescription` has disabled some options.")
 	elif not have_template:
-		pretty_print("You can override template by setting `template` property in your 'toolchain.json', it will be automatically apply when you create a new project. Properties remain same as `info` property in 'make.json'.", style="class:editable.hint")
+		print("You can override template by setting `template` property in your 'toolchain.json', it will be automatically apply when you create a new project. Properties remain same as `info` property in 'make.json'.", style="class:editable.hint")
 
-	pretty_print(f"Copying template {choosen_template!r} to {output_directory!r}")
+	print(f"Copying template {choosen_template!r} to {output_directory!r}")
 	return GLOBALS.PROJECT_MANAGER.create_project(
 		choosen_template,
 		output_directory,

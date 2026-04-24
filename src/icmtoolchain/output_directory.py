@@ -164,7 +164,7 @@ def lock_file(
 				raise TimeoutError(f"Lock {file!r} being blocked too long!")
 			if requires_locked_message and yield_message:
 				requires_locked_message = False
-				from .shell import frozen
+				from .logger import frozen
 				frozen(yield_message)
 			sleep(retry_delay)
 
@@ -174,7 +174,7 @@ def lock_file(
 		pass
 	LOCKS[absolute_path] = lock
 	if not requires_locked_message and continue_message:
-		from .shell import success
+		from .logger import success
 		success(continue_message)
 	return lock
 

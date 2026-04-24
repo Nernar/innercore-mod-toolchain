@@ -61,7 +61,7 @@ class ModpackConfig(MakeDataConfig):
 			try:
 				yield self.obtain_asset_data(directory_config)
 			except ValueError as exc:
-				from .shell import attention
+				from .logger import attention
 				attention(exc)
 		external_servers = self.get_relative_path("external_servers.txt")
 		if isfile(external_servers):

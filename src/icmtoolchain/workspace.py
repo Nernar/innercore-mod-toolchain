@@ -20,7 +20,7 @@ class CodeWorkspace(FileConfig):
 			super().__init__(path)
 			self.valid = True
 		except ValueError as exc:
-			from .shell import attention
+			from .logger import attention
 			attention(f"Malformed {basename(path)!r}, ignoring it: {exc}.")
 			self.valid = False
 

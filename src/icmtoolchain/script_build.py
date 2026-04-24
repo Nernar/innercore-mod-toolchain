@@ -6,8 +6,7 @@ pass
 from .includes import Includes
 from .language import MakeScriptData
 from .output_directory import expand_paths
-from .shell import (attention, failure, frozen, pretty_debug, pretty_print,
-                    success)
+from .logger import attention, failure, frozen, debug, print, success
 from .utils import (RuntimeCodeError, copy_file, ensure_not_whitespace,
                     walk_all_files)
 from .script_setup import request_typescript
@@ -149,7 +148,7 @@ def copy_build_targets(composite: List[Tuple[str, str, str]], includes: List[Tup
 			temporary_script = included[0]
 
 		if temporary_script == included[0] and isfile(temporary_script) and GLOBALS.BUILD_STORAGE.is_path_changed(temporary_script):
-			pretty_print(f"Flushing {basename(included[1])!r} from {basename(included[0])!r}")
+			print(f"Flushing {basename(included[1])!r} from {basename(included[0])!r}")
 
 		if not isfile(temporary_script) or GLOBALS.BUILD_STORAGE.is_path_changed(temporary_script) or not isfile(included[1]):
 			if isfile(temporary_script):
@@ -198,7 +197,7 @@ def build_composite_project() -> int:
 		# which files changed with hashing algorithm and composite building may rebuild everything
 		# when tsconfig changes or something unexpected happened, like removing temporary declarations
 		if len(which) > 0:
-			pretty_debug("Rebuilding composite", ", ".join([
+			debug("Rebuilding composite", ", ".join([
 				basename(included[1]) for included in which
 			]))
 

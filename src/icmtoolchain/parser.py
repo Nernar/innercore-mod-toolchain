@@ -7,7 +7,8 @@ from types import (BuiltinMethodType, ClassMethodDescriptorType,
                    DynamicClassAttribute)
 from typing import Any, Callable, Mapping, MutableSequence, Optional, Tuple
 
-from .shell import attention, pretty_print, stringify
+from .shell import stringify
+from .logger import attention, print
 from .task import Task
 
 MAGICS = (
@@ -24,10 +25,10 @@ try:
 
 	def highlight(*values: object, sep: Optional[str] = " ", file: Optional[Any] = None):
 		tokens = list(pygments.lex(stringify(*values, sep=sep), lexer=PythonLexer()))
-		pretty_print(PygmentsTokens(tokens), file=file)
+		print(PygmentsTokens(tokens), file=file)
 except ImportError:
 	def highlight(*values: object, sep: Optional[str] = " ", file: Optional[Any] = None):
-		pretty_print(*values, sep=sep, file=file)
+		print(*values, sep=sep, file=file)
 
 Attribute = namedtuple("Attribute", "name kind defining_class object type")
 

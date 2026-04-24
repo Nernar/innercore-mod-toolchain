@@ -2,7 +2,7 @@ from typing import Any, Callable, Dict, Final, List, Optional
 from os.path import join
 
 from .output_directory import get_temporary_directory, lock_file, unlock_file
-from .shell import pretty_print
+from .logger import print
 
 class Task:
 	name: Final[str]
@@ -57,7 +57,7 @@ class Task:
 			raise ValueError(f"Task {self.name!r} decorator is not assigned to function.")
 		self.lock(silent)
 		if not silent:
-			pretty_print(f"> Executing task: {self.name}", style="class:task.execute")
+			print(f"> Executing task: {self.name}", style="class:task.execute")
 		result = self.callable.__call__(*args, **kwargs)
 		self.unlock()
 		return result

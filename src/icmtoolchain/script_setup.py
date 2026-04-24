@@ -10,13 +10,14 @@ from urllib.request import urlopen
 
 from .fetch import queue_download_request, retrieve_bytes
 from .output_directory import get_config_directory, get_temporary_directory
-from .shell import (InteractiveSession, Progress, abort, pretty_debug,
-                    pretty_warn, success)
+from .shell import InteractiveSession, Progress, pretty_warn
+from .logger import debug, success
+from .errors import abort
 from .utils import AttributeZipFile, remove_tree
 
 
 def download_node(lts: bool = False) -> str:
-	pretty_debug("Fetching Node.js versions...")
+	debug("Fetching Node.js versions...")
 	version_index: List[Dict] = json_loads(retrieve_bytes("https://nodejs.org/dist/index.json"))
 	if not isinstance(version_index, list):
 		raise RuntimeError("Malformed Node.js dist/index.json file!")
@@ -36,7 +37,7 @@ def download_node(lts: bool = False) -> str:
 		url = f"https://nodejs.org/dist/{latest_version}/node-{latest_version}-darwin-x64.tar.gz"
 	else:
 		url = f"https://nodejs.org/dist/{latest_version}/node-{latest_version}-linux-x64.tar.gz"
-	pretty_debug(f"Fetching Node.js {latest_version} from {url}...")
+	debug(f"Fetching Node.js {latest_version} from {url}...")
 
 	archive_path = queue_download_request(url)
 	if not archive_path:
@@ -72,7 +73,8 @@ def request_typescript(only_check: bool = False) -> Optional[str]:
 	pass
 	if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
 		return None
-	from .shell import confirm_prompt, failure, pretty_debug
+	from .shell import confirm_prompt
+	from .logger import failure, debug
 	from .utils import request_tool
 
 	tsc = shutil.which("tsc") or request_tool("tsc")
@@ -104,11 +106,11 @@ def request_typescript(only_check: bool = False) -> Optional[str]:
 	if not confirm_prompt("Do you want to enable TypeScript and ES6+ support (requires Node.js to build project)?", True):
 		return None
 	if not npm:
-		pretty_debug("Node.js not found in system, downloading local instance...")
+		debug("Node.js not found in system, downloading local instance...")
 		download_node()
 		return request_typescript(only_check=False)
 
-	pretty_debug("Updating TypeScript via npm...")
+	debug("Updating TypeScript via npm...")
 	subprocess.run([npm, "install", "-g", "typescript"], shell=platform.system()=="Windows")
 	tsc = shutil.which("tsc") or request_tool("tsc")
 

@@ -11,9 +11,9 @@ from typing import Any, Generator, List, Optional, Union
 
 pass
 from .fetch import queue_download_request
-from .shell import (InteractiveSession, Progress, abort, attention,
-                    confirm_prompt, failure, pretty_error, pretty_print,
-                    pretty_warn, success)
+from .shell import InteractiveSession, Progress, confirm_prompt, pretty_warn
+from .logger import attention, failure, error, print, success
+from .errors import abort
 from .utils import (AttributeZipFile, RuntimeCodeError, ensure_file,
                     ensure_not_whitespace, iterate_subdirectories,
                     read_properties_stream, remove_tree)
@@ -138,7 +138,7 @@ def search_for_gcc_executable(ndk_directory: str) -> Optional[str]:
 		for filename in files:
 			if re.match(pattern, filename):
 				return abspath(join(search_directory, filename))
-		pretty_print(f"Searching GCC in {search_directory} with {len(files)} files...")
+		print(f"Searching GCC in {search_directory} with {len(files)} files...")
 
 def require_compiler_executable(arch: str, install_if_required: bool = False) -> Optional[str]:
 	from .output_directory import get_config_directory
@@ -271,7 +271,7 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False) -
 
 	if not ndk_path:
 		if not reinstall:
-			pretty_print(f"Not found valid NDK installation for {abi}.")
+			print(f"Not found valid NDK installation for {abi}.")
 		question = "Install NDK from Android Repository?"
 		if ndk_version:
 			question = f"Install NDK {ndk_version} from Android Repository?"
@@ -295,7 +295,7 @@ def download_and_make_standalone_toolchain(arch: str, reinstall: bool = False) -
 			"--force"
 		], capture_output=True, text=True)
 		if output.returncode != 0:
-			pretty_error(output.stderr.strip())
+			error(output.stderr.strip())
 			failure(f"Failed to make a standalone toolchain for {abi} architecture with code {output.returncode}!")
 			return output.returncode
 		else:

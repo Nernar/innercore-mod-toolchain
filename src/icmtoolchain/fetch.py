@@ -7,7 +7,7 @@ from typing import IO, Callable, Optional, Tuple
 from urllib.error import URLError
 from urllib.response import addinfourl
 
-from .shell import attention, failure, success
+from .logger import attention, failure, success
 from .utils import ensure_file, name_to_identifier
 
 

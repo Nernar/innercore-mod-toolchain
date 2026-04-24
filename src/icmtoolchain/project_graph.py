@@ -11,7 +11,9 @@ from typing import (Any, Callable, Dict, Final, List, MutableSequence,
 pass
 from .config import Config, FileConfig
 from .language import MakeDataConfig
-from .shell import abort, attention, confirm_prompt, pretty_print
+from .shell import confirm_prompt
+from .logger import attention, print
+from .errors import abort
 from .utils import ensure_not_whitespace, remove_tree
 
 AVAILABLE_ARTIFACTS: Dict[Union[type, Callable[[Any], bool]], Union[Callable[[Any], 'Artifact'], Type['Artifact']]] = {}
@@ -487,12 +489,12 @@ class ProjectManager:
 			GLOBALS.CODE_SETTINGS.save_as_file()
 
 		self.select_project_folder(folder)
-		pretty_print(f"Project {folder!r} selected.")
+		print(f"Project {folder!r} selected.")
 
 	def unselect_project(self, *, silent: bool = False):
 		self.select_project_folder()
 		if not silent:
-			pretty_print(f"Project unselected.")
+			print(f"Project unselected.")
 
 	def resolve_mod_name(self, path: str, make_obj: Optional[Dict[Any, Any]] = None) -> str:
 		if not make_obj:

@@ -4,7 +4,9 @@ from os.path import dirname, isdir, isfile, join
 from typing import Optional
 
 from .output_directory import get_temporary_directory, unique_folder_name
-from .shell import abort, attention, confirm_prompt, failure, pretty_print, success
+from .shell import confirm_prompt
+from .logger import attention, failure, print, success
+from .errors import abort
 from .task import task
 from .utils import DEVNULL
 
@@ -250,7 +252,7 @@ def task_remove_project() -> int:
 
 	who = GLOBALS.PROJECT_MANAGER.require_selection("Which project will be deleted?", "Do you really want to delete {}?", "I don't want it anymore")
 	if not who:
-		pretty_print("Nothing will happen.")
+		print("Nothing will happen.")
 		return 0
 	if GLOBALS.PROJECT_MANAGER.how_much() > 1 and not confirm_prompt("Do you really want to delete it?", True):
 		return 0
@@ -264,7 +266,7 @@ def task_remove_project() -> int:
 	except ValueError:
 		abort(f"Folder {who!r} not found!")
 
-	pretty_print("Project permanently deleted.")
+	print("Project permanently deleted.")
 	return 0
 
 @task(
@@ -311,7 +313,7 @@ def task_ensure_project_exists() -> int:
 
 	who = GLOBALS.PROJECT_MANAGER.require_selection("Which project do you choice to continue?", "Do you want to select {} to continue?")
 	if not who:
-		pretty_print("Nothing will happen.")
+		print("Nothing will happen.")
 		return 1
 	try:
 		GLOBALS.PROJECT_MANAGER.select_project(folder=who)

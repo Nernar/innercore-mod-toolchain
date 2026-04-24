@@ -4,7 +4,9 @@ from os.path import basename, isdir, isfile, join, relpath
 from typing import List, Optional
 
 from .hglob import glob
-from .shell import InteractiveSession, Progress, pretty_print, abort, pretty_error, failure, success
+from .shell import InteractiveSession, Progress
+from .logger import print, error, failure, success
+from .errors import abort
 from .utils import DEVNULL
 from .modpack import get_modpack_push_directory
 
@@ -31,7 +33,7 @@ def push_everything(push_unchanged: bool = True, cleanup_remote: bool = True) ->
 		elif isdir(project_path):
 			result = push_directory(project_path, remote_path, push_unchanged=remote_push_unchanged, cleanup_remote=remote_cleanup_remote) or result
 		else:
-			pretty_print()
+			print()
 			abort(f"We cannot push {linked_resource['relative_path']!r} resource because we could not determine its type!")
 		if result > 0:
 			return result
@@ -66,7 +68,7 @@ def push_file(file: str, destination_file: str, push_unchanged: bool = True, cle
 		if result.returncode != 0:
 			cause = (result.stderr.strip() or result.stdout.strip()).splitlines()
 			if cause and len(cause[-1]) > 0:
-				pretty_error(cause[-1])
+				error(cause[-1])
 			failure(f"Failed to push file {readable_name!r} with error code {result.returncode}!")
 			return result.returncode
 
@@ -110,7 +112,7 @@ def push_directory(directory: str, destination_directory: str, push_unchanged: b
 			if result.returncode != 0:
 				cause = (result.stderr.strip() or result.stdout.strip()).splitlines()
 				if cause and len(cause[-1]) > 0:
-					pretty_error(cause[-1])
+					error(cause[-1])
 				failure(f"Failed to push directory {readable_name!r} with error code {result.returncode}!")
 				return result.returncode
 

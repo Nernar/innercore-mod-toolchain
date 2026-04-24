@@ -10,7 +10,7 @@ from typing import Any, Final, List, MutableMapping, MutableSequence, Optional
 pass
 from .config import FileConfig
 from .hglob import glob
-from .shell import attention, failure, frozen, pretty_debug, success
+from .logger import attention, failure, frozen, debug, success
 from .tsconfig import TSCONFIG
 from .utils import ensure_file_directory
 
@@ -171,7 +171,7 @@ class Includes:
 		temp_path = join(GLOBALS.MAKE_CONFIG.get_build_path("sources"), basename(target_path))
 		if GLOBALS.BUILD_STORAGE.is_path_changed(self.directory) or not isfile(temp_path):
 			if language == "typescript":
-				pretty_debug(f"Computing {basename(target_path)!r} tsconfig from {self.includes!r}")
+				debug(f"Computing {basename(target_path)!r} tsconfig from {self.includes!r}")
 				self.create_tsconfig(temp_path)
 			return True
 		return False
@@ -182,7 +182,7 @@ class Includes:
 
 		from time import time
 		if GLOBALS.BUILD_STORAGE.is_path_changed(self.directory) or not isfile(temporary_path):
-			pretty_debug(f"Building {basename(target_path)!r} from {self.includes!r}")
+			debug(f"Building {basename(target_path)!r} from {self.includes!r}")
 
 			startup_millis = time()
 			overall_result = self.build_source(temporary_path, language)

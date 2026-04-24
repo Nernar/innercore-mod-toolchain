@@ -9,7 +9,8 @@ from typing import (TYPE_CHECKING, Any, Callable, Dict, Final, Iterable,
 from .config import Config, FileConfig
 from .output_directory import expand_paths
 from .rule_set import RuleSet, RuleSetConfig, RuleSetHolder
-from .shell import abort, attention
+from .logger import attention
+from .errors import abort
 from .utils import RuntimeCodeError, copy_file, ensure_not_whitespace
 
 if TYPE_CHECKING:
