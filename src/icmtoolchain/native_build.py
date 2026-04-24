@@ -1,4 +1,3 @@
-from .context import GLOBALS
 import os
 import subprocess
 from itertools import tee
@@ -6,12 +5,12 @@ from os.path import abspath, basename, exists, isdir, isfile, join, relpath
 from typing import (Collection, Iterable, List, MutableSequence, NamedTuple,
                     Optional, Tuple)
 
-pass
 from .config import Config, FileConfig
+from .context import GLOBALS
 from .language import MakeNativeData
+from .logger import attention, debug, failure, frozen, info, print, success
 from .native_setup import arch_to_abi, prepare_compiler_executable
 from .output_directory import expand_paths
-from .logger import attention, failure, frozen, debug, info, print, success
 from .utils import (copy_directory, copy_file, ensure_directory, ensure_file,
                     ensure_file_directory, ensure_not_whitespace,
                     get_all_files, remove_tree)

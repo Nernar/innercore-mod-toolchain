@@ -3,9 +3,9 @@ import socket
 import subprocess
 from typing import List, Optional, Tuple
 
+from .adb import get_adb_executable
 from .shell import Progress
 from .utils import DEVNULL
-from .adb import get_adb_executable
 
 
 def get_ip() -> str:

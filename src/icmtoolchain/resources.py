@@ -1,13 +1,12 @@
-from .context import GLOBALS
 import os
 from itertools import tee
 from os.path import basename, exists, isdir, isfile, join
 from shutil import make_archive
 
-pass
+from .context import GLOBALS
 from .language import PROJECT_TYPE_MOD
-from .output_directory import expand_paths
 from .logger import attention, debug, print
+from .output_directory import expand_paths
 from .utils import (copy_directory, copy_file, ensure_directory,
                     ensure_file_directory, ensure_not_whitespace, remove_tree)
 

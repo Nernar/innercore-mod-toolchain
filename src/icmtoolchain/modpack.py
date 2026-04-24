@@ -1,11 +1,11 @@
-from .context import GLOBALS
 from os.path import basename, join
 from typing import List, Optional
 
-from .shell import select_prompt
-from .logger import print, error, attention
+from .adb import ls, test_directory_exist
+from .context import GLOBALS
 from .errors import abort
-from .adb import test_directory_exist, ls
+from .logger import attention, error, print
+from .shell import select_prompt
 
 
 def get_modpack_push_directory() -> Optional[str]:

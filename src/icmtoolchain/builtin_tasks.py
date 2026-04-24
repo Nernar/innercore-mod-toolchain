@@ -1,12 +1,12 @@
-from .context import GLOBALS, PROPERTIES
 import subprocess
 from os.path import dirname, isdir, isfile, join
 from typing import Optional
 
+from .context import GLOBALS, PROPERTIES
+from .errors import abort
+from .logger import attention, failure, print, success
 from .output_directory import get_temporary_directory, unique_folder_name
 from .shell import confirm_prompt
-from .logger import attention, failure, print, success
-from .errors import abort
 from .task import task
 from .utils import DEVNULL
 

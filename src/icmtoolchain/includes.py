@@ -1,4 +1,3 @@
-from .context import GLOBALS, PROPERTIES
 import json
 import os
 import platform
@@ -7,10 +6,10 @@ import subprocess
 from os.path import basename, isdir, isfile, join, normpath, relpath
 from typing import Any, Final, List, MutableMapping, MutableSequence, Optional
 
-pass
 from .config import FileConfig
+from .context import GLOBALS, PROPERTIES
 from .hglob import glob
-from .logger import attention, failure, frozen, debug, success
+from .logger import attention, debug, failure, frozen, success
 from .tsconfig import TSCONFIG
 from .utils import ensure_file_directory
 

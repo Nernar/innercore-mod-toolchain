@@ -1,4 +1,3 @@
-from .context import GLOBALS
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
@@ -7,10 +6,11 @@ from typing import (TYPE_CHECKING, Any, Callable, Dict, Final, Iterable,
                     MutableMapping, Optional, Type, Union)
 
 from .config import Config, FileConfig
+from .context import GLOBALS
+from .errors import abort
+from .logger import attention
 from .output_directory import expand_paths
 from .rule_set import RuleSet, RuleSetConfig, RuleSetHolder
-from .logger import attention
-from .errors import abort
 from .utils import RuntimeCodeError, copy_file, ensure_not_whitespace
 
 if TYPE_CHECKING:
@@ -18,8 +18,8 @@ if TYPE_CHECKING:
 
 def get_language_directories(compile_type: str, language_config: Config, properties_merger: Optional[Callable] = None, make_config: Optional['MakeDataConfig'] = None) -> Dict[str, Config]:
 	if not make_config:
-		pass
 		make_config = GLOBALS.MAKE_CONFIG
+	assert make_config is not None
 
 	directories = language_config.obtain_list("directories")
 	if not any(directories):
@@ -226,53 +226,7 @@ PROJECT_TYPE_MOD = 1
 PROJECT_TYPE_MODPACK = 2
 PROJECT_TYPE_PACK = 3
 
-class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ABC):
-	defaults: FileConfig
-	current_project: Final[str]
-	project_unique_name: Final[str]
-
-	def __init__(self, path: str, defaults: FileConfig, rule_set: Optional[RuleSet] = None) -> None:
-		if not isfile(path):
-			abort(f"Not found {basename(path)!r}, are you sure that selected project exists?")
-		RuleSetConfig.__init__(self)
-		self.current_project = dirname(abspath(path))
-		FileConfig.__init__(self, path, defaults, raise_non_existing=True)
-		RuleSetHolder.__init__(self, rule_set=rule_set)
-		from .output_directory import unique_folder_name
-		self.project_unique_name = unique_folder_name(self.directory)
-
-	def get_build_path(self, *components: str) -> str:
-		from .output_directory import get_temporary_directory
-		return join(get_temporary_directory(), "build", self.project_unique_name, *components)
-
-	@property
-	def project_type(self) -> int:
-		"""Defines project type that can be used by some sources at build time.
-
-		Returns:
-			int: one of obviously existing PROJECT_TYPEs, or something else
-		"""
-		return PROJECT_TYPE_UNIVERSAL
-
-	def iterate_dependencies(self) -> Iterable[Union['MakeDataConfig', 'Artifact']]:
-		"""Each project may contain dependencies that must be compiled before that project itself.
-		When instantiating a config, toolchain will make a dependency graph first, and only then build your project.
-
-		Returns:
-			Iterable[MakeDataConfig]: optional project data on which manifest is based
-		"""
-		return []
-
-	@abstractmethod
-	def obtain_project_data(self) -> Optional[FlushableMakeProjectData]:
-		"""Basic data describing this config and project as a whole. They should be provided in any case.
-		If there is no value, no built-in startup configurations are created.
-
-		Returns:
-			Optional[FlushableMakeProjectData]: optional project data on which manifest is based
-		"""
-		...
-
+class ModpackDataMixin:
 	def obtain_mod_data(self, mod_info: Config) -> MakeModData:
 		name = mod_info.get_value("name") or ""
 		author = mod_info.get_value("author") or ""
@@ -329,20 +283,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ABC):
 			description=self.shortcodes_mapping(description)
 		)
 
-	@property
-	def supports_scripts(self) -> bool:
-		return False
-
-	def iterate_scripts(self) -> Iterable[MakeScriptData]:
-		"""Returns iterable script data that is used in appropriate compilers and handlers.
-		Scripts are individual files or folders written using Java/TypeScript language.
-		You are responsible for producing this data, using this config and manifests within a project.
-
-		Returns:
-			Iterable[MakeScriptData]: iterable which can be used in compilers
-		"""
-		return []
-
+class JavaConfigMixin:
 	@property
 	def supports_java(self) -> bool:
 		return False
@@ -370,6 +311,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ABC):
 			options=config.obtain_list("options")
 		)
 
+class NativeConfigMixin:
 	@property
 	def supports_native(self) -> bool:
 		return False
@@ -411,6 +353,22 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ABC):
 			options=config.obtain_list("options")
 		)
 
+class ScriptConfigMixin:
+	@property
+	def supports_scripts(self) -> bool:
+		return False
+
+	def iterate_scripts(self) -> Iterable[MakeScriptData]:
+		"""Returns iterable script data that is used in appropriate compilers and handlers.
+		Scripts are individual files or folders written using Java/TypeScript language.
+		You are responsible for producing this data, using this config and manifests within a project.
+
+		Returns:
+			Iterable[MakeScriptData]: iterable which can be used in compilers
+		"""
+		return []
+
+class SharedObjectsConfigMixin:
 	@property
 	def supports_shared_objects(self) -> bool:
 		return False
@@ -425,6 +383,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ABC):
 		"""
 		return []
 
+class ResourceConfigMixin:
 	@property
 	def supports_resources(self) -> bool:
 		return False
@@ -439,6 +398,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ABC):
 		"""
 		return []
 
+class PackGraphicsConfigMixin:
 	@property
 	def supports_pack_graphics(self) -> bool:
 		return False
@@ -452,6 +412,53 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ABC):
 			Iterable[MakePackGraphicsData]: iterable which can be used in compilers
 		"""
 		return []
+
+class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ModpackDataMixin, JavaConfigMixin, NativeConfigMixin, ScriptConfigMixin, SharedObjectsConfigMixin, ResourceConfigMixin, PackGraphicsConfigMixin, ABC):
+	defaults: FileConfig
+	current_project: Final[str]
+	project_unique_name: Final[str]
+
+	def __init__(self, path: str, defaults: FileConfig, rule_set: Optional[RuleSet] = None) -> None:
+		if not isfile(path):
+			abort(f"Not found {basename(path)!r}, are you sure that selected project exists?")
+		RuleSetConfig.__init__(self)
+		self.current_project = dirname(abspath(path))
+		FileConfig.__init__(self, path, defaults, raise_non_existing=True)
+		RuleSetHolder.__init__(self, rule_set=rule_set)
+		from .output_directory import unique_folder_name
+		self.project_unique_name = unique_folder_name(self.directory)
+
+	def get_build_path(self, *components: str) -> str:
+		from .output_directory import get_temporary_directory
+		return join(get_temporary_directory(), "build", self.project_unique_name, *components)
+
+	@property
+	def project_type(self) -> int:
+		"""Defines project type that can be used by some sources at build time.
+
+		Returns:
+			int: one of obviously existing PROJECT_TYPEs, or something else
+		"""
+		return PROJECT_TYPE_UNIVERSAL
+
+	def iterate_dependencies(self) -> Iterable[Union['MakeDataConfig', 'Artifact']]:
+		"""Each project may contain dependencies that must be compiled before that project itself.
+		When instantiating a config, toolchain will make a dependency graph first, and only then build your project.
+
+		Returns:
+			Iterable[MakeDataConfig]: optional project data on which manifest is based
+		"""
+		return []
+
+	@abstractmethod
+	def obtain_project_data(self) -> Optional[FlushableMakeProjectData]:
+		"""Basic data describing this config and project as a whole. They should be provided in any case.
+		If there is no value, no built-in startup configurations are created.
+
+		Returns:
+			Optional[FlushableMakeProjectData]: optional project data on which manifest is based
+		"""
+		...
 
 	@abstractmethod
 	def iterate_assets(self) -> Iterable[MakeAssetData]:

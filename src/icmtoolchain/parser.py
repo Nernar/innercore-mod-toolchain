@@ -1,4 +1,3 @@
-from .context import GLOBALS, PROPERTIES
 import inspect
 import os
 import sys
@@ -7,8 +6,9 @@ from types import (BuiltinMethodType, ClassMethodDescriptorType,
                    DynamicClassAttribute)
 from typing import Any, Callable, Mapping, MutableSequence, Optional, Tuple
 
-from .shell import stringify
+from .context import GLOBALS, PROPERTIES
 from .logger import attention, print
+from .shell import stringify
 from .task import Task
 
 MAGICS = (

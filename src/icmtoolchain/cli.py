@@ -1,4 +1,3 @@
-from .context import GLOBALS
 import asyncio
 import sys
 from itertools import tee
@@ -8,8 +7,9 @@ from time import time
 from typing import TYPE_CHECKING, Any, MutableSequence, MutableSet, Optional
 
 from .config import FileConfig
-from .project_graph import ProjectEdge, ProjectGraph
+from .context import GLOBALS
 from .errors import ToolchainError
+from .project_graph import ProjectEdge, ProjectGraph
 from .shell import (abort, attention, failure, pretty_ansi_layers,
                     pretty_error, pretty_print, success)
 from .utils import RuntimeCodeError
@@ -29,8 +29,8 @@ def show_help(requires_art: bool = False):
 	pretty_print("Example: icmtoolchain pushEverything launchApplication")
 
 def show_available_tasks():
-	from .task import TASKS
 	from . import builtin_tasks
+	from .task import TASKS
 	pretty_print("All available tasks:")
 	for name, task in TASKS.items():
 		pretty_print(" " * 2 + name, end="")
@@ -143,9 +143,9 @@ def run(argv: Optional[MutableSequence[str]] = None):
 		is_concurrent = True
 		argv.remove("--concurrent")
 
+	from . import builtin_tasks
 	from .parser import apply_environment_properties, parse_arguments
 	from .task import TASKS
-	from . import builtin_tasks
 
 	try:
 		targets = parse_arguments(argv, TASKS, lambda name, target, callables: attention(f"No such task: {name}."))

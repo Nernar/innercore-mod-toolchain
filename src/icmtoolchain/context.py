@@ -1,9 +1,12 @@
 import os
 from copy import deepcopy
 from os.path import abspath, dirname, isfile, join
-from typing import Iterable, Optional
+from typing import TYPE_CHECKING, Iterable, Optional
 
 from .config import Config, FileConfig
+
+if TYPE_CHECKING:
+	from .language import MakeDataConfig
 
 def find_config_directory(path: str, filename: str) -> Optional[str]:
 	working_directory = abspath(path)
@@ -16,6 +19,7 @@ def find_config_directory(path: str, filename: str) -> Optional[str]:
 		working_directory = dirname(working_directory)
 
 def find_project_config(path: str) -> Optional['MakeDataConfig']:
+	from .language import MakeDataConfig
 	working_directory = abspath(path)
 	# When searching for config ignore root directory and iterate
 	# through parent ones until resolution or nothing.
@@ -132,7 +136,7 @@ class Globals:
 	@property
 	def PROJECT_MANAGER(self):
 		if not hasattr(self, "project_manager"):
-			from .project_graph import ProjectManager
+			from .project_manager import ProjectManager
 			self.project_manager = ProjectManager()
 		return self.project_manager
 
@@ -193,6 +197,7 @@ class Globals:
 		return self.parameter_signature
 
 	def is_project_available(self, which_project: Optional[str] = None):
+		from .language import MakeDataConfig
 		if not isinstance(self.PREFERRED_CONFIG, MakeDataConfig):
 			return False
 		return which_project is None or which_project == self.MAKE_CONFIG.current_project
@@ -235,5 +240,3 @@ PARAMETERS = {
 }
 
 PROPERTIES = Config()
-
-from .language import MakeDataConfig

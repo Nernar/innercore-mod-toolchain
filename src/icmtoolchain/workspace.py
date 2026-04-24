@@ -1,12 +1,11 @@
-from .context import GLOBALS
 import json
 import posixpath
 from os.path import basename, isfile, join, relpath
 from re import sub
 from typing import Callable, Collection, Optional
 
-pass
 from .config import FileConfig
+from .context import GLOBALS
 from .utils import ensure_directory, ensure_file_directory
 
 

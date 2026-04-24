@@ -1,12 +1,11 @@
-from .context import GLOBALS
 import sys
 from os.path import isdir, isfile, join
 from typing import Final, List, Optional
 
-pass
-from .script_setup import request_typescript
-from .logger import attention, frozen, print, success
+from .context import GLOBALS
 from .errors import abort
+from .logger import attention, frozen, print, success
+from .script_setup import request_typescript
 from .utils import ensure_not_whitespace
 
 

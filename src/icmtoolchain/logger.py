@@ -1,13 +1,9 @@
-from .shell import (
-    pretty_debug as debug,
-    pretty_info as info,
-    pretty_print as print,
-    success,
-    attention,
-    failure,
-    pretty_error as error,
-    frozen
-)
+from .shell import attention, failure, frozen
+from .shell import pretty_debug as debug
+from .shell import pretty_error as error
+from .shell import pretty_info as info
+from .shell import pretty_print as print
+from .shell import success
 
 __all__ = [
     "debug",

@@ -1,4 +1,3 @@
-from .context import GLOBALS
 import platform
 import re
 import struct
@@ -9,11 +8,11 @@ from os import environ, getenv, listdir, makedirs
 from os.path import abspath, basename, exists, isdir, isfile, join, realpath
 from typing import Any, Generator, List, Optional, Union
 
-pass
-from .fetch import queue_download_request
-from .shell import InteractiveSession, Progress, confirm_prompt, pretty_warn
-from .logger import attention, failure, error, print, success
+from .context import GLOBALS
 from .errors import abort
+from .fetch import queue_download_request
+from .logger import attention, error, failure, print, success
+from .shell import InteractiveSession, Progress, confirm_prompt, pretty_warn
 from .utils import (AttributeZipFile, RuntimeCodeError, ensure_file,
                     ensure_not_whitespace, iterate_subdirectories,
                     read_properties_stream, remove_tree)

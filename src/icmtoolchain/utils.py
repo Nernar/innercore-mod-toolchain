@@ -1,4 +1,3 @@
-from .context import GLOBALS
 import os
 import platform
 import re
@@ -9,7 +8,7 @@ from typing import (Any, Callable, Dict, Iterable, List, Optional, TextIO,
                     Tuple, Union, overload)
 from zipfile import ZipFile, ZipInfo
 
-from .logger import failure
+from .context import GLOBALS
 
 DEVNULL = open(os.devnull, "w")
 

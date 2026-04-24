@@ -1,8 +1,9 @@
-from typing import Any, Callable, Dict, Final, List, Optional
 from os.path import join
+from typing import Any, Callable, Dict, Final, List, Optional
 
-from .output_directory import get_temporary_directory, lock_file, unlock_file
 from .logger import print
+from .output_directory import get_temporary_directory, lock_file, unlock_file
+
 
 class Task:
 	name: Final[str]

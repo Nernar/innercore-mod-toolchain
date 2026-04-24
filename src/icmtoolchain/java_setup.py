@@ -1,4 +1,3 @@
-from .context import GLOBALS
 import platform
 import re
 import shutil
@@ -7,12 +6,13 @@ from os import environ, walk
 from os.path import basename, dirname, isdir, isfile, join, splitext
 from typing import NamedTuple, Optional
 
+from .context import GLOBALS
+from .errors import abort
 from .fetch import queue_download_request, retrieve_bytes
+from .logger import success
 from .output_directory import (FileLock, get_config_directory,
                                get_temporary_directory)
 from .shell import InteractiveSession, Progress
-from .logger import success
-from .errors import abort
 from .utils import AttributeZipFile, encode_int, ensure_directory, remove_tree
 
 # (numeric part, major version, minor version), (stage part, stage, patch number), (commit part, commit/date, timezone)

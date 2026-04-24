@@ -1,4 +1,3 @@
-from .context import GLOBALS
 import platform
 import shutil
 import subprocess
@@ -8,11 +7,12 @@ from os.path import exists, isdir, isfile, join
 from typing import Dict, List, Optional
 from urllib.request import urlopen
 
+from .context import GLOBALS
+from .errors import abort
 from .fetch import queue_download_request, retrieve_bytes
+from .logger import debug, success
 from .output_directory import get_config_directory, get_temporary_directory
 from .shell import InteractiveSession, Progress, pretty_warn
-from .logger import debug, success
-from .errors import abort
 from .utils import AttributeZipFile, remove_tree
 
 
@@ -73,8 +73,8 @@ def request_typescript(only_check: bool = False) -> Optional[str]:
 	pass
 	if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
 		return None
+	from .logger import debug, failure
 	from .shell import confirm_prompt
-	from .logger import failure, debug
 	from .utils import request_tool
 
 	tsc = shutil.which("tsc") or request_tool("tsc")

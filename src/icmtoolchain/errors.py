@@ -1,5 +1,6 @@
 from typing import NoReturn, Optional
 
+
 class ToolchainError(Exception):
     def __init__(self, message: str, code: int = 255, cause: Optional[BaseException] = None):
         super().__init__(message)

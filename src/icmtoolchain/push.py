@@ -1,14 +1,13 @@
-from .context import GLOBALS
 import subprocess
 from os.path import basename, isdir, isfile, join, relpath
-from typing import List, Optional
 
-from .hglob import glob
-from .shell import InteractiveSession, Progress
-from .logger import print, error, failure, success
+from .context import GLOBALS
 from .errors import abort
-from .utils import DEVNULL
+from .hglob import glob
+from .logger import error, failure, print, success
 from .modpack import get_modpack_push_directory
+from .shell import InteractiveSession, Progress
+from .utils import DEVNULL
 
 
 def push_everything(push_unchanged: bool = True, cleanup_remote: bool = True) -> int:

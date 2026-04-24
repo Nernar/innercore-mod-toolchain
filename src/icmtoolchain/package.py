@@ -1,15 +1,14 @@
-from .context import GLOBALS
 import os
 import time
 from os.path import basename, exists, isdir, join, relpath
 from typing import Any, Dict, List, Optional, cast
 
-pass
 from .config import Config, FileConfig
+from .context import GLOBALS
+from .errors import abort
+from .logger import attention, failure, print, success
 from .output_directory import expand_paths
 from .shell import select_prompt
-from .logger import attention, failure, print, success
-from .errors import abort
 from .utils import (copy_file, ensure_not_whitespace, get_all_files,
                     get_project_folder_by_name, name_to_identifier,
                     remove_tree)

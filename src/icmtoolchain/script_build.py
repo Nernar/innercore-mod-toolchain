@@ -1,15 +1,14 @@
-from .context import GLOBALS, PROPERTIES
 from os.path import basename, exists, isdir, isfile, join, relpath
 from typing import Any, List, MutableMapping, Tuple
 
-pass
+from .context import GLOBALS, PROPERTIES
 from .includes import Includes
 from .language import MakeScriptData
+from .logger import attention, debug, failure, frozen, print, success
 from .output_directory import expand_paths
-from .logger import attention, failure, frozen, debug, print, success
+from .script_setup import request_typescript
 from .utils import (RuntimeCodeError, copy_file, ensure_not_whitespace,
                     walk_all_files)
-from .script_setup import request_typescript
 
 
 def build_all_scripts(watch: bool = False) -> int:

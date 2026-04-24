@@ -1,16 +1,15 @@
-from .context import GLOBALS
 import platform
 import re
 import subprocess
-from os.path import isfile, join
+from os.path import join
 from typing import Any, Dict, List, Optional, Tuple
 
+from .context import GLOBALS
 from .fetch import queue_download_request
+from .logger import attention, failure, success
 from .output_directory import get_config_directory, get_temporary_directory
 from .shell import confirm_prompt
-from .logger import attention, failure, success
 from .utils import DEVNULL, AttributeZipFile, remove_tree
-
 
 LAUNCHER_PACKAGES = [
 	"com.zheka.horizon64",

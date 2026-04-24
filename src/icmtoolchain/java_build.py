@@ -1,4 +1,3 @@
-from .context import GLOBALS, PROPERTIES
 import json
 import os
 import platform
@@ -10,12 +9,13 @@ from typing import (Collection, Dict, Iterable, List, MutableSequence,
                     NamedTuple)
 from zipfile import ZipFile
 
-pass
 from .config import Config
-from .language import PROJECT_TYPE_PACK, MakeJavaData
-from .output_directory import expand_paths
-from .logger import attention, failure, frozen, debug, error, info, print, success
+from .context import GLOBALS, PROPERTIES
 from .errors import abort
+from .language import PROJECT_TYPE_PACK, MakeJavaData
+from .logger import (attention, debug, error, failure, frozen, info, print,
+                     success)
+from .output_directory import expand_paths
 from .utils import (copy_directory, copy_file, ensure_directory, ensure_file,
                     get_all_files, get_next_filename, remove_tree,
                     request_executable_version, request_tool, walk_all_files)

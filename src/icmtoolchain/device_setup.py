@@ -1,19 +1,18 @@
-from .context import GLOBALS
 import platform
 import subprocess
 from typing import Any, Dict, List, Optional
 
-from .shell import select_prompt, InteractiveSession, Progress
-from .logger import print, attention, failure
+from .adb import (STATE_DEVICE_AUTHORIZING, STATE_DEVICE_CONNECTED,
+                  device_list, ensure_server_running,
+                  get_adb_command_by_serial, get_adb_command_by_serialno_type,
+                  get_adb_command_by_tcp, get_adb_executable, get_device_state,
+                  wait_for_authorization)
+from .context import GLOBALS
 from .errors import abort
+from .logger import attention, failure, print
+from .network import connect_async, get_ip, ping_async, ping_via_shell
+from .shell import InteractiveSession, Progress, select_prompt
 from .utils import DEVNULL
-from .adb import (
-	get_adb_executable, ensure_server_running, get_device_state, 
-	wait_for_authorization, get_adb_command_by_serial, 
-	get_adb_command_by_tcp, get_adb_command_by_serialno_type, 
-	device_list, STATE_DEVICE_CONNECTED, STATE_DEVICE_AUTHORIZING
-)
-from .network import get_ip, ping_async, ping_via_shell, connect_async
 
 
 def person_readable_device_name(device: Dict[str, Any]) -> str:

@@ -1,9 +1,8 @@
-from .context import GLOBALS
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from os.path import abspath, isfile, join
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from .config import FileConfig
 from .hglob import glob

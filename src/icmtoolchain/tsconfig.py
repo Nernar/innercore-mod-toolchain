@@ -1,4 +1,3 @@
-from .context import GLOBALS, PROPERTIES
 import json
 import os
 import platform
@@ -7,7 +6,7 @@ from glob import glob
 from os.path import dirname, exists, isdir, join, relpath
 from typing import Any, Dict, List
 
-pass
+from .context import GLOBALS, PROPERTIES
 
 # The TypeScript Compiler - Version 4.8.3
 TSCONFIG: Dict[str, Any] = {

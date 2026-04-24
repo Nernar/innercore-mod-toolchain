@@ -1,4 +1,3 @@
-from .context import GLOBALS
 import asyncio
 import contextlib
 import io
@@ -17,11 +16,13 @@ from prompt_toolkit.keys import Keys
 from prompt_toolkit.layout import HSplit, Layout, ScrollablePane, ScrollOffsets
 from prompt_toolkit.widgets import TextArea
 
-from .language import MakeDataConfig
-from .project_graph import ConcurrentScheduler, ProjectEdge, ProjectGraph
-from .shell import Interactable, Progress, get_toolchain_style, pretty_exception
-from .logger import attention, error, print
+from .context import GLOBALS
 from .errors import abort
+from .language import MakeDataConfig
+from .logger import attention, error, print
+from .project_graph import ConcurrentScheduler, ProjectEdge, ProjectGraph
+from .shell import (Interactable, Progress, get_toolchain_style,
+                    pretty_exception)
 from .task import TASKS
 from .utils import RuntimeCodeError
 

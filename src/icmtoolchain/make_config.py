@@ -1,10 +1,10 @@
-from .context import GLOBALS
 from functools import cmp_to_key
 from os.path import basename, isfile, join, splitext
 from typing import (Any, Iterable, MutableMapping, MutableSequence, Optional,
                     Union)
 
 from .config import Config, FileConfig
+from .context import GLOBALS
 from .language import (PROJECT_TYPE_MOD, PROJECT_TYPE_MODPACK,
                        PROJECT_TYPE_PACK, FlushableMakeProjectData,
                        MakeAssetData, MakeDataConfig, MakeJavaData,
