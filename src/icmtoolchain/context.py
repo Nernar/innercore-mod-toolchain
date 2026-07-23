@@ -30,6 +30,7 @@ def find_project_config(path: str) -> Optional['MakeDataConfig']:
 		working_directory = dirname(working_directory)
 
 def iterate_config_directories(path: str, max_depth: int = 5) -> Iterable['MakeDataConfig']:
+	from .language import MakeDataConfig
 	path = abspath(path)
 	for dirpath, dirnames, filenames in os.walk(path):
 		if max_depth >= 0 and dirpath.count(os.sep, len(path) + 1) > max_depth:

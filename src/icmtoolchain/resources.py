@@ -13,10 +13,10 @@ from .utils import (copy_directory, copy_file, ensure_directory,
 
 def build_resources() -> int:
 	# TODO: Separate that shit, we do not need to rebuild EVERYTHING with thousands of resources...
-	GLOBALS.PROJECT_STRUCTURE.cleanup_target("resource_directory")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("resources")
 	GLOBALS.PROJECT_STRUCTURE.cleanup_target("gui")
-	GLOBALS.PROJECT_STRUCTURE.cleanup_target("minecraft_resource_pack")
-	GLOBALS.PROJECT_STRUCTURE.cleanup_target("minecraft_behavior_pack")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("resource_packs")
+	GLOBALS.PROJECT_STRUCTURE.cleanup_target("behavior_packs")
 
 	overall_result = 0
 	for resource in GLOBALS.MAKE_CONFIG.iterate_resources():
@@ -29,7 +29,7 @@ def build_resources() -> int:
 			resource_name = basename(source_path)
 			if resource.type in ("resource_directory", "gui"):
 				target = GLOBALS.PROJECT_STRUCTURE.declare_target(
-					keyword=resource.type,
+					keyword="resources" if resource.type == "resource_directory" else "gui",
 					relative_path=resource_name,
 					declare={
 						"resourceType": "resource" if resource.type == "resource_directory" else resource.type
@@ -37,7 +37,7 @@ def build_resources() -> int:
 				)
 			else:
 				target = GLOBALS.PROJECT_STRUCTURE.declare_target(
-					keyword=resource.type,
+					keyword="resource_packs" if resource.type == "minecraft_resource_pack" else "behavior_packs" if resource.type == "minecraft_behavior_pack" else resource.type,
 					relative_path=resource_name,
 					exclude=True,
 					declare_default={

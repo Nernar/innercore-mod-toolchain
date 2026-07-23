@@ -9,8 +9,9 @@ from icmtoolchain.config import FileConfig
 from icmtoolchain.language import MakeAssetData, MakeDataConfig
 from icmtoolchain.parser import parse_arguments
 from icmtoolchain.project_graph import Artifact, ProjectGraph
-from icmtoolchain.shell import attention, success
+from icmtoolchain.logger import attention, success
 from icmtoolchain.task import TASKS
+import icmtoolchain.builtin_tasks
 
 startup_millis = time()
 build_command = "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage"

@@ -35,7 +35,7 @@ def rebuild_build_target(source: MakeScriptData, target_path: str) -> str:
 	if ensure_not_whitespace(source.source_name):
 		declare["sourceName"] = source.source_name
 
-	target_type = "script_library" if source.type == "library" else "script_source"
+	target_type = "libraries" if source.type == "library" else "scripts"
 	return GLOBALS.PROJECT_STRUCTURE.declare_target(
 		keyword=target_type,
 		relative_path=target_path,
