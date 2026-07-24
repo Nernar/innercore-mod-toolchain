@@ -149,6 +149,8 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 
 	target_d8_directory = join(target_directory, "d8", target.relative_directory)
 	compressed_target = target_d8_directory + ".zip"
+	remove_tree(target_d8_directory)
+	remove_tree(compressed_target)
 	ensure_directory(target_d8_directory)
 
 	modified_class_pathes = modified_pathes["classes"]

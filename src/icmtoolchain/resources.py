@@ -86,6 +86,7 @@ def build_pack_graphics() -> int:
 
 	from shutil import make_archive
 	make_archive(graphics_archive[:-4], "zip", graphics_directory)
+	remove_tree(graphics_directory)
 	print(f"Composed a pack with graphics from {group_length} groups!")
 	return 0
 
