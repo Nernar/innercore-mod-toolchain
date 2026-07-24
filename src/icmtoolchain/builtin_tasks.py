@@ -165,6 +165,10 @@ def task_push_everything() -> int:
 	description="Starts launcher with predefined autostart setting on a connected device using ADB."
 )
 def task_monkey_launcher() -> int:
+	from .device import ensure_device_ready
+	if not ensure_device_ready():
+		return 1
+
 	preferred_launcher = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherPackage")
 	preferred_activity = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherActivity")
 	from .device import (LAUNCHER_PACKAGES, launch_package_via_am,

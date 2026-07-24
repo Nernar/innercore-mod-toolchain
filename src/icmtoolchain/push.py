@@ -11,6 +11,10 @@ from .utils import DEVNULL
 
 
 def push_everything(push_unchanged: bool = True, cleanup_remote: bool = True) -> int:
+	from .adb import ensure_device_ready
+	if not ensure_device_ready():
+		return 1
+
 	destination_directory = get_modpack_push_directory()
 	if not destination_directory:
 		# probably someday it will return 0, but only when we merge push and launch

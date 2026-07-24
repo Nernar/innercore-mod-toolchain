@@ -186,6 +186,15 @@ def wait_for_authorization(serial: Optional[str] = None, timeout: float = 15.0) 
 		attention("Authorization timeout. Device is still unauthorized.")
 	return False
 
+def ensure_device_ready(timeout: float = 15.0) -> bool:
+	ensure_server_running()
+	state = get_device_state()
+	if state == STATE_DEVICE_CONNECTED:
+		return True
+	if state in (STATE_DEVICE_AUTHORIZING, STATE_NO_DEVICES, STATE_DISCONNECTED, STATE_UNKNOWN):
+		return wait_for_authorization(timeout=timeout)
+	return False
+
 def get_adb_command_by_serial(serial: str) -> List[str]:
 	ensure_server_running()
 	devices = GLOBALS.TOOLCHAIN_CONFIG.get_value("devices", list())

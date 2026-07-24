@@ -1,11 +1,12 @@
 from .adb import (LAUNCHER_PACKAGES, STATE_DEVICE_AUTHORIZING,
                   STATE_DEVICE_CONNECTED, STATE_DISCONNECTED, STATE_NO_DEVICES,
                   STATE_UNKNOWN, device_list, download_adb,
-                  ensure_server_running, get_adb_command_by_serial,
-                  get_adb_command_by_serialno_type, get_adb_command_by_tcp,
-                  get_adb_executable, get_device_serial, get_device_state,
-                  launch_package_via_am, launch_package_via_monkey, ls,
-                  test_directory_exist, wait_for_authorization, which_state)
+                  ensure_device_ready, ensure_server_running,
+                  get_adb_command_by_serial, get_adb_command_by_serialno_type,
+                  get_adb_command_by_tcp, get_adb_executable,
+                  get_device_serial, get_device_state, launch_package_via_am,
+                  launch_package_via_monkey, ls, test_directory_exist,
+                  wait_for_authorization, which_state)
 from .device_setup import (get_adb_command, person_readable_device_name,
                            setup_device_connection, setup_externally,
                            setup_how_to_use, setup_via_network,
@@ -20,7 +21,7 @@ from .push import make_locks, push_directory, push_everything, push_file
 
 __all__ = [
 	"get_ip", "ping", "ping_async", "ping_via_shell", "connect", "connect_async",
-	"download_adb", "get_adb_executable", "ensure_server_running", "get_device_state", 
+	"download_adb", "get_adb_executable", "ensure_server_running", "ensure_device_ready", "get_device_state", 
 	"get_device_serial", "device_list", "which_state", "wait_for_authorization", 
 	"get_adb_command_by_serial", "get_adb_command_by_tcp", 
 	"get_adb_command_by_serialno_type", "launch_package_via_am", 

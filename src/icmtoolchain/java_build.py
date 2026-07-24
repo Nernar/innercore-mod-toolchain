@@ -570,9 +570,12 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 
 			if target.manifest.keep_sources:
 				target_sources_directory = join(target_directory, "classes", target.relative_directory, "generated", "sources")
-				sources_jar = join(target.output_directory, "classpath-sources.jar")
+				sources_jar = join(target.output_directory, f"{target.manifest.output_path}-sources.jar")
+				legacy_sources_jar = join(target.output_directory, "classpath-sources.jar")
 				if isfile(sources_jar):
 					os.remove(sources_jar)
+				if isfile(legacy_sources_jar):
+					os.remove(legacy_sources_jar)
 
 				with ZipFile(sources_jar, "w") as archive:
 					has_sources = False
@@ -586,8 +589,18 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 							walk_all_files(abs_src_dir, lambda path: archive.write(path, arcname=relpath(path, abs_src_dir)))
 							has_sources = True
 
+					for lib_dir in target.manifest.libraries:
+						abs_lib_dir = join(target.directory, lib_dir)
+						if isdir(abs_lib_dir):
+							for lib_file in get_all_files(abs_lib_dir, (".jar")):
+								if lib_file.endswith(("-sources.jar", "-javadoc.jar")):
+									walk_all_files(lib_file, lambda path: archive.write(path, arcname=relpath(path, abs_lib_dir)))
+									has_sources = True
+
 				if not has_sources and isfile(sources_jar):
 					os.remove(sources_jar)
+				elif isfile(sources_jar):
+					copy_file(sources_jar, legacy_sources_jar)
 
 		if not built_successfully:
 			attention(f"Directory {target.relative_directory!r} is empty.")
