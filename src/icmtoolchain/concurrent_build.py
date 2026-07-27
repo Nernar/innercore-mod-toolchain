@@ -105,10 +105,12 @@ def worker_execute_project_tasks(node: ProjectEdge, task_names: List[str], queue
 
 class WorkerStatePane:
 	def __init__(self, index: int):
+		from .shell import UNICODE_INTERMEDIATE_PROGRESS
+		
 		self.index = index
 		self.project = None
 		self.message = "Idle"
-		self.frames = cycle(["▀", "▄"])
+		self.frames = cycle(UNICODE_INTERMEDIATE_PROGRESS)
 		self.content = TextArea(dont_extend_height=True, read_only=True)
 		self.description = Interactable(text="")
 		self.is_active = False
@@ -136,43 +138,19 @@ class WorkerStatePane:
 		if self.project:
 			self.message = message
 
-class ConcurrentBuilderApp:
+class ConcurrentCliApplication:
 	def __init__(self, total_tasks: int, max_workers: int):
+		from .shell import request_application
+		
 		self.worker_panes = [WorkerStatePane(i) for i in range(1, max_workers + 1)]
 		self.total_tasks = total_tasks
 		self.overall_progress = Progress()
 
-		contents = [self.overall_progress]
+		self.contents = [self.overall_progress]
 		for pane in self.worker_panes:
-			contents += [pane.content, pane.description]
+			self.contents += [pane.content, pane.description]
 
-		root_container = ScrollablePane(
-			HSplit(contents),
-			scroll_offsets=ScrollOffsets(3, 3),
-			display_arrows=False,
-		)
-
-		self.layout = Layout(root_container)
-		kb = KeyBindings()
-
-		@kb.add("c-c")
-		@kb.add("<sigint>")
-		def _(event):
-			event.app.exit()
-			raise KeyboardInterrupt()
-
-		kb.add(Keys.Down)(focus_next)
-		kb.add(Keys.Up)(focus_previous)
-
-		self.app = Application(
-			layout=self.layout,
-			style=get_toolchain_style(),
-			include_default_pygments_style=False,
-			key_bindings=kb,
-			full_screen=False,
-			mouse_support=True,
-			erase_when_done=True
-		)
+		self.app = request_application(*self.contents)
 		self.update_progress(0)
 
 	def assign_worker(self, project: str, message: str) -> Optional[WorkerStatePane]:
@@ -201,10 +179,11 @@ class ConcurrentBuilderApp:
 		await self.app.run_async()
 
 	def exit(self):
-		self.app.exit()
+		from .shell import clear_application
+		clear_application(*self.contents, force_exit=True)
 
 
-async def build_executor_loop(app: ConcurrentBuilderApp, scheduler: ConcurrentScheduler, task_names: List[str], max_workers: int, queue: Any, all_logs: list, status_obj: BuildStatus, use_processes: bool = False):
+async def build_executor_loop(app: ConcurrentCliApplication, scheduler: ConcurrentScheduler, task_names: List[str], max_workers: int, queue: Any, all_logs: list, status_obj: BuildStatus, use_processes: bool = False):
 	if use_processes:
 		from concurrent.futures import ProcessPoolExecutor as Executor
 	else:
@@ -297,7 +276,7 @@ async def run_concurrent_build(graph: 'ProjectGraph', task_names: List[str]):
 
 	scheduler = ConcurrentScheduler(graph)
 
-	app = ConcurrentBuilderApp(len(scheduler.pending), max_workers)
+	app = ConcurrentCliApplication(len(scheduler.pending), max_workers)
 	all_logs = []
 	build_status = BuildStatus()
 

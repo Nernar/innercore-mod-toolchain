@@ -121,9 +121,25 @@ def request_application(*content: Optional[AnyContainer]) -> Application:
 					container = container.content # type: ignore
 				assert hasattr(container, "children")
 				children: List[Container] = container.children # type: ignore
+				
+				# append controls
+				first_control = None
 				for control in content:
-					if control and not control in children:
-						children.append(to_container(control))
+					if control:
+						wrapped = to_container(control)
+						if not wrapped in children:
+							children.append(wrapped)
+						if not first_control:
+							first_control = wrapped
+							
+				# focus on the newly added component
+				if first_control:
+					try:
+						interactive_application.layout.focus(first_control)
+					except ValueError:
+						pass # if not focusable
+				
+				interactive_application.invalidate()
 			return interactive_application
 		interactive_application = None
 
@@ -168,8 +184,20 @@ def clear_application(*content: Optional[AnyContainer], force_exit: bool = False
 		assert hasattr(container, "children")
 		children: List[Container] = container.children # type: ignore
 		for control in content:
-			if control and not control in children:
-				children.remove(to_container(control))
+			if control:
+				wrapped = to_container(control)
+				if wrapped in children:
+					children.remove(wrapped)
+		
+		# return focus back if there are still interactive components
+		if len(children) > 0 and interactive_application.layout.current_control not in children:
+			try:
+				interactive_application.layout.focus_last()
+			except ValueError:
+				pass
+				
+		interactive_application.invalidate()
+		
 		if force_exit or len(children) == 0:
 			interactive_application.exit()
 	if force_exit or not interactive_application.is_running or interactive_application.is_done:

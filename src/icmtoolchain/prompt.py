@@ -15,8 +15,13 @@ from prompt_toolkit.layout import (AnyContainer, HSplit, Layout,
                                    ScrollablePane, ScrollOffsets)
 from prompt_toolkit.validation import Validator
 
+import threading
+import concurrent.futures
+
 from .shell import (Editable, Interactable, Selectable, attention, failure,
                     frozen, get_toolchain_style, pretty_print, success)
+
+_feedback_injection_lock = threading.Lock()
 
 
 class Feedback(ABC):
@@ -96,9 +101,25 @@ class Feedback(ABC):
 		return self.result
 
 	def request(self) -> Any:
+		from .shell import interactive_application, request_application, clear_application
 		self.inform_if_already_busy()
-		self.result = self.application.run(pre_run=self.pre_run)
-		return self.result
+		self.pre_run()
+		
+		if interactive_application is not None and interactive_application.is_running:
+			with _feedback_injection_lock:
+				fut = concurrent.futures.Future()
+				self._injection_future = fut
+				
+				# Push layout into global application
+				request_application(self.content)
+				
+				# Wait until user interacts
+				self.result = fut.result()
+				clear_application(self.content)
+				return self.result
+		else:
+			self.result = self.application.run(pre_run=self.pre_run)
+			return self.result
 
 	async def request_async_safe(self, prints_abort: bool = True) -> Any:
 		try:
@@ -137,8 +158,11 @@ class Feedback(ABC):
 				pretty_print(result, style="class:print.answer")
 
 	def complete(self, *, result: object = None, print_result: object = None) -> None:
-		if self.application.is_running and not self.application.is_done:
+		if hasattr(self, "_application") and self.application.is_running and not self.application.is_done:
 			self.application.exit(result=result)
+		if hasattr(self, "_injection_future") and not self._injection_future.done():
+			self._injection_future.set_result(result)
+			
 		if result is not None:
 			self.print_result(print_result if print_result else result)
 
