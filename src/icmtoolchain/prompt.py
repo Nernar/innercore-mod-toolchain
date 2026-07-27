@@ -271,7 +271,7 @@ class Select(Feedback):
 	def __init__(
 		self,
 		prompt: AnyFormattedText = "What do you like?",
-		variants: Iterable[Optional[str]] = ["Rides", "Guide", "Both"],
+		variants: Iterable[AnyFormattedText] = ["Rides", "Guide", "Both"],
 		selected_variant: Optional[Union[int, str]] = None,
 		default_variant: Optional[Union[int, str]] = None,
 		returns_what: bool = False,
@@ -316,7 +316,7 @@ class Select(Feedback):
 			self.explanation_control
 		])
 
-	def create_choice_content(self, variant: str, offset: int) -> AnyContainer:
+	def create_choice_content(self, variant: AnyFormattedText, offset: int) -> AnyContainer:
 		selected = self.selected_variant is not None and (
 			variant == self.selected_variant or offset == self.selected_variant
 		)
@@ -386,7 +386,7 @@ class Checkbox(Select):
 	def __init__(
 		self,
 		prompt: AnyFormattedText = "What do you like?",
-		variants: Iterable[Optional[str]] = ["Rides", "Guide", "Both"],
+		variants: Iterable[AnyFormattedText] = ["Rides", "Guide", "Both"],
 		selected_variants: Optional[Iterable[Union[int, str]]] = None,
 		default_variant: Optional[Union[int, str]] = None,
 		returns_what: bool = False,
@@ -410,7 +410,7 @@ class Checkbox(Select):
 		self.on_accept = on_accept
 		self.use_space_as_accept = False
 
-	def create_choice_content(self, variant: str, offset: int) -> AnyContainer:
+	def create_choice_content(self, variant: AnyFormattedText, offset: int) -> AnyContainer:
 		selected = self.selected_variants is not None and (
 			variant in self.selected_variants or offset in self.selected_variants
 		)
