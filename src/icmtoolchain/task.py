@@ -1,3 +1,4 @@
+import threading
 from os.path import join
 from typing import Any, Callable, Dict, Final, List, Optional
 
@@ -8,10 +9,24 @@ from .output_directory import get_temporary_directory, lock_file, unlock_file
 class Task:
 	name: Final[str]
 	description: str = ""
-	_status: Optional[str] = None
 	callable: Callable
 	locks: Optional[List[str]] = None
-	on_status_changed: Optional[Callable[[str], None]] = None
+
+	@property
+	def _status(self) -> Optional[str]:
+		return getattr(self._local, "status", None)
+
+	@_status.setter
+	def _status(self, value: Optional[str]) -> None:
+		self._local.status = value
+
+	@property
+	def on_status_changed(self) -> Optional[Callable[[str], None]]:
+		return getattr(self._local, "on_status_changed", None)
+
+	@on_status_changed.setter
+	def on_status_changed(self, value: Optional[Callable[[str], None]]) -> None:
+		self._local.on_status_changed = value
 
 	@property
 	def status(self) -> str:
@@ -43,6 +58,7 @@ class Task:
 		else:
 			raise ValueError(f"Task {name!r} is already exists.")
 		self.name = name
+		self._local = threading.local()
 		if description:
 			self.description = description
 		if status:

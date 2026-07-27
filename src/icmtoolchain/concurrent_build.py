@@ -204,10 +204,13 @@ class ConcurrentBuilderApp:
 		self.app.exit()
 
 
-async def build_executor_loop(app: ConcurrentBuilderApp, scheduler: ConcurrentScheduler, task_names: List[str], max_workers: int, queue: Queue, all_logs: list, status_obj: BuildStatus):
-	from concurrent.futures import ProcessPoolExecutor
+async def build_executor_loop(app: ConcurrentBuilderApp, scheduler: ConcurrentScheduler, task_names: List[str], max_workers: int, queue: Any, all_logs: list, status_obj: BuildStatus, use_processes: bool = False):
+	if use_processes:
+		from concurrent.futures import ProcessPoolExecutor as Executor
+	else:
+		from concurrent.futures import ThreadPoolExecutor as Executor
 	loop = asyncio.get_event_loop()
-	with ProcessPoolExecutor(max_workers=max_workers) as executor:
+	with Executor(max_workers=max_workers) as executor:
 		pending_futures: Dict[Any, Tuple[ProjectEdge, Optional[WorkerStatePane]]] = {}
 
 		while scheduler.has_unfinished_tasks():
@@ -265,16 +268,24 @@ async def build_executor_loop(app: ConcurrentBuilderApp, scheduler: ConcurrentSc
 	app.exit()
 
 async def run_concurrent_build(graph: 'ProjectGraph', task_names: List[str]):
-	import multiprocessing
-	if multiprocessing.get_start_method(allow_none=True) != "spawn":
-		preferred_method = "spawn"
-		if "forkserver" in multiprocessing.get_all_start_methods():
-			preferred_method = "forkserver"
-		try:
-			multiprocessing.set_start_method(preferred_method, force=True)
-		except RuntimeError:
-			pass
+	use_processes = GLOBALS.TOOLCHAIN_CONFIG.get_value("concurrentProcesses", False)
 
+	if use_processes:
+		import multiprocessing
+		if multiprocessing.get_start_method(allow_none=True) != "spawn":
+			preferred_method = "spawn"
+			if "forkserver" in multiprocessing.get_all_start_methods():
+				preferred_method = "forkserver"
+			try:
+				multiprocessing.set_start_method(preferred_method, force=True)
+			except RuntimeError:
+				pass
+		manager = multiprocessing.Manager()
+		queue = manager.Queue()
+	else:
+		queue = Queue()
+
+	import sys
 	if sys.version_info < (3, 13):
 		from os import cpu_count as _cpu_count
 		cpu_count = _cpu_count()
@@ -285,14 +296,12 @@ async def run_concurrent_build(graph: 'ProjectGraph', task_names: List[str]):
 	max_workers = max(1, cpu_count // 2 if cpu_count else 1)
 
 	scheduler = ConcurrentScheduler(graph)
-	manager = multiprocessing.Manager()
-	queue = manager.Queue()
 
 	app = ConcurrentBuilderApp(len(scheduler.pending), max_workers)
 	all_logs = []
 	build_status = BuildStatus()
 
-	executor_task = asyncio.create_task(build_executor_loop(app, scheduler, task_names, max_workers, queue, all_logs, build_status))
+	executor_task = asyncio.create_task(build_executor_loop(app, scheduler, task_names, max_workers, queue, all_logs, build_status, use_processes))
 
 	try:
 		await app.run_async()

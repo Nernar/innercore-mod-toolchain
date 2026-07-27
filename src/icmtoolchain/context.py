@@ -1,4 +1,5 @@
 import os
+import threading
 from copy import deepcopy
 from os.path import abspath, dirname, isfile, join
 from typing import TYPE_CHECKING, Iterable, Optional
@@ -51,7 +52,7 @@ def get_current_directory() -> str:
 		return project_path
 	return os.getcwd()
 
-class Globals:
+class Globals(threading.local):
 	@property
 	def ADB_COMMAND(self):
 		if not hasattr(self, "adb_command"):
