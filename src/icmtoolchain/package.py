@@ -1,6 +1,7 @@
+import json
 import os
 import time
-from os.path import basename, exists, isdir, join, relpath
+from os.path import basename, exists, isdir, isfile, join, relpath
 from typing import Any, Dict, List, Optional, cast
 
 from .config import Config, FileConfig
@@ -8,7 +9,7 @@ from .context import GLOBALS
 from .errors import abort
 from .logger import attention, failure, print, success
 from .output_directory import expand_paths
-from .shell import select_prompt
+from .shell import confirm_prompt, select_prompt
 from .utils import (copy_file, ensure_not_whitespace, get_all_files,
                     get_project_folder_by_name, name_to_identifier,
                     remove_tree)
@@ -33,9 +34,24 @@ def pretty_cleanup_directory(path: str) -> None:
 	remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path(path))
 	success(f"Completed {basename(path)} cleanup in {int((time.time() - start_time) * 100) / 100}s")
 
-def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
+def collect_project_templates() -> List[str]:
+	templates = []
+	locations = GLOBALS.PREFERRED_CONFIG.obtain_list("projectLocations")
+	for location in locations[:]:
+		path = GLOBALS.TOOLCHAIN_CONFIG.get_path(location)
+		if not exists(path) or not isdir(path):
+			attention(f"Not found project location {location}!")
+			continue
+		for entry in os.listdir(path):
+			template_path = join(path, entry, "template.json")
+			if exists(template_path) and isfile(template_path):
+				templates.append(join(location, entry))
+	return templates
+
+def request_create_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 	have_template = "template" in GLOBALS.TOOLCHAIN_CONFIG
 	always_skip_description = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.skipDescription", False)
+	templates = collect_project_templates()
 	output_directory = None
 
 	print("Create new project")
@@ -49,7 +65,7 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 			if select is not None:
 				select.explanation = f"Malformed '{template}/template.json', nothing to do."
 				return False
-			if len(GLOBALS.PROJECT_MANAGER.templates) == 0 or template == GLOBALS.PROJECT_MANAGER.templates[0]:
+			if len(templates) == 0 or template == templates[0]:
 				abort(f"Malformed '{template}/template.json', nothing to do.", cause=exc)
 			template_config = Config()
 		update_template_defaults(template_config)
@@ -59,15 +75,15 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 		nonlocal template
 		if template and exists(GLOBALS.TOOLCHAIN_CONFIG.get_path(template)):
 			on_validate_template(template)
-		elif len(GLOBALS.PROJECT_MANAGER.templates) <= 1:
-			if len(GLOBALS.PROJECT_MANAGER.templates) == 0:
+		elif len(templates) <= 1:
+			if len(templates) == 0:
 				attention("You need at least one template to create a project, it can be done by creating a folder and renaming `make.json` to `template.json`.")
 				abort("Not found any templates, nothing to do.")
-			template = GLOBALS.PROJECT_MANAGER.templates[0]
+			template = templates[0]
 			on_validate_template(template)
-		if len(GLOBALS.PROJECT_MANAGER.templates) == 0 or template == GLOBALS.PROJECT_MANAGER.templates[0]:
+		if len(templates) == 0 or template == templates[0]:
 			return None
-		template_locations = GLOBALS.PROJECT_MANAGER.templates.copy()
+		template_locations = templates.copy()
 		if template and not template in template_locations:
 			template_locations.insert(0, template)
 		return Select(
@@ -132,7 +148,7 @@ def new_project(template: Optional[str] = "../toolchain-mod") -> Optional[int]:
 		print("You can override template by setting `template` property in your 'toolchain.json', it will be automatically apply when you create a new project. Properties remain same as `info` property in 'make.json'.", style="class:editable.hint")
 
 	print(f"Copying template {choosen_template!r} to {output_directory!r}")
-	return GLOBALS.PROJECT_MANAGER.create_project(
+	return create_project(
 		choosen_template,
 		output_directory,
 		name=results["name"],
@@ -189,5 +205,87 @@ def setup_project(make_obj: Dict[Any, Any], template: str, path: str) -> None:
 		with open(source, "w", encoding="utf-8") as source_file:
 			source_file.writelines(lines)
 
-def select_project(variants: List[str], prompt: Optional[str] = "Which project do you want?", selected: Optional[str] = None, *additionals: str) -> Optional[str]:
-	return select_prompt(prompt, *variants, *additionals, selected_variant=selected, returns_what=True)
+def append_workspace_folder(folder: str, name: Optional[object] = "Mod") -> None:
+	if GLOBALS.CODE_WORKSPACE.available():
+		folders = GLOBALS.CODE_WORKSPACE.obtain_list("folders", implace_fallback=True)
+		if len(folders) == 0:
+			folders.append({
+				"path": GLOBALS.CODE_WORKSPACE.get_toolchain_path().replace("\\", "/"),
+				"name": "Inner Core Mod Toolchain"
+			})
+		folders.append({
+			"path": GLOBALS.CODE_WORKSPACE.get_toolchain_path(folder).replace("\\", "/"),
+			"name": str(name)
+		})
+		GLOBALS.CODE_WORKSPACE.save_as_file()
+
+def create_project(template: str, folder: str, name: Optional[str] = None, author: Optional[str] = None, version: Optional[str] = None, description: Optional[str] = None, clientOnly: bool = False) -> None:
+	location = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(folder)
+	if exists(location):
+		abort(f"Folder {folder!r} already exists!")
+	template_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(template)
+	if not exists(template_path):
+		abort(f"Not found {template!r} template, nothing to do.")
+	template_make_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(join(template, "template.json"))
+	if not isfile(template_make_path):
+		abort(f"Not found 'template.json' in template {template!r}, nothing to do.")
+
+	with open(template_make_path, "r", encoding="utf-8") as make_file:
+		template_obj = json.loads(make_file.read())
+
+	if not "info" in template_obj:
+		template_obj["info"] = dict()
+	template_info = template_obj["info"]
+	template_info["name"] = ensure_not_whitespace(name, ensure_not_whitespace(
+		template_info["name"] if "name" in template_info else None, "Mod"
+	))
+	template_info["author"] = ensure_not_whitespace(author, ensure_not_whitespace(
+		template_info["author"] if "author" in template_info else None, "ICMods"
+	))
+	template_info["version"] = ensure_not_whitespace(version, ensure_not_whitespace(
+		template_info["version"] if "version" in template_info else None, "1.0"
+	))
+	template_info["description"] = description or ensure_not_whitespace(
+		template_info["description"] if "description" in template_info else None, "Describe your creation just in a few words."
+	)
+	template_info["clientOnly"] = clientOnly if clientOnly is not None else \
+		template_info["clientOnly"] if "clientOnly" in template_info else False
+
+	os.makedirs(location, exist_ok=True)
+	setup_project(template_obj, template_path, location)
+
+	make_path = join(location, "make.json")
+	with open(make_path, "w", encoding="utf-8") as make_file:
+		make_file.write(json.dumps(template_obj, indent="\t", ensure_ascii=False) + "\n")
+
+	if GLOBALS.CODE_WORKSPACE.available():
+		location = GLOBALS.CODE_WORKSPACE.get_toolchain_path(folder).replace("\\", "/")
+		if not any(filter(lambda folder: isinstance(folder, Config) and location == folder.get_value("path"), GLOBALS.CODE_WORKSPACE.obtain_list("folders"))):
+			append_workspace_folder(folder, template_info["name"])
+
+def resolve_mod_name(path: str, make_obj: Optional[Dict[Any, Any]] = None) -> str:
+	if not make_obj:
+		try:
+			make_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(join(path, "make.json"))
+			if isfile(make_path):
+				with open(make_path, "r", encoding="utf-8") as make_file:
+					make_obj = json.loads(make_file.read())
+		except BaseException:
+			pass
+	return make_obj["info"]["name"] if make_obj and "info" in make_obj and "name" in make_obj["info"] else basename(path)
+
+def get_shortcut(path: str, make_obj: Optional[Dict[Any, Any]] = None) -> str:
+	if len(path) == 0:
+		return basename(GLOBALS.TOOLCHAIN_CONFIG.directory)
+	return resolve_mod_name(path, make_obj) + " (" + path + ")"
+
+def select_project(projects: List[str], prompt: Optional[str] = "Which project do you want?", prompt_when_single: Optional[str] = None, *dont_want_anymore: str) -> Optional[str]:
+	if len(projects) == 1:
+		itwillbe = projects[0]
+		if not prompt_when_single:
+			return itwillbe
+		else:
+			if not confirm_prompt(prompt_when_single.format(get_shortcut(itwillbe)), True):
+				return None
+			return itwillbe
+	return select_prompt(prompt, *projects, *dont_want_anymore, selected_variant=GLOBALS.MAKE_CONFIG.current_project if GLOBALS.is_project_available() else None, returns_what=True)

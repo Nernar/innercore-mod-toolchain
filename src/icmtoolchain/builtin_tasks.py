@@ -220,77 +220,12 @@ def task_configure_adb() -> int:
 	description="Creates a project, prompting interactive input for name, template, and other properties."
 )
 def task_new_project() -> int:
-	from .package import new_project
+	from .package import request_create_project
 
-	index = new_project(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
+	index = request_create_project(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
 	if index is None:
 		return 1
 	success("Successfully completed!")
-
-	if not confirm_prompt("Select this project?", True):
-		return 0
-	GLOBALS.PROJECT_MANAGER.select_project(index=index)
-	return 0
-
-@task(
-	"removeProject",
-	locks=["cleanup"],
-	description="Removes a project, selected interactively by user."
-)
-def task_remove_project() -> int:
-	if GLOBALS.PROJECT_MANAGER.how_much() == 0:
-		abort("Not found any project to remove.")
-	attention("Selected project will be deleted forever, please think twice before removing anything!")
-
-	who = GLOBALS.PROJECT_MANAGER.require_selection("Which project will be deleted?", "Do you really want to delete {}?", "I don't want it anymore")
-	if not who:
-		frozen("Nothing will happen.")
-		return 0
-	if GLOBALS.PROJECT_MANAGER.how_much() > 1 and not confirm_prompt("Do you really want to delete it?", True):
-		return 0
-
-	try:
-		location = GLOBALS.TOOLCHAIN_CONFIG.get_path(who)
-		GLOBALS.PROJECT_MANAGER.remove_project(folder=who)
-		from .package import pretty_cleanup_directory
-		temporary_project_directory = join(get_temporary_directory(), "build", unique_folder_name(location))
-		pretty_cleanup_directory(temporary_project_directory)
-	except ValueError:
-		abort(f"Folder {who!r} not found!")
-
-	success("Project permanently deleted.")
-	return 0
-
-@task(
-	"selectProject",
-	description="Selects a project from a specified folder or requests interactive pickings from user."
-)
-def task_select_project(path: str = "") -> int:
-	if len(path) > 0:
-		where = GLOBALS.TOOLCHAIN_CONFIG.get_path(path)
-		if isfile(where): # and basename(where) == "make.json"
-			where = dirname(where)
-		if isdir(where):
-			if where == GLOBALS.TOOLCHAIN_CONFIG.directory:
-				abort("Requested path must be reference to project, not toolchain itself.")
-			# if not isfile(join(where, "make.json")):
-				# abort(f"Not found 'make.json' in {path!r}, it not belongs to project yet.")
-			GLOBALS.PROJECT_MANAGER.select_project(folder=path)
-			return 0
-		else:
-			abort(f"Requested project path {path!r} does not exists.")
-
-	if GLOBALS.PROJECT_MANAGER.how_much() == 0:
-		abort("Not found any project to choice.")
-
-	who = GLOBALS.PROJECT_MANAGER.require_selection("Which project do you choice?", "Do you want to select {}?")
-	if not who:
-		GLOBALS.PROJECT_MANAGER.unselect_project()
-		return 0
-	try:
-		GLOBALS.PROJECT_MANAGER.select_project(folder=who)
-	except ValueError:
-		abort(f"Folder {who!r} not found!")
 	return 0
 
 @task(
@@ -300,18 +235,7 @@ def task_select_project(path: str = "") -> int:
 def task_ensure_project_exists() -> int:
 	if GLOBALS.is_project_available():
 		return 0
-	if GLOBALS.PROJECT_MANAGER.how_much() == 0:
-		abort("Not found any project to choice.")
-
-	who = GLOBALS.PROJECT_MANAGER.require_selection("Which project do you choice to continue?", "Do you want to select {} to continue?")
-	if not who:
-		frozen("Nothing will happen.")
-		return 1
-	try:
-		GLOBALS.PROJECT_MANAGER.select_project(folder=who)
-	except ValueError:
-		abort(f"Folder {who!r} not found!")
-	return 0
+	abort("Not found any project to choice.")
 
 ### MISCELLANEOUS
 
@@ -320,53 +244,26 @@ def task_ensure_project_exists() -> int:
 	description="Configures tasks in most useful IDEs for mods to use from the interface."
 )
 def task_configure_ide() -> int:
-	from .workspace import (flush_compound_tasks, flush_toolchain_tasks,
-	                        flush_vscode_compound_task)
+	from .workspace import flush_compound_tasks, flush_toolchain_tasks
 
-	# flush_toolchain_tasks("Select Project", "folder-opened", "selectProject", focus=True)
-	# flush_vscode_toolchain_task("Select Project by Active File", "repo-force-push", "selectProject --path", hidden=True, glob="**/*", options=("${fileWorkspaceFolder}", ))
-	flush_toolchain_tasks("Push", "rocket", "ensureProjectExists stopApplication pushEverything launchApplication")
 	flush_toolchain_tasks("Assemble Mod for Release", "archive", "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage")
-
 	flush_toolchain_tasks("Build (No push)", "debug-all", "ensureProjectExists clearOutput buildScripts compileNative compileJava buildResources buildInfo", hidden=True)
 	flush_compound_tasks("Build", "debug-all", ("Build (No push)", "Push"))
-	flush_vscode_compound_task("Build by Active File", "debug-all", ("Select Project by Active File", "Build"), hidden=True, glob="**/*")
-
 	flush_toolchain_tasks("Build Scripts and Resources (No push)", "debug-alt", "ensureProjectExists clearOutput buildScripts buildResources buildInfo", hidden=True)
 	flush_compound_tasks("Build Scripts and Resources", "debug-alt", ("Build Scripts and Resources (No push)", "Push"))
-	flush_vscode_compound_task("Build Scripts and Resources by Active File", "debug-alt", ("Select Project by Active File", "Build Scripts and Resources"), hidden=True, glob="**/*")
-
+	flush_toolchain_tasks("Rebuild Declarations", "milestone", "ensureProjectExists updateIncludes", hidden=True)
 	flush_toolchain_tasks("Build Java (No push)", "run-above", "ensureProjectExists compileJava buildInfo", hidden=True)
 	flush_compound_tasks("Build Java", "run-above", ("Build Java (No push)", "Push"))
-	flush_vscode_compound_task("Build Java by Active File", "run-above", ("Select Project by Active File", "Build Java"), hidden=True, glob="**/*")
-
 	flush_toolchain_tasks("Build Native (No push)", "run", "ensureProjectExists compileNative buildInfo", hidden=True)
 	flush_compound_tasks("Build Native", "run", ("Build Native (No push)", "Push"))
-	flush_vscode_compound_task("Build Native by Active File", "run", ("Select Project by Active File", "Build Native"), hidden=True, glob="**/*")
-
-	# flush_toolchain_tasks("Watch Scripts (No push)", "debug-coverage", "ensureProjectExists clearOutput watchScripts buildInfo", hidden=True)
-	# flush_compound_tasks("Watch Scripts", "debug-coverage", ("Watch Scripts (No push)", "Push"))
-	# flush_vscode_compound_task("Watch Scripts by Active File", "debug-coverage", ("Select Project by Active File", "Watch Scripts"), hidden=True, glob="**/*")
-
-	flush_toolchain_tasks("Rebuild Declarations", "milestone", "ensureProjectExists updateIncludes", hidden=True)
-	flush_vscode_compound_task("Rebuild Declarations by Active File", "milestone", ("Select Project by Active File", "Rebuild Declarations"), hidden=True, glob="**/*")
-	flush_toolchain_tasks("Invalidate Caches", "flame", "cleanup", focus=True)
+	flush_toolchain_tasks("Push", "rocket", "ensureProjectExists stopApplication pushEverything launchApplication")
 
 	flush_toolchain_tasks("New Project", "new-folder", "newProject", focus=True)
-	# flush_toolchain_tasks("Import Project", "repo-pull", "importProject", focus=True)
-	# XXX: flush_toolchain_tasks("Remove Project", "root-folder-opened", "removeProject", focus=True)
-	# flush_toolchain_tasks("Check for Updates", "cloud", "updateToolchain", focus=True)
 	flush_toolchain_tasks("Configure ADB", "device-mobile", "configureADB", focus=True)
-	# flush_toolchain_tasks("Reinstall Components", "package", "componentIntegrity", focus=True)
+	flush_toolchain_tasks("Reinstall Components", "package", "componentIntegrity", focus=True)
+	flush_toolchain_tasks("Invalidate Caches", "flame", "cleanup", focus=True)
 
 	return 0
-
-@task(
-	"updateToolchain",
-	description="Updates the toolchain using a development branch; additionally verifies updates for installed components."
-)
-def task_update_toolchain() -> int:
-	return 1
 
 @task(
 	"componentIntegrity",

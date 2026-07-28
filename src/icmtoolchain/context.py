@@ -136,13 +136,6 @@ class Globals(threading.local):
 		return self.project_structure
 
 	@property
-	def PROJECT_MANAGER(self):
-		if not hasattr(self, "project_manager"):
-			from .project_manager import ProjectManager
-			self.project_manager = ProjectManager()
-		return self.project_manager
-
-	@property
 	def TSCONFIG_DEPENDENTS(self):
 		if not hasattr(self, "tsconfig_dependents"):
 			from .tsconfig import TSCONFIG_DEPENDENTS
