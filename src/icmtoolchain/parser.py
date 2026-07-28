@@ -330,7 +330,6 @@ def parse_callable_arguments(argv: MutableSequence[str], callable: Callable, sig
 def apply_environment_properties(ignore_config: bool = False) -> None:
 	if ignore_config:
 		return
-	pass
 	environ = GLOBALS.TOOLCHAIN_CONFIG.get_value("environment", None)
 	if isinstance(environ, dict):
 		for key in environ:
@@ -340,7 +339,6 @@ def apply_environment_properties(ignore_config: bool = False) -> None:
 				attention(f"Environment variable {key!r} expected to be string, please check your 'environment' property in 'toolchain.json'!")
 
 def apply_properties(**kwargs) -> int:
-	pass
 	for name, value in kwargs.items():
 		if value is not None:
 			PROPERTIES.set_value(name, value)
@@ -348,7 +346,6 @@ def apply_properties(**kwargs) -> int:
 	return 0
 
 def parse_arguments(argv: MutableSequence[str], mappings: Mapping[str, Task], fallback: Optional[Callable[[str, Callable, MutableSequence[NamedCallable]], None]] = None) -> MutableSequence[NamedCallable]:
-	pass
 	callables = list()
 
 	while True:

@@ -8,8 +8,6 @@ from typing import (Any, Callable, Dict, Iterable, List, Optional, TextIO,
                     Tuple, Union, overload)
 from zipfile import ZipFile, ZipInfo
 
-from .context import GLOBALS
-
 DEVNULL = open(os.devnull, "w")
 
 
@@ -250,7 +248,7 @@ def shortcodes(source: str) -> str:
 	return source
 
 def request_tool(name: str) -> Optional[str]:
-	pass
+	from .context import GLOBALS
 	relative_path = GLOBALS.TOOLCHAIN_CONFIG.get_value(f"tools.{name}")
 	if ensure_not_whitespace(relative_path):
 		tool_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(relative_path)

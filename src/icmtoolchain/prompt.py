@@ -1,3 +1,5 @@
+import concurrent.futures
+import threading
 from abc import ABC, abstractmethod
 from typing import (Any, Callable, Dict, Iterable, List, Optional, Sequence,
                     Sized, Tuple, Union, cast)
@@ -15,11 +17,10 @@ from prompt_toolkit.layout import (AnyContainer, HSplit, Layout,
                                    ScrollablePane, ScrollOffsets)
 from prompt_toolkit.validation import Validator
 
-import threading
-import concurrent.futures
-
-from .shell import (Editable, Interactable, Selectable, attention, failure,
-                    frozen, get_toolchain_style, pretty_print, success)
+from .logger import attention, failure, frozen, print, success
+from .shell import (Editable, Interactable, Selectable, clear_application,
+                    get_toolchain_style, interactive_application,
+                    request_application)
 
 _feedback_injection_lock = threading.Lock()
 
@@ -101,7 +102,6 @@ class Feedback(ABC):
 		return self.result
 
 	def request(self) -> Any:
-		from .shell import interactive_application, request_application, clear_application
 		self.inform_if_already_busy()
 		self.pre_run()
 		
@@ -140,22 +140,22 @@ class Feedback(ABC):
 	def print_result(self, result: object) -> object:
 		if result is True:
 			success(self.prompt, end=" ")
-			pretty_print("Yes", style="class:print.answer")
+			print("Yes", style="class:print.answer")
 		elif result is False:
 			failure(self.prompt, end=" ")
-			pretty_print("No", style="class:print.answer")
+			print("No", style="class:print.answer")
 		elif result == self.fallback:
 			frozen(self.prompt, end=" ")
-			pretty_print(result, style="class:print.answer")
+			print(result, style="class:print.answer")
 		elif isinstance(result, Sized) and len(result) == 0:
 			attention(self.prompt, end=" ")
-			pretty_print("<nope>", style="class:print.answer")
+			print("<nope>", style="class:print.answer")
 		else:
 			success(self.prompt, end=" ")
 			if not isinstance(result, str) and isinstance(result, Iterable):
-				pretty_print(*result, sep=", ", style="class:print.answer")
+				print(*result, sep=", ", style="class:print.answer")
 			else:
-				pretty_print(result, style="class:print.answer")
+				print(result, style="class:print.answer")
 
 	def complete(self, *, result: object = None, print_result: object = None) -> None:
 		if hasattr(self, "_application") and self.application.is_running and not self.application.is_done:
@@ -412,7 +412,7 @@ class Checkbox(Select):
 
 	def create_choice_content(self, variant: AnyFormattedText, offset: int) -> AnyContainer:
 		selected = self.selected_variants is not None and (
-			variant in self.selected_variants or offset in self.selected_variants
+			to_plain_text(variant) in self.selected_variants or offset in self.selected_variants
 		)
 		return Selectable(
 			variant,

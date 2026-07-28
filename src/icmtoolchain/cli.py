@@ -4,14 +4,15 @@ from itertools import tee
 from os import listdir
 from os.path import dirname, isdir, isfile, join
 from time import time
-from typing import TYPE_CHECKING, Any, MutableSequence, MutableSet, Optional
+from typing import (TYPE_CHECKING, Any, MutableSequence, MutableSet, NoReturn,
+                    Optional)
 
 from .config import FileConfig
 from .context import GLOBALS
 from .errors import ToolchainError
+from .logger import attention, error, failure, print, success, trace
 from .project_graph import ProjectEdge, ProjectGraph
-from .shell import (abort, attention, failure, pretty_ansi_layers,
-                    pretty_error, pretty_print, success)
+from .shell import UNICODE_BALLOT_X, pretty_ansi_layers
 from .utils import RuntimeCodeError
 
 if TYPE_CHECKING:
@@ -21,22 +22,22 @@ if TYPE_CHECKING:
 def show_help(requires_art: bool = False):
 	if requires_art:
 		show_ansi_toolchain()
-		pretty_print()
-	pretty_print("Usage: icmtoolchain [options] ... <task1> [arguments1] ...")
-	pretty_print(" " * 2 + "--help: Display this message.")
-	pretty_print(" " * 2 + "--list: See available tasks.")
-	pretty_print("Perform commands marked with a special decorator @task.")
-	pretty_print("Example: icmtoolchain pushEverything launchApplication")
+		print()
+	print("Usage: icmtoolchain [options] ... <task1> [arguments1] ...")
+	print(" " * 2 + "--help: Display this message.")
+	print(" " * 2 + "--list: See available tasks.")
+	print("Perform commands marked with a special decorator @task.")
+	print("Example: icmtoolchain pushEverything launchApplication")
 
 def show_available_tasks():
 	from . import builtin_tasks
 	from .task import TASKS
-	pretty_print("All available tasks:")
+	print("All available tasks:")
 	for name, task in TASKS.items():
-		pretty_print(" " * 2 + name, end="")
+		print(" " * 2 + name, end="")
 		if task.description:
-			pretty_print(": " + task.description, end="")
-		pretty_print()
+			print(": " + task.description, end="")
+		print()
 
 def show_ansi_toolchain():
 	pretty_ansi_layers(
@@ -95,7 +96,6 @@ def execute_task(callable: 'NamedCallable') -> None:
 		raise ToolchainError(f"Task {callable.name} failed with unexpected error!", cause=err)
 
 def build_project_graph() -> ProjectGraph:
-	pass
 	graph = ProjectGraph(GLOBALS.MAKE_CONFIG)
 	graph.collect_dependencies(GLOBALS.MAKE_CONFIG)
 	unresolved_artifacts = graph.resolve_dependencies()
@@ -104,7 +104,6 @@ def build_project_graph() -> ProjectGraph:
 	return graph
 
 def run_sequential_build(graph: ProjectGraph, targets: Any) -> None:
-	pass
 	from .language import MakeDataConfig
 	for edge in graph.traverse_dependencies():
 		GLOBALS.shutdown_project()
@@ -150,8 +149,8 @@ def run(argv: Optional[MutableSequence[str]] = None):
 	try:
 		targets = parse_arguments(argv, TASKS, lambda name, target, callables: attention(f"No such task: {name}."))
 	except (TypeError, ValueError) as err:
-		pretty_error(" ".join(argv))
-		abort(cause=err)
+		error(" ".join(argv))
+		force_exit(cause=err)
 
 	apply_environment_properties()
 
@@ -162,7 +161,6 @@ def run(argv: Optional[MutableSequence[str]] = None):
 		attention("No tasks to execute.")
 		exit(0)
 
-	pass
 	try:
 		if GLOBALS.is_project_available():
 			graph = build_project_graph()
@@ -177,7 +175,7 @@ def run(argv: Optional[MutableSequence[str]] = None):
 		else:
 			run_single_build(targets)
 	except ToolchainError as err:
-		abort(err.message, code=err.code, cause=err.cause)
+		force_exit(err.message, code=err.code, cause=err.cause)
 
 	startup_millis = time() - startup_millis
 	success(f"Tasks successfully completed in {startup_millis:.2f}s!")
@@ -205,8 +203,6 @@ async def run_concurrent_test():
 	index = 0
 
 	def fetch_available_projects(index):
-		pass
-
 		if index == 0:
 			for _ in range(max_workers):
 				yield GLOBALS.PREFERRED_CONFIG
@@ -285,3 +281,19 @@ def run_example_test(name: str):
 	if not example_spec.loader:
 		raise RuntimeError(f"Cannot obtain example {name!r} module loader.")
 	example_spec.loader.exec_module(example_module)
+
+def force_exit(*values: object, sep: Optional[str] = " ", code: int = 255, cause: Optional[BaseException] = None) -> NoReturn:
+	if cause:
+		trace(cause, is_error=True)
+	if len(values) != 0:
+		print(UNICODE_BALLOT_X, style="class:print.failure", end=" ")
+		print(*values, sep=sep, style="class:print.abort-message")
+	elif not cause:
+		print("Abort.")
+	from .task import TASKS
+	for name, task in TASKS.items():
+		try:
+			task.unlock()
+		except IOError:
+			pass
+	exit(code)

@@ -831,7 +831,7 @@ def select_prompt(prompt: Optional[str] = None, *variants: str, selected_variant
 def input_prompt(prompt: Optional[str] = None, default_text: Optional[str] = None, explanation: Optional[str] = None, on_text_changed: Optional[Callable[[Editable, Interactable], None]] = None, fallback: Optional[str] = None, prints_abort: bool = True) -> Optional[str]:
 	from .prompt import Input
 
-	def on_input(input: Input, text: str) -> None:
+	def on_input(input: Input, text: AnyFormattedText) -> None:
 		if on_text_changed:
 			on_text_changed(input.input_control, input.explanation_control)
 
@@ -873,23 +873,6 @@ def pretty_print(*values: object, style: str = "", sep: Optional[str] = " ", end
 		print_something = True
 	print_formatted_text(end if end is not None else "\n", end="", file=file, flush=flush, style=baked_style, include_default_pygments_style=include_default_pygments_style)
 
-def pretty_debug(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
-	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.debug", include_default_pygments_style=include_default_pygments_style)
-
-def pretty_info(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
-	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.info", include_default_pygments_style=include_default_pygments_style)
-
-def pretty_warn(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
-	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.warn", include_default_pygments_style=include_default_pygments_style)
-
-def pretty_error(*values: object, sep: Optional[str] = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
-	pretty_print(*values, sep=sep, end=end, file=file, flush=flush, style="class:print.error", include_default_pygments_style=include_default_pygments_style)
-
-def pretty_answer(prompt: AnyFormattedText, *values: object, sep: str=", ", end: Optional[str] = "\n", prompt_end: Optional[str] = " ", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
-	if prompt:
-		success(prompt, end=prompt_end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
-	pretty_print(*values, style="class:print.answer", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
-
 def pretty_ansi_layers(*layers: Iterable[Union[int, str]], end: Optional[str] = "", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
 	from prompt_toolkit import ANSI
 	for layer in layers:
@@ -900,48 +883,6 @@ def pretty_ansi_layers(*layers: Iterable[Union[int, str]], end: Optional[str] = 
 		pretty_print(file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 	if end:
 		pretty_print(end, end="", file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
-
-def pretty_exception(cause: BaseException, is_error: bool = True, sep: Optional[str] = "\n", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False) -> None:
-	from traceback import print_exception
-	buffer = StringIO()
-	print_exception(cause.__class__, cause, cause.__traceback__, file=buffer)
-	lines = buffer.getvalue().rsplit("\n", 13)[1:-1]
-	if is_error:
-		pretty_error(*lines, sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
-	else:
-		pretty_warn(*lines, sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
-
-def success(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
-	pretty_print(UNICODE_CHECK_MARK, style="class:print.success", end=" ")
-	pretty_print(*values, style="class:print.success", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
-
-def attention(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
-	pretty_print(UNICODE_POINTED_STAR, style="class:print.attention", end=" ")
-	pretty_print(*values, style="class:print.attention", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
-
-def failure(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
-	pretty_print(UNICODE_BALLOT_X, style="class:print.failure", end=" ")
-	pretty_print(*values, style="class:print.failure", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
-
-def frozen(*values: object, sep: str = " ", end: Optional[str] = "\n", file: Optional[Any] = None, flush: bool = False, include_default_pygments_style: bool = False):
-	pretty_print(UNICODE_SNOWFLAKE, style="class:print.frozen", end=" ")
-	pretty_print(*values, style="class:print.frozen", sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
-
-def abort(*values: object, sep: Optional[str] = " ", code: int = 255, cause: Optional[BaseException] = None) -> NoReturn:
-	if cause:
-		pretty_exception(cause, is_error=True)
-	if len(values) != 0:
-		pretty_print(UNICODE_BALLOT_X, style="class:print.failure", end=" ")
-		pretty_print(*values, sep=sep, style="class:print.abort-message")
-	elif not cause:
-		pretty_print("Abort.")
-	from .task import TASKS
-	for name, task in TASKS.items():
-		try:
-			task.unlock()
-		except IOError:
-			pass
-	exit(code)
 
 if __name__ == "__main__":
 	preparing = Progress(intermediate=True)

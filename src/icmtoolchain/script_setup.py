@@ -10,9 +10,9 @@ from urllib.request import urlopen
 from .context import GLOBALS
 from .errors import abort
 from .fetch import queue_download_request, retrieve_bytes
-from .logger import debug, success
+from .logger import debug, success, warn
 from .output_directory import get_config_directory, get_temporary_directory
-from .shell import InteractiveSession, Progress, pretty_warn
+from .shell import InteractiveSession, Progress
 from .utils import AttributeZipFile, remove_tree
 
 
@@ -70,7 +70,6 @@ def request_typescript(only_check: bool = False) -> Optional[str]:
 	"""
 	Utility to check and install tsc with npm.
 	"""
-	pass
 	if GLOBALS.TOOLCHAIN_CONFIG.get_value("denyTypeScript"):
 		return None
 	from .logger import debug, failure
@@ -130,7 +129,7 @@ def fetch_declarations() -> bool:
 		response = urlopen("https://nernar.github.io/declarations/core-engine.d.ts")
 		declaration = response.read().decode("utf-8")
 	except Exception as e:
-		pretty_warn(f"Failed to fetch declarations: {e}")
+		warn(f"Failed to fetch declarations: {e}")
 		return False
 
 	declaration_path = join(get_config_directory(), "declarations")

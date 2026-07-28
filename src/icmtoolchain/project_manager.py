@@ -6,7 +6,7 @@ from typing import Any, Dict, Final, List, Optional, Tuple
 from .config import Config
 from .context import GLOBALS, PROPERTIES
 from .errors import abort
-from .logger import attention, print
+from .logger import attention, success
 from .shell import confirm_prompt
 from .utils import ensure_not_whitespace, remove_tree
 
@@ -133,7 +133,6 @@ class ProjectManager:
 	def select_project_folder(self, folder: Optional[str] = None) -> None:
 		if GLOBALS.is_project_available(which_project=folder):
 			return
-		pass
 		PROPERTIES.set_value("project", folder)
 		GLOBALS.shutdown_project()
 
@@ -160,12 +159,12 @@ class ProjectManager:
 			GLOBALS.CODE_SETTINGS.save_as_file()
 
 		self.select_project_folder(folder)
-		print(f"Project {folder!r} selected.")
+		success(f"Project {folder!r} selected.")
 
 	def unselect_project(self, *, silent: bool = False):
 		self.select_project_folder()
 		if not silent:
-			print(f"Project unselected.")
+			success(f"Project unselected.")
 
 	def resolve_mod_name(self, path: str, make_obj: Optional[Dict[Any, Any]] = None) -> str:
 		if not make_obj:

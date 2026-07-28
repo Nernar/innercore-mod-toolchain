@@ -8,21 +8,14 @@ from os.path import basename
 from queue import Empty, Queue
 from typing import Any, Dict, List, Optional, Tuple, cast
 
-from prompt_toolkit import Application
-from prompt_toolkit.key_binding import KeyBindings
-from prompt_toolkit.key_binding.bindings.focus import (focus_next,
-                                                       focus_previous)
-from prompt_toolkit.keys import Keys
-from prompt_toolkit.layout import HSplit, Layout, ScrollablePane, ScrollOffsets
 from prompt_toolkit.widgets import TextArea
 
 from .context import GLOBALS
 from .errors import abort
 from .language import MakeDataConfig
-from .logger import attention, error, print
+from .logger import attention, error, print, trace
 from .project_graph import ConcurrentScheduler, ProjectEdge, ProjectGraph
-from .shell import (Interactable, Progress, get_toolchain_style,
-                    pretty_exception)
+from .shell import Interactable, Progress
 from .task import TASKS
 from .utils import RuntimeCodeError
 
@@ -43,7 +36,6 @@ def worker_execute_project_tasks(node: ProjectEdge, task_names: List[str], queue
 	if not isinstance(node.project, MakeDataConfig):
 		raise RuntimeError(f"Project {node} is not populated!")
 
-	pass
 	GLOBALS.shutdown_project()
 	GLOBALS.make_config = node.project
 	project_spec = str(node)
@@ -91,7 +83,7 @@ def worker_execute_project_tasks(node: ProjectEdge, task_names: List[str], queue
 					error(f"Task {callable_task.name} failed with error code #{err.code}: {err}")
 				else:
 					error(f"Task {callable_task.name} failed with unexpected error!")
-					pretty_exception(err)
+					trace(err)
 				overall_result = 255
 				all_task_logs.append((task_name, buffer.getvalue()))
 				break
@@ -264,7 +256,6 @@ async def run_concurrent_build(graph: 'ProjectGraph', task_names: List[str]):
 	else:
 		queue = Queue()
 
-	import sys
 	if sys.version_info < (3, 13):
 		from os import cpu_count as _cpu_count
 		cpu_count = _cpu_count()

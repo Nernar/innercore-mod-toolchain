@@ -56,7 +56,7 @@ class Globals(threading.local):
 	@property
 	def ADB_COMMAND(self):
 		if not hasattr(self, "adb_command"):
-			from .device import get_adb_command
+			from .device_setup import get_adb_command
 			self.adb_command = get_adb_command()
 		return self.adb_command
 

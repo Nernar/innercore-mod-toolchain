@@ -4,6 +4,7 @@ import struct
 import subprocess
 import sys
 import zipfile
+from logging import debug
 from os import environ, getenv, listdir, makedirs
 from os.path import abspath, basename, exists, isdir, isfile, join, realpath
 from typing import Any, Generator, List, Optional, Union
@@ -11,8 +12,8 @@ from typing import Any, Generator, List, Optional, Union
 from .context import GLOBALS
 from .errors import abort
 from .fetch import queue_download_request
-from .logger import attention, error, failure, print, success
-from .shell import InteractiveSession, Progress, confirm_prompt, pretty_warn
+from .logger import attention, error, failure, print, success, warn
+from .shell import InteractiveSession, Progress, confirm_prompt
 from .utils import (AttributeZipFile, RuntimeCodeError, ensure_file,
                     ensure_not_whitespace, iterate_subdirectories,
                     read_properties_stream, remove_tree)
@@ -137,7 +138,7 @@ def search_for_gcc_executable(ndk_directory: str) -> Optional[str]:
 		for filename in files:
 			if re.match(pattern, filename):
 				return abspath(join(search_directory, filename))
-		print(f"Searching GCC in {search_directory} with {len(files)} files...")
+		debug(f"Searching GCC in {search_directory} with {len(files)} files...")
 
 def require_compiler_executable(arch: str, install_if_required: bool = False) -> Optional[str]:
 	from .output_directory import get_config_directory
@@ -254,8 +255,8 @@ def install_distutils_optionally() -> bool:
 		if setuptools_installed:
 			success("Dependency distutils for Android NDK successfully installed!")
 		else:
-			pretty_warn("Android NDK requires distutils dependency in order to work, but installation went wrong:")
-			pretty_warn(pip_output.stderr.strip())
+			warn("Android NDK requires distutils dependency in order to work, but installation went wrong:")
+			warn(pip_output.stderr.strip())
 		return setuptools_installed
 	except OSError:
 		pass
@@ -331,14 +332,14 @@ def install_gcc(arches: Union[str, List[str]] = "arm", reinstall: bool = False) 
 				troubleshoot = "Your Python installation does not contain distutils dependency needed to run Android NDK."
 			attention(troubleshoot, "We were unable to do this automatically, so you can try following options to solve problem:")
 			if platform.system() == 'Windows':
-				pretty_warn(" - pip install setuptools")
-				pretty_warn(" - python -m pip install setuptools")
+				warn(" - pip install setuptools")
+				warn(" - python -m pip install setuptools")
 			else:
-				pretty_warn(" - apt-get install python-setuputils")
-				pretty_warn(" - pacman -S python-setuputils")
-				pretty_warn(" - pip3 install setuptools")
-				pretty_warn(" - python3 -m pip install setuptools")
-			pretty_warn(f"Visit https://docs.python.org/3/library/distutils.html for details.")
+				warn(" - apt-get install python-setuputils")
+				warn(" - pacman -S python-setuputils")
+				warn(" - pip3 install setuptools")
+				warn(" - python3 -m pip install setuptools")
+			warn(f"Visit https://docs.python.org/3/library/distutils.html for details.")
 		else:
-			pretty_warn("Please use a different version of Android NDK or report this issue to developer.")
+			warn("Please use a different version of Android NDK or report this issue to developer.")
 	return result

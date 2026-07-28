@@ -93,7 +93,6 @@ class MakeModData(FlushableMakeProjectData):
 			info.set_value("description", self.description)
 		info.save_as_file()
 
-		pass
 		icon_path = GLOBALS.MAKE_CONFIG.get_path(self.icon or "mod_icon.png")
 		output_info_path = join(directory, "mod_icon.png")
 		if isfile(icon_path) and icon_path != output_info_path:
@@ -129,7 +128,6 @@ class MakeModpackData(FlushableMakeProjectData):
 			manifest.set_value("description", self.description)
 		manifest.save_as_file()
 
-		pass
 		icon_path = GLOBALS.MAKE_CONFIG.get_path(self.icon or "pack_icon.png")
 		output_info_path = join(directory, "pack_icon.png")
 		if isfile(icon_path) and icon_path != output_info_path:
@@ -499,5 +497,4 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ModpackDataMixin,
 				continue
 			if not config_file:
 				continue
-			pass
 			return config_type(config_file, defaults=GLOBALS.TOOLCHAIN_CONFIG)

@@ -1,6 +1,6 @@
 import sys
 from os.path import isdir, isfile, join
-from typing import Final, List, Optional, Tuple, Any, Callable
+from typing import Any, Callable, Final, List, Optional, Tuple
 
 from .context import GLOBALS
 from .errors import abort
@@ -55,7 +55,7 @@ def install_cpp(**kwargs) -> None:
 		install_gcc([abi_to_arch(abi) for abi in abis], reinstall=True)
 
 def install_adb(**kwargs) -> None:
-	from .device import download_adb
+	from .adb import download_adb
 	download_adb()
 
 def install_declarations(**kwargs) -> None:
@@ -215,7 +215,7 @@ def startup() -> None:
 	print("Execute `icmtoolchain --help` to obtain a list of available commands.")
 	attention("You may need to restart your console to be able to access any commands.")
 
-def upgrade() -> int:
+def upgrade() -> None:
 	while True:
 		try:
 			options, keys = build_component_menu_options()
@@ -273,12 +273,14 @@ def upgrade() -> int:
 					GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 
 			elif action_str == "Set Custom Path":
+				assert component.config_key
 				path = Input(f"Enter path to {component.name}:").request()
 				if path:
 					GLOBALS.TOOLCHAIN_CONFIG.set_value(component.config_key, path)
 					GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 
 			elif action_str == "Unset Custom Path":
+				assert component.config_key
 				GLOBALS.TOOLCHAIN_CONFIG.delete_value(component.config_key)
 				for k in component.legacy_keys:
 					GLOBALS.TOOLCHAIN_CONFIG.delete_value(k)

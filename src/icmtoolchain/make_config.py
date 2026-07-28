@@ -79,22 +79,24 @@ class MakeConfig(MakeDataConfig):
 				path = dependency.get_value("path")
 			elif isinstance(dependency, str):
 				path = dependency
+
 			if path and ensure_not_whitespace(path):
 				absolute_path = self.get_path(path)
 				project = MakeDataConfig.of(absolute_path)
 				if project:
 					yield project
 					continue
-				pass
 				absolute_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(path)
 				project = MakeDataConfig.of(absolute_path)
 				if project:
 					yield project
 					continue
+
 			artifact = Artifact.of(dependency)
 			if artifact:
 				yield artifact
 				continue
+
 			if not self.get_value("project.requiredDependencies", True) or isinstance(dependency, Config) and not dependency.get_value("required", True):
 				from .logger import attention
 				attention(f"Skipping unsatisfied dependency {dependency!r}, since it is optional.")

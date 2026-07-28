@@ -4,7 +4,7 @@ from typing import Optional
 
 from .context import GLOBALS, PROPERTIES
 from .errors import abort
-from .logger import attention, failure, print, success
+from .logger import attention, failure, frozen, success
 from .output_directory import get_temporary_directory, unique_folder_name
 from .shell import confirm_prompt
 from .task import task
@@ -157,7 +157,7 @@ def task_build_package() -> int:
 	description="Sends assembled output folder to a connected device."
 )
 def task_push_everything() -> int:
-	from .device import push_everything
+	from .push import push_everything
 	return push_everything()
 
 @task(
@@ -165,14 +165,14 @@ def task_push_everything() -> int:
 	description="Starts launcher with predefined autostart setting on a connected device using ADB."
 )
 def task_monkey_launcher() -> int:
-	from .device import ensure_device_ready
+	from .adb import ensure_device_ready
 	if not ensure_device_ready():
 		return 1
 
 	preferred_launcher = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherPackage")
 	preferred_activity = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherActivity")
-	from .device import (LAUNCHER_PACKAGES, launch_package_via_am,
-	                     launch_package_via_monkey)
+	from .adb import (LAUNCHER_PACKAGES, launch_package_via_am,
+	                  launch_package_via_monkey)
 	packages = (preferred_launcher, ) if preferred_launcher else LAUNCHER_PACKAGES
 
 	subprocess.run(GLOBALS.ADB_COMMAND + [
@@ -204,7 +204,7 @@ def task_monkey_launcher() -> int:
 )
 def task_stop_launcher() -> int:
 	preferred_launcher = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherPackage")
-	from .device import LAUNCHER_PACKAGES
+	from .adb import LAUNCHER_PACKAGES
 	packages = (preferred_launcher, ) if preferred_launcher else LAUNCHER_PACKAGES
 
 	try:
@@ -221,7 +221,7 @@ def task_stop_launcher() -> int:
 	description="Adds a new connection to a mobile device/emulator via cable or network."
 )
 def task_configure_adb() -> int:
-	from .device import setup_device_connection
+	from .device_setup import setup_device_connection
 	setup_device_connection()
 	return 0
 
@@ -256,7 +256,7 @@ def task_remove_project() -> int:
 
 	who = GLOBALS.PROJECT_MANAGER.require_selection("Which project will be deleted?", "Do you really want to delete {}?", "I don't want it anymore")
 	if not who:
-		print("Nothing will happen.")
+		frozen("Nothing will happen.")
 		return 0
 	if GLOBALS.PROJECT_MANAGER.how_much() > 1 and not confirm_prompt("Do you really want to delete it?", True):
 		return 0
@@ -270,7 +270,7 @@ def task_remove_project() -> int:
 	except ValueError:
 		abort(f"Folder {who!r} not found!")
 
-	print("Project permanently deleted.")
+	success("Project permanently deleted.")
 	return 0
 
 @task(
@@ -317,7 +317,7 @@ def task_ensure_project_exists() -> int:
 
 	who = GLOBALS.PROJECT_MANAGER.require_selection("Which project do you choice to continue?", "Do you want to select {} to continue?")
 	if not who:
-		print("Nothing will happen.")
+		frozen("Nothing will happen.")
 		return 1
 	try:
 		GLOBALS.PROJECT_MANAGER.select_project(folder=who)
@@ -386,11 +386,11 @@ def task_update_toolchain() -> int:
 )
 def task_component_integrity(startup: bool = False) -> int:
 	if startup:
-		from .component import startup as component_startup
-		component_startup()
-		return 0
-	from .component import upgrade as component_upgrade
-	return component_upgrade()
+		from .component import startup as component_task
+	else:
+		from .component import upgrade as component_task
+	component_task()
+	return 0
 
 @task(
 	"cleanup",
