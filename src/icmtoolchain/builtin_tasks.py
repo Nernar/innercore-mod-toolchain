@@ -221,7 +221,6 @@ def task_configure_adb() -> int:
 )
 def task_new_project() -> int:
 	from .package import request_create_project
-
 	index = request_create_project(GLOBALS.PREFERRED_CONFIG.get_value("defaultTemplate", "../toolchain-mod"))
 	if index is None:
 		return 1
@@ -246,7 +245,7 @@ def task_ensure_project_exists() -> int:
 def task_configure_ide() -> int:
 	from .workspace import flush_compound_tasks, flush_toolchain_tasks
 
-	flush_toolchain_tasks("Assemble Mod for Release", "archive", "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage")
+	flush_toolchain_tasks("Assemble for Release", "archive", "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage")
 	flush_toolchain_tasks("Build (No push)", "debug-all", "ensureProjectExists clearOutput buildScripts compileNative compileJava buildResources buildInfo", hidden=True)
 	flush_compound_tasks("Build", "debug-all", ("Build (No push)", "Push"))
 	flush_toolchain_tasks("Build Scripts and Resources (No push)", "debug-alt", "ensureProjectExists clearOutput buildScripts buildResources buildInfo", hidden=True)

@@ -110,16 +110,16 @@ def request_create_project(template: Optional[str] = "../toolchain-mod") -> Opti
 	default_name = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.name")
 	create_review = Review(
 		template=lambda _: create_template_chooser(),
-		name=Input("Decide a name for your project:", on_input=update_project_name, default_text=default_name, hint="Template Mod"),
+		name=Input("Decide a name for your project:", on_input=update_project_name, default_text=default_name, hint="Template Project"),
 		author=Input("Author who crafted this creation:", default_text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.author")),
 		version=Input("What version a project starts from:", default_text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.version"), hint="1.0"),
 		description=Input("Describe this masterpiece in one sentence:", default_text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.description")),
-		client_side=Confirm("Is this mod client-side (without server requirement)?", default_value=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.clientOnly", False))
+		client_side=Confirm("Is this project client-side (without server requirement)?", default_value=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.clientOnly", False))
 	)
 
 	def update_template_defaults(template_config: Config) -> None:
 		name = cast(Input, create_review.require_feedback("name"))
-		name.hint = template_config.get_value("info.name", "Template Mod")
+		name.hint = template_config.get_value("info.name", "Template Project")
 		author = cast(Input, create_review.require_feedback("author"))
 		author.hint = template_config.get_value("info.author")
 		version = cast(Input, create_review.require_feedback("version"))
@@ -171,7 +171,7 @@ def resolve_make_format_map(make_obj: Dict[Any, Any], path: str) -> Dict[Any, An
 		package_suffix = package_suffix[1:]
 	return {
 		"identifier": ensure_not_whitespace(identifier, "whoami"),
-		"packageSuffix": ensure_not_whitespace(package_suffix, "mod"),
+		"packageSuffix": ensure_not_whitespace(package_suffix, "project"),
 		"packagePrefix": package_prefix,
 		**make_obj_info,
 		"clientOnly": "true" if "clientOnly" in make_obj_info and make_obj_info["clientOnly"] else "false"
@@ -205,7 +205,7 @@ def setup_project(make_obj: Dict[Any, Any], template: str, path: str) -> None:
 		with open(source, "w", encoding="utf-8") as source_file:
 			source_file.writelines(lines)
 
-def append_workspace_folder(folder: str, name: Optional[object] = "Mod") -> None:
+def append_workspace_folder(folder: str, name: Optional[object] = "Project") -> None:
 	if GLOBALS.CODE_WORKSPACE.available():
 		folders = GLOBALS.CODE_WORKSPACE.obtain_list("folders", implace_fallback=True)
 		if len(folders) == 0:
@@ -237,7 +237,7 @@ def create_project(template: str, folder: str, name: Optional[str] = None, autho
 		template_obj["info"] = dict()
 	template_info = template_obj["info"]
 	template_info["name"] = ensure_not_whitespace(name, ensure_not_whitespace(
-		template_info["name"] if "name" in template_info else None, "Mod"
+		template_info["name"] if "name" in template_info else None, "Project"
 	))
 	template_info["author"] = ensure_not_whitespace(author, ensure_not_whitespace(
 		template_info["author"] if "author" in template_info else None, "ICMods"
