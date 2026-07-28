@@ -5,11 +5,18 @@ from typing import Any, Callable, Dict, Final, List, Optional
 from .logger import print
 from .output_directory import get_temporary_directory, lock_file, unlock_file
 
+TASK_STAGE_UNKNOWN = 0
+TASK_STAGE_PREPARE = 1
+TASK_STAGE_BUILD = 2
+TASK_STAGE_VALIDATE = 3
+TASK_STAGE_DEPLOY = 4
+TASK_STAGE_LAUNCH = 5
 
 class Task:
 	name: Final[str]
 	description: str = ""
 	callable: Callable
+	stage: int
 	locks: Optional[List[str]] = None
 
 	@property
@@ -44,9 +51,10 @@ class Task:
 		self,
 		name: str,
 		description: Optional[str] = None,
+		stage: int = TASK_STAGE_UNKNOWN,
+		*,
 		status: Optional[str] = None,
 		locks: Optional[List[str]] = None,
-		*,
 		yield_message: Optional[str] = "Task is already running by another process, wait for unlocking.",
 		continue_message: Optional[str] = "Lock is released, resuming task..."
 	) -> None:
@@ -61,6 +69,7 @@ class Task:
 		self._local = threading.local()
 		if description:
 			self.description = description
+		self.stage = stage
 		if status:
 			self.status = status
 		if locks:
@@ -127,8 +136,8 @@ def execute_task(name: str, silent: bool = True, *args, **kwargs) -> Any:
 	return assure_task(name) \
 		.execute(silent=silent, *args, **kwargs)
 
-def task(name: str, description: Optional[str] = None, status: Optional[str] = None, locks: Optional[List[str]] = None) -> Callable[[Callable], Callable]:
-	task = Task(name, description, status, locks)
+def task(name: str, description: Optional[str] = None, stage: int = TASK_STAGE_UNKNOWN, status: Optional[str] = None, locks: Optional[List[str]] = None) -> Callable[[Callable], Callable]:
+	task = Task(name, description, stage, status=status, locks=locks)
 
 	def decorator(callable: Callable) -> Callable:
 		task.callable = callable

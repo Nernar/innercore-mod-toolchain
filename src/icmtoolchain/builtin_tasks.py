@@ -3,18 +3,64 @@ from typing import Optional
 
 from .context import GLOBALS, PROPERTIES
 from .errors import abort
-from .logger import attention, error, failure, success
+from .logger import attention, error, failure, frozen, success
 from .output_directory import get_temporary_directory
 from .shell import confirm_prompt
-from .task import task
+from .task import (TASK_STAGE_BUILD, TASK_STAGE_DEPLOY, TASK_STAGE_LAUNCH,
+                   TASK_STAGE_PREPARE, TASK_STAGE_VALIDATE, task)
 from .utils import DEVNULL
 
 ### JAVASCRIPT, TYPESCRIPT, JAVA, C++
 
 @task(
+	"buildScripts",
+	locks=["script", "cleanup", "push"],
+	description="Recompiles scripts using simple file concatenation or tsc.",
+	stage=TASK_STAGE_BUILD
+)
+def task_build_scripts() -> int:
+	if not GLOBALS.MAKE_CONFIG.supports_scripts:
+		return 0
+	from .script_build import build_all_scripts
+	return build_all_scripts()
+
+@task(
+	"updateIncludes",
+	description="Overrides the contents of 'tsconfig.json' based on script files.",
+	stage=TASK_STAGE_PREPARE
+)
+def task_update_includes() -> int:
+	if not GLOBALS.MAKE_CONFIG.supports_scripts:
+		return 0
+	from .script_build import compute_and_capture_changed_scripts
+	compute_and_capture_changed_scripts()
+	GLOBALS.TSC_COMPOSITE.flush()
+	return 0
+
+@task(
+	"compileJava",
+	locks=["java", "cleanup", "push"],
+	description="Compiles java folders using Gradle, Javac or ECJ.",
+	stage=TASK_STAGE_BUILD
+)
+def task_compile_java(tool: Optional[str] = None) -> int:
+	if not GLOBALS.MAKE_CONFIG.supports_java:
+		return 0
+	from .java_build import compile_java
+	if not tool:
+		tool = GLOBALS.MAKE_CONFIG.get_value("java.compiler", "gradle")
+	if not tool:
+		return 1
+	if not tool == "gradle" and GLOBALS.MAKE_CONFIG.get_value("java.configurable", False):
+		attention("Project uses configurable Gradle, different tools cannot be applied.")
+		tool = "gradle"
+	return compile_java(tool)
+
+@task(
 	"compileNative",
 	locks=["native", "cleanup", "push"],
-	description="Compiles native folders using NDK and links objects."
+	description="Compiles native folders using NDK and links objects.",
+	stage=TASK_STAGE_BUILD
 )
 def task_compile_native() -> int:
 	if not GLOBALS.MAKE_CONFIG.supports_native:
@@ -40,53 +86,13 @@ def task_compile_native() -> int:
 		result = copy_shared_objects(abis)
 	return result
 
-@task(
-	"compileJava",
-	locks=["java", "cleanup", "push"],
-	description="Compiles java folders using Gradle, Javac or ECJ."
-)
-def task_compile_java(tool: Optional[str] = None) -> int:
-	if not GLOBALS.MAKE_CONFIG.supports_java:
-		return 0
-	from .java_build import compile_java
-	if not tool:
-		tool = GLOBALS.MAKE_CONFIG.get_value("java.compiler", "gradle")
-	if not tool:
-		return 1
-	if not tool == "gradle" and GLOBALS.MAKE_CONFIG.get_value("java.configurable", False):
-		attention("Project uses configurable Gradle, different tools cannot be applied.")
-		tool = "gradle"
-	return compile_java(tool)
-
-@task(
-	"buildScripts",
-	locks=["script", "cleanup", "push"],
-	description="Recompiles scripts using simple file concatenation or tsc."
-)
-def task_build_scripts() -> int:
-	if not GLOBALS.MAKE_CONFIG.supports_scripts:
-		return 0
-	from .script_build import build_all_scripts
-	return build_all_scripts()
-
-@task(
-	"updateIncludes",
-	description="Overrides the contents of 'tsconfig.json' based on script files."
-)
-def task_update_includes() -> int:
-	if not GLOBALS.MAKE_CONFIG.supports_scripts:
-		return 0
-	from .script_build import compute_and_capture_changed_scripts
-	compute_and_capture_changed_scripts()
-	GLOBALS.TSC_COMPOSITE.flush()
-	return 0
-
-### RESOURCES & PACKAGE
+### RESOURCES
 
 @task(
 	"buildResources",
 	locks=["resource", "cleanup", "push"],
-	description="Copies predefined resources consisting of textures, in-game packs, etc."
+	description="Copies predefined resources consisting of textures, in-game packs, etc.",
+	stage=TASK_STAGE_BUILD
 )
 def task_resources() -> int:
 	from .resources import (build_additional_resources, build_pack_graphics,
@@ -102,23 +108,13 @@ def task_resources() -> int:
 		GLOBALS.LINKED_RESOURCE_STORAGE.save_contents()
 	return overall_result
 
-@task(
-	"buildInfo",
-	locks=["cleanup", "push"],
-	description="Writes the description file 'mod.info' to output folder for display in mod browser."
-)
-def task_build_info() -> int:
-	project_data = GLOBALS.MAKE_CONFIG.obtain_project_data()
-	if project_data is None:
-		failure(f"Project type {GLOBALS.MAKE_CONFIG.project_type} is unknown or could not be determined from config!")
-		error("Please add property `info` for mod, `modpack` for modpack or `manifest` for pack into your 'make.json'.")
-		return 1
-	return project_data.flush_to_output(GLOBALS.PROJECT_STRUCTURE.directory)
+### PACKAGING & CLEAN UP
 
 @task(
 	"clearOutput",
 	locks=["assemble", "push", "native", "java", "resource", "script"],
-	description="Optionally deletes the output folder; has no effect by default."
+	description="Optionally deletes the output folder; has no effect by default.",
+	stage=TASK_STAGE_PREPARE
 )
 def task_clear_output(force: bool = False) -> int:
 	if GLOBALS.MAKE_CONFIG.get_value("development.clearOutput", False) or force:
@@ -129,20 +125,36 @@ def task_clear_output(force: bool = False) -> int:
 	return 0
 
 @task(
+	"buildInfo",
+	locks=["cleanup", "push"],
+	description="Writes the description file 'mod.info' to output folder for display in mod browser.",
+	stage=TASK_STAGE_VALIDATE
+)
+def task_build_info() -> int:
+	project_data = GLOBALS.MAKE_CONFIG.obtain_project_data()
+	if project_data is None:
+		failure(f"Project type {GLOBALS.MAKE_CONFIG.project_type} is unknown or could not be determined from config!")
+		error("Please add property `info` for mod, `modpack` for modpack or `manifest` for pack into your 'make.json'.")
+		return 1
+	return project_data.flush_to_output(GLOBALS.PROJECT_STRUCTURE.directory)
+
+@task(
 	"buildPackage",
 	locks=["push", "assemble", "native", "java", "resource", "script"],
-	description="Assembles project's output folder into an archive, specifically for publishing in a mod browser."
+	description="Assembles project's output folder into an archive, specifically for publishing in a mod browser.",
+	stage=TASK_STAGE_DEPLOY
 )
 def task_build_package() -> int:
 	from .resources import build_package
 	return build_package()
 
-### CONNECTION
+### DEPLOY
 
 @task(
 	"pushEverything",
 	locks=["push"],
-	description="Sends assembled output folder to a connected device."
+	description="Sends assembled output folder to a connected device.",
+	stage=TASK_STAGE_DEPLOY
 )
 def task_push_everything() -> int:
 	from .push import push_everything
@@ -150,7 +162,8 @@ def task_push_everything() -> int:
 
 @task(
 	"launchApplication",
-	description="Starts launcher with predefined autostart setting on a connected device using ADB."
+	description="Starts launcher with predefined autostart setting on a connected device using ADB.",
+	stage=TASK_STAGE_LAUNCH
 )
 def task_monkey_launcher() -> int:
 	from .adb import ensure_device_ready
@@ -188,7 +201,8 @@ def task_monkey_launcher() -> int:
 
 @task(
 	"stopApplication",
-	description="Terminates launcher process on a connected device using ADB."
+	description="Terminates launcher process on a connected device using ADB.",
+	stage=TASK_STAGE_VALIDATE
 )
 def task_stop_launcher() -> int:
 	preferred_launcher = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherPackage")
@@ -206,14 +220,27 @@ def task_stop_launcher() -> int:
 
 @task(
 	"configureADB",
-	description="Adds a new connection to a mobile device/emulator via cable or network."
+	description="Adds a new connection to a mobile device/emulator via cable or network.",
+	stage=TASK_STAGE_PREPARE
 )
 def task_configure_adb() -> int:
 	from .device_setup import setup_device_connection
 	setup_device_connection()
 	return 0
 
-### PROJECTS
+### MISCELLANEOUS
+
+@task(
+	"ensureProjectExists",
+	description="Ensures that selected project is opened and exists.",
+	stage=TASK_STAGE_PREPARE
+)
+def task_ensure_project_exists() -> int:
+	if GLOBALS.is_project_available():
+		return 0
+	abort("Not found any project in your directory. Try passing `--project <path>` into this command.")
+
+### TOOLCHAIN
 
 @task(
 	"newProject",
@@ -226,17 +253,6 @@ def task_new_project() -> int:
 		return 1
 	success("Successfully completed!")
 	return 0
-
-@task(
-	"ensureProjectExists",
-	description="Ensures that selected project is opened and exists."
-)
-def task_ensure_project_exists() -> int:
-	if GLOBALS.is_project_available():
-		return 0
-	abort("Not found any project to choice.")
-
-### MISCELLANEOUS
 
 @task(
 	"configureIde",
@@ -293,16 +309,18 @@ def task_component_integrity(startup: bool = False) -> int:
 
 @task(
 	"cleanup",
+	locks=["assemble", "push", "native", "java", "resource", "script"],
 	description="Clears cache of a selected project or all output files from previous builds, forgetting modified files."
 )
 def task_cleanup() -> int:
 	from .package import pretty_cleanup_directory
 	if GLOBALS.is_project_available():
-		if confirm_prompt("Do you want to clear selected project cache?", True):
-			pretty_cleanup_directory(GLOBALS.MAKE_CONFIG.get_build_path())
-			GLOBALS.PROJECT_STRUCTURE.cleanup(clear_output=True)
+		pretty_cleanup_directory(GLOBALS.MAKE_CONFIG.get_build_path())
+		GLOBALS.PROJECT_STRUCTURE.cleanup(clear_output=True)
+		pretty_cleanup_directory(GLOBALS.PROJECT_STRUCTURE.directory)
 		return 0
 	if not confirm_prompt("Do you want to clear all projects cache?", True):
+		frozen("Abort.")
 		return 0
 	pretty_cleanup_directory(get_temporary_directory())
 	return 0
