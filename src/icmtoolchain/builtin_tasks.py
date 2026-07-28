@@ -6,8 +6,8 @@ from .errors import abort
 from .logger import attention, error, failure, frozen, success
 from .output_directory import get_temporary_directory
 from .shell import confirm_prompt
-from .task import (TASK_STAGE_BUILD, TASK_STAGE_DEPLOY, TASK_STAGE_LAUNCH,
-                   TASK_STAGE_PREPARE, TASK_STAGE_VALIDATE, task)
+from .task import (TASK_MODE_GLOBALLY, TASK_MODE_ONCE_EARLY,
+                   TASK_MODE_ONCE_LATELY, task)
 from .utils import DEVNULL
 
 ### JAVASCRIPT, TYPESCRIPT, JAVA, C++
@@ -15,8 +15,7 @@ from .utils import DEVNULL
 @task(
 	"buildScripts",
 	locks=["script", "cleanup", "push"],
-	description="Recompiles scripts using simple file concatenation or tsc.",
-	stage=TASK_STAGE_BUILD
+	description="Recompiles scripts using simple file concatenation or tsc."
 )
 def task_build_scripts() -> int:
 	if not GLOBALS.MAKE_CONFIG.supports_scripts:
@@ -26,8 +25,7 @@ def task_build_scripts() -> int:
 
 @task(
 	"updateIncludes",
-	description="Overrides the contents of 'tsconfig.json' based on script files.",
-	stage=TASK_STAGE_PREPARE
+	description="Overrides the contents of 'tsconfig.json' based on script files."
 )
 def task_update_includes() -> int:
 	if not GLOBALS.MAKE_CONFIG.supports_scripts:
@@ -40,8 +38,7 @@ def task_update_includes() -> int:
 @task(
 	"compileJava",
 	locks=["java", "cleanup", "push"],
-	description="Compiles java folders using Gradle, Javac or ECJ.",
-	stage=TASK_STAGE_BUILD
+	description="Compiles java folders using Gradle, Javac or ECJ."
 )
 def task_compile_java(tool: Optional[str] = None) -> int:
 	if not GLOBALS.MAKE_CONFIG.supports_java:
@@ -57,8 +54,7 @@ def task_compile_java(tool: Optional[str] = None) -> int:
 @task(
 	"compileNative",
 	locks=["native", "cleanup", "push"],
-	description="Compiles native folders using NDK and links objects.",
-	stage=TASK_STAGE_BUILD
+	description="Compiles native folders using NDK and links objects."
 )
 def task_compile_native() -> int:
 	if not GLOBALS.MAKE_CONFIG.supports_native:
@@ -88,8 +84,7 @@ def task_compile_native() -> int:
 @task(
 	"buildResources",
 	locks=["resource", "cleanup", "push"],
-	description="Copies predefined resources consisting of textures, in-game packs, etc.",
-	stage=TASK_STAGE_BUILD
+	description="Copies predefined resources consisting of textures, in-game packs, etc."
 )
 def task_resources() -> int:
 	from .resources import (build_additional_resources, build_pack_graphics,
@@ -110,8 +105,7 @@ def task_resources() -> int:
 @task(
 	"clearOutput",
 	locks=["assemble", "push", "native", "java", "resource", "script"],
-	description="Optionally deletes the output folder; has no effect by default.",
-	stage=TASK_STAGE_PREPARE
+	description="Optionally deletes the output folder; has no effect by default."
 )
 def task_clear_output(force: bool = False) -> int:
 	if GLOBALS.MAKE_CONFIG.get_value("development.clearOutput", False) or force:
@@ -124,8 +118,7 @@ def task_clear_output(force: bool = False) -> int:
 @task(
 	"buildInfo",
 	locks=["cleanup", "push"],
-	description="Writes the description file 'mod.info' to output folder for display in mod browser.",
-	stage=TASK_STAGE_VALIDATE
+	description="Writes the description file 'mod.info' to output folder for display in mod browser."
 )
 def task_build_info() -> int:
 	project_data = GLOBALS.MAKE_CONFIG.obtain_project_data()
@@ -138,8 +131,7 @@ def task_build_info() -> int:
 @task(
 	"buildPackage",
 	locks=["push", "assemble", "native", "java", "resource", "script"],
-	description="Assembles project's output folder into an archive, specifically for publishing in a mod browser.",
-	stage=TASK_STAGE_DEPLOY
+	description="Assembles project's output folder into an archive, specifically for publishing in a mod browser."
 )
 def task_build_package() -> int:
 	from .resources import build_package
@@ -150,8 +142,7 @@ def task_build_package() -> int:
 @task(
 	"pushEverything",
 	locks=["push"],
-	description="Sends assembled output folder to a connected device.",
-	stage=TASK_STAGE_DEPLOY
+	description="Sends assembled output folder to a connected device."
 )
 def task_push_everything() -> int:
 	from .push import push_everything
@@ -160,7 +151,7 @@ def task_push_everything() -> int:
 @task(
 	"launchApplication",
 	description="Starts launcher with predefined autostart setting on a connected device using ADB.",
-	stage=TASK_STAGE_LAUNCH
+	mode=TASK_MODE_ONCE_LATELY
 )
 def task_monkey_launcher() -> int:
 	from .adb import ensure_device_ready
@@ -199,7 +190,7 @@ def task_monkey_launcher() -> int:
 @task(
 	"stopApplication",
 	description="Terminates launcher process on a connected device using ADB.",
-	stage=TASK_STAGE_VALIDATE
+	mode=TASK_MODE_ONCE_EARLY
 )
 def task_stop_launcher() -> int:
 	preferred_launcher = GLOBALS.PREFERRED_CONFIG.get_value("adb.launcherPackage")
@@ -218,7 +209,7 @@ def task_stop_launcher() -> int:
 @task(
 	"configureADB",
 	description="Adds a new connection to a mobile device/emulator via cable or network.",
-	stage=TASK_STAGE_PREPARE
+	mode=TASK_MODE_GLOBALLY
 )
 def task_configure_adb() -> int:
 	from .device_setup import setup_device_connection
@@ -229,8 +220,7 @@ def task_configure_adb() -> int:
 
 @task(
 	"ensureProjectExists",
-	description="Ensures that selected project is opened and exists.",
-	stage=TASK_STAGE_PREPARE
+	description="Ensures that selected project is opened and exists."
 )
 def task_ensure_project_exists() -> int:
 	if GLOBALS.is_project_available():
@@ -241,7 +231,8 @@ def task_ensure_project_exists() -> int:
 
 @task(
 	"newProject",
-	description="Creates a project, prompting interactive input for name, template, and other properties."
+	description="Creates a project, prompting interactive input for name, template, and other properties.",
+	mode=TASK_MODE_GLOBALLY
 )
 def task_new_project() -> int:
 	from .package import request_create_project
@@ -253,7 +244,8 @@ def task_new_project() -> int:
 
 @task(
 	"configureIde",
-	description="Configures tasks in most useful IDEs for mods to use from the interface."
+	description="Configures tasks in most useful IDEs for mods to use from the interface.",
+	mode=TASK_MODE_GLOBALLY
 )
 def task_configure_ide(exclude_toolchain: bool = False) -> int:
 	from .workspace import flush_compound_tasks, flush_toolchain_tasks
@@ -294,7 +286,8 @@ def task_configure_ide(exclude_toolchain: bool = False) -> int:
 
 @task(
 	"componentIntegrity",
-	description="Installs additional components required for compilation or performs a initial setup."
+	description="Installs additional components required for compilation or performs a initial setup.",
+	mode=TASK_MODE_GLOBALLY
 )
 def task_component_integrity(startup: bool = False) -> int:
 	if startup:
@@ -307,7 +300,8 @@ def task_component_integrity(startup: bool = False) -> int:
 @task(
 	"cleanup",
 	locks=["assemble", "push", "native", "java", "resource", "script"],
-	description="Clears cache of a selected project or all output files from previous builds, forgetting modified files."
+	description="Clears cache of a selected project or all output files from previous builds, forgetting modified files.",
+	mode=TASK_MODE_GLOBALLY
 )
 def task_cleanup() -> int:
 	from .package import pretty_cleanup_directory

@@ -1,22 +1,22 @@
+import multiprocessing
 import threading
+from dataclasses import dataclass, field
 from os.path import join
-from typing import Any, Callable, Dict, Final, List, Optional
+from typing import Any, Callable, Dict, Final, List, Optional, Sequence
 
 from .logger import print
 from .output_directory import get_temporary_directory, lock_file, unlock_file
 
-TASK_STAGE_UNKNOWN = 0
-TASK_STAGE_PREPARE = 1
-TASK_STAGE_BUILD = 2
-TASK_STAGE_VALIDATE = 3
-TASK_STAGE_DEPLOY = 4
-TASK_STAGE_LAUNCH = 5
+TASK_MODE_GLOBALLY = 0
+TASK_MODE_PROJECTWISE = 1
+TASK_MODE_ONCE_EARLY = 2
+TASK_MODE_ONCE_LATELY = 3
 
 class Task:
 	name: Final[str]
 	description: str = ""
 	callable: Callable
-	stage: int
+	mode: int
 	locks: Optional[List[str]] = None
 
 	@property
@@ -51,7 +51,7 @@ class Task:
 		self,
 		name: str,
 		description: Optional[str] = None,
-		stage: int = TASK_STAGE_UNKNOWN,
+		mode: int = TASK_MODE_PROJECTWISE,
 		*,
 		status: Optional[str] = None,
 		locks: Optional[List[str]] = None,
@@ -69,7 +69,7 @@ class Task:
 		self._local = threading.local()
 		if description:
 			self.description = description
-		self.stage = stage
+		self.mode = mode
 		if status:
 			self.status = status
 		if locks:
@@ -136,8 +136,8 @@ def execute_task(name: str, silent: bool = True, *args, **kwargs) -> Any:
 	return assure_task(name) \
 		.execute(silent=silent, *args, **kwargs)
 
-def task(name: str, description: Optional[str] = None, stage: int = TASK_STAGE_UNKNOWN, status: Optional[str] = None, locks: Optional[List[str]] = None) -> Callable[[Callable], Callable]:
-	task = Task(name, description, stage, status=status, locks=locks)
+def task(name: str, description: Optional[str] = None, mode: int = TASK_MODE_PROJECTWISE, status: Optional[str] = None, locks: Optional[List[str]] = None) -> Callable[[Callable], Callable]:
+	task = Task(name, description, mode, status=status, locks=locks)
 
 	def decorator(callable: Callable) -> Callable:
 		task.callable = callable
@@ -145,3 +145,68 @@ def task(name: str, description: Optional[str] = None, stage: int = TASK_STAGE_U
 		return task
 
 	return decorator
+
+
+class ScheduledTask:
+	task: Task
+	callable: Callable
+	lock: Optional[threading.Lock]
+	barrier: Optional[threading.Barrier] = None
+	has_run: bool = False
+
+	def __init__(self, task: Task, callable: Callable):
+		self.task = task
+		self.callable = callable
+		self._local = threading.local()
+
+	def prepare(self, opponents: Sequence['ScheduledTask']):
+		if self.task.mode == TASK_MODE_ONCE_EARLY:
+			self.lock = threading.Lock()
+		elif self.task.mode == TASK_MODE_ONCE_LATELY:
+			self.barrier = threading.Barrier(len(opponents))
+
+	@property
+	def _status(self) -> Optional[str]:
+		status = getattr(self._local, "status", None)
+		return status or task.status
+
+	@_status.setter
+	def _status(self, value: Optional[str]) -> None:
+		self._local.status = value
+
+	@property
+	def on_status_changed(self) -> Optional[Callable[[str], None]]:
+		return getattr(self._local, "on_status_changed", None)
+
+	@on_status_changed.setter
+	def on_status_changed(self, value: Optional[Callable[[str], None]]) -> None:
+		self._local.on_status_changed = value
+
+	@property
+	def status(self) -> str:
+		if not self._status:
+			return self.task.status
+		return self._status
+
+	@status.setter
+	def status(self, value: str) -> None:
+		self._status = value
+		if self.on_status_changed:
+			self.on_status_changed(value)
+
+	def execute(self):
+		if self.task.mode == TASK_MODE_ONCE_EARLY:
+			assert self.lock, "ScheduledTask is not prepared!"
+			with self.lock:
+				if self.has_run:
+					return
+				self.has_run = True
+				self.callable()
+
+		elif self.task.mode == TASK_MODE_ONCE_LATELY:
+			assert self.barrier, "ScheduledTask is not prepared!"
+			if self.barrier.wait() == 0:
+				self.callable()
+
+		else:
+			self.callable()

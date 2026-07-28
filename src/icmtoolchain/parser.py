@@ -292,7 +292,7 @@ def parse_callable_arguments(argv: MutableSequence[str], callable: Callable, sig
 				break
 			else:
 				if parameter.kind != inspect.Parameter.POSITIONAL_ONLY:
-					# Normally, no more positional arguments will be availabled.
+					# Normally, no more positional arguments will be available.
 					break
 				value = linked_positionals.get(parameter.name)
 				if not value and parameter.default is inspect.Parameter.empty:
