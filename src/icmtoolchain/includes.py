@@ -39,7 +39,7 @@ class Includes:
 				self.decode_line(line.strip(), dependents)
 		for dependent in dependents:
 			if (dependent in GLOBALS.TSCONFIG_DEPENDENTS and GLOBALS.TSCONFIG_DEPENDENTS[dependent] in self.params and self.params[GLOBALS.TSCONFIG_DEPENDENTS[dependent]] == True):
-				self.params[GLOBALS.TSCONFIG_DEPENDENTS[dependent]] = not self.params[GLOBALS.TSCONFIG_DEPENDENTS[dependent]]
+				self.params[dependent] = not self.params[dependent]
 
 	def decode_param(self, key: str, value: Any, dependents: List[str]) -> None:
 		default = GLOBALS.TSCONFIG_TOOLCHAIN[key] if key in GLOBALS.TSCONFIG_TOOLCHAIN else TSCONFIG[key]

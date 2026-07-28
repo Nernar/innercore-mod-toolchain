@@ -49,9 +49,7 @@ def task_compile_java(tool: Optional[str] = None) -> int:
 	from .java_build import compile_java
 	if not tool:
 		tool = GLOBALS.MAKE_CONFIG.get_value("java.compiler", "gradle")
-	if not tool:
-		return 1
-	if not tool == "gradle" and GLOBALS.MAKE_CONFIG.get_value("java.configurable", False):
+	if tool != "gradle" and GLOBALS.MAKE_CONFIG.get_value("java.configurable", False):
 		attention("Project uses configurable Gradle, different tools cannot be applied.")
 		tool = "gradle"
 	return compile_java(tool)
@@ -78,7 +76,6 @@ def task_compile_native() -> int:
 		if len(abis) == 0:
 			abis = GLOBALS.MAKE_CONFIG.obtain_list("abis")
 	if len(abis) == 0:
-		attention(f"No `abis` value in 'toolchain.json' config, using defaults otherwise.")
 		abis = ["arm64-v8a", "armeabi-v7a"]
 	from .native_build import compile_native, copy_shared_objects
 	result = compile_native(abis)

@@ -6,7 +6,7 @@ import subprocess
 from itertools import tee
 from os.path import basename, exists, isdir, isfile, join, relpath, splitext
 from typing import (Collection, Dict, Iterable, List, MutableSequence,
-                    NamedTuple)
+                    NamedTuple, Optional)
 from zipfile import ZipFile
 
 from .config import Config
@@ -620,7 +620,7 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 	GLOBALS.BUILD_STORAGE.save()
 	return result
 
-def compile_java(tool: str = "gradle") -> int:
+def compile_java(tool: Optional[str] = "gradle") -> int:
 	if tool not in ("gradle", "javac", "ecj"):
 		failure(f"Java compilation will be cancelled, because tool {tool!r} is not available.")
 		return 255
