@@ -71,18 +71,6 @@ def task_build_scripts() -> int:
 	return build_all_scripts()
 
 @task(
-	"watchScripts",
-	locks=["script", "cleanup", "push"],
-	description="Recompiles changed scripts instantly using tsc, interruption will end watching."
-)
-def task_watch_scripts() -> int:
-	if not GLOBALS.MAKE_CONFIG.supports_scripts:
-		failure("You cannot have scripts to watch because your project does not support them.")
-		return 1
-	from .script_build import build_all_scripts
-	return build_all_scripts(watch=True)
-
-@task(
 	"updateIncludes",
 	description="Overrides the contents of 'tsconfig.json' based on script files."
 )

@@ -270,18 +270,3 @@ class CompositeProject:
 			*GLOBALS.MAKE_CONFIG.get_value("development.tsc", list()),
 			*args
 		], shell=platform.system() == "Windows")
-
-	def watch(self, *args: str) -> int:
-		from .script_setup import request_typescript
-		tsc = request_typescript()
-		if not tsc:
-			raise RuntimeError("A tsc is required to watch project, make sure it is present before calling this function.")
-		try:
-			return subprocess.call([
-				tsc,
-				"--watch",
-				*GLOBALS.MAKE_CONFIG.get_value("development.watch", list()),
-				*args
-			], cwd=dirname(self.get_tsconfig()).replace("/", os.path.sep), shell=platform.system() == "Windows")
-		except KeyboardInterrupt:
-			return 0

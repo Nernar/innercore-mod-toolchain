@@ -11,7 +11,7 @@ from .utils import (RuntimeCodeError, copy_file, ensure_not_whitespace,
                     walk_all_files)
 
 
-def build_all_scripts(watch: bool = False) -> int:
+def build_all_scripts() -> int:
 	GLOBALS.PROJECT_STRUCTURE.cleanup_target("scripts")
 	GLOBALS.PROJECT_STRUCTURE.cleanup_target("libraries")
 
@@ -20,7 +20,7 @@ def build_all_scripts(watch: bool = False) -> int:
 		if not isdir(join(get_config_directory(), "declarations")):
 			attention("Not found 'declarations', in most cases build will be failed, please install it via tasks.")
 
-	return build_composite_project() if not watch else watch_composite_project()
+	return build_composite_project()
 
 def rebuild_build_target(source: MakeScriptData, target_path: str) -> str:
 	declare: MutableMapping[str, Any] = {
@@ -214,33 +214,6 @@ def build_composite_project() -> int:
 
 		if overall_result != 0:
 			return overall_result
-
-	copy_build_targets(computed_composite, computed_includes)
-	GLOBALS.PROJECT_STRUCTURE.generate_config()
-	return overall_result
-
-def watch_composite_project() -> int:
-	if not request_typescript():
-		failure("Watching is not supported for legacy JavaScript!")
-		return 1
-	overall_result = 0
-
-	# Recomputing existing changes before watching, changes here doesn't make sence
-	# since it will be recomputed after watching interruption
-	compute_and_capture_changed_scripts()
-	GLOBALS.TSC_COMPOSITE.flush()
-	GLOBALS.TSC_COMPOSITE.watch()
-	GLOBALS.PROJECT_STRUCTURE.cleanup_target("scripts")
-	GLOBALS.PROJECT_STRUCTURE.cleanup_target("libraries")
-	GLOBALS.TSC_COMPOSITE.reset()
-
-	composite, computed_composite, includes, computed_includes = compute_and_capture_changed_scripts()
-
-	for included in includes:
-		if not GLOBALS.MAKE_CONFIG.get_value("project.useReferences", False) or included[2] == "javascript":
-			overall_result += included[0].build(included[1], included[2])
-	if overall_result != 0:
-		return overall_result
 
 	copy_build_targets(computed_composite, computed_includes)
 	GLOBALS.PROJECT_STRUCTURE.generate_config()
