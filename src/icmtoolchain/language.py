@@ -219,7 +219,7 @@ class MakeAssetData:
 
 AVAILABLE_DATA_CONFIGS: Dict[Union[str, Callable[[str], str]], Type['MakeDataConfig']] = {}
 
-PROJECT_TYPE_UNIVERSAL = 0
+PROJECT_TYPE_UNKNOWN = 0
 PROJECT_TYPE_MOD = 1
 PROJECT_TYPE_MODPACK = 2
 PROJECT_TYPE_PACK = 3
@@ -437,7 +437,7 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ModpackDataMixin,
 		Returns:
 			int: one of obviously existing PROJECT_TYPEs, or something else
 		"""
-		return PROJECT_TYPE_UNIVERSAL
+		return PROJECT_TYPE_UNKNOWN
 
 	def iterate_dependencies(self) -> Iterable[Union['MakeDataConfig', 'Artifact']]:
 		"""Each project may contain dependencies that must be compiled before that project itself.

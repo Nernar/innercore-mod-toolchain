@@ -71,7 +71,7 @@ class WorkspaceBuildConfiguration:
 	@staticmethod
 	def get_vscode_shell_task(name: str, icon: str, path: str, **kwargs):
 		task = WorkspaceBuildConfiguration.get_vscode_task(name, icon, **kwargs)
-		absolute_path = GLOBALS.PREFERRED_CONFIG.get_path_to_config(path).replace("\\", "/")
+		absolute_path = GLOBALS.MAKE_CONFIG.get_path_to_config(path).replace("\\", "/")
 		absolute_path = absolute_path if absolute_path.startswith("..") else "./" + absolute_path
 		task.update({
 			"type": "shell",
@@ -118,7 +118,7 @@ class WorkspaceBuildConfiguration:
 
 	@staticmethod
 	def flush_vscode_task(name: str, icon: str, method: Callable, *args, **kwargs):
-		tasks_path = GLOBALS.PREFERRED_CONFIG.get_relative_path(join(".vscode", "tasks.json"))
+		tasks_path = GLOBALS.MAKE_CONFIG.get_relative_path(join(".vscode", "tasks.json"))
 		ensure_file_directory(tasks_path)
 		configuration: dict = method(name, icon, *args, **kwargs)
 
@@ -172,7 +172,7 @@ class WorkspaceBuildConfiguration:
 		configuration: minidom.Node = component.childNodes[0]
 		assert component.ownerDocument is not None
 		document: minidom.Document = component.ownerDocument
-		relative_path = GLOBALS.PREFERRED_CONFIG.get_path_to_config(path)
+		relative_path = GLOBALS.MAKE_CONFIG.get_path_to_config(path)
 		relative_path = "$PROJECT_DIR$/" + relative_path.replace("\\", "/")
 
 		script_path = document.createElement("option")
@@ -255,7 +255,7 @@ class WorkspaceBuildConfiguration:
 	@staticmethod
 	def flush_idea_task(name: str, method: Callable, *args, **kwargs):
 		from xml.dom import minidom
-		configurations_path = GLOBALS.PREFERRED_CONFIG.get_relative_path(join(".idea", "runConfigurations"))
+		configurations_path = GLOBALS.MAKE_CONFIG.get_relative_path(join(".idea", "runConfigurations"))
 		ensure_directory(configurations_path)
 		component: minidom.Node = method(name, *args, **kwargs)
 		unescaped_name = sub(r"\W", "_", name) + ".xml"

@@ -1,11 +1,10 @@
 import subprocess
-from os.path import dirname, isdir, isfile, join
 from typing import Optional
 
 from .context import GLOBALS, PROPERTIES
 from .errors import abort
-from .logger import attention, failure, frozen, success
-from .output_directory import get_temporary_directory, unique_folder_name
+from .logger import attention, error, failure, success
+from .output_directory import get_temporary_directory
 from .shell import confirm_prompt
 from .task import task
 from .utils import DEVNULL
@@ -111,8 +110,9 @@ def task_resources() -> int:
 def task_build_info() -> int:
 	project_data = GLOBALS.MAKE_CONFIG.obtain_project_data()
 	if project_data is None:
-		attention("Nothing to write in project configurations, project data does not exist.")
-		return 0
+		failure(f"Project type {GLOBALS.MAKE_CONFIG.project_type} is unknown or could not be determined from config!")
+		error("Please add property `info` for mod, `modpack` for modpack or `manifest` for pack into your 'make.json'.")
+		return 1
 	return project_data.flush_to_output(GLOBALS.PROJECT_STRUCTURE.directory)
 
 @task(
@@ -242,25 +242,40 @@ def task_ensure_project_exists() -> int:
 	"configureIde",
 	description="Configures tasks in most useful IDEs for mods to use from the interface."
 )
-def task_configure_ide() -> int:
+def task_configure_ide(exclude_toolchain: bool = False) -> int:
 	from .workspace import flush_compound_tasks, flush_toolchain_tasks
 
-	flush_toolchain_tasks("Assemble for Release", "archive", "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage")
-	flush_toolchain_tasks("Build (No push)", "debug-all", "ensureProjectExists clearOutput buildScripts compileNative compileJava buildResources buildInfo", hidden=True)
-	flush_compound_tasks("Build", "debug-all", ("Build (No push)", "Push"))
-	flush_toolchain_tasks("Build Scripts and Resources (No push)", "debug-alt", "ensureProjectExists clearOutput buildScripts buildResources buildInfo", hidden=True)
-	flush_compound_tasks("Build Scripts and Resources", "debug-alt", ("Build Scripts and Resources (No push)", "Push"))
-	flush_toolchain_tasks("Rebuild Declarations", "milestone", "ensureProjectExists updateIncludes", hidden=True)
-	flush_toolchain_tasks("Build Java (No push)", "run-above", "ensureProjectExists compileJava buildInfo", hidden=True)
-	flush_compound_tasks("Build Java", "run-above", ("Build Java (No push)", "Push"))
-	flush_toolchain_tasks("Build Native (No push)", "run", "ensureProjectExists compileNative buildInfo", hidden=True)
-	flush_compound_tasks("Build Native", "run", ("Build Native (No push)", "Push"))
-	flush_toolchain_tasks("Push", "rocket", "ensureProjectExists stopApplication pushEverything launchApplication")
+	flush_toolchain_tasks("Assemble for Release", "package", "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage")
+	flush_toolchain_tasks("Build (No push)", "run", "ensureProjectExists clearOutput buildScripts compileNative compileJava buildResources buildInfo", hidden=True)
+	flush_compound_tasks("Build", "run", ("Build (No push)", "Push"))
 
-	flush_toolchain_tasks("New Project", "new-folder", "newProject", focus=True)
-	flush_toolchain_tasks("Configure ADB", "device-mobile", "configureADB", focus=True)
-	flush_toolchain_tasks("Reinstall Components", "package", "componentIntegrity", focus=True)
+	if GLOBALS.MAKE_CONFIG.supports_scripts:
+		flush_toolchain_tasks("Build Scripts (No push)", "code", "ensureProjectExists buildScripts buildInfo", hidden=True)
+		flush_compound_tasks("Build Scripts", "code", ("Build Scripts (No push)", "Push"))
+		if GLOBALS.MAKE_CONFIG.supports_resources or GLOBALS.MAKE_CONFIG.supports_pack_graphics:
+			flush_toolchain_tasks("Build Scripts and Resources (No push)", "debug-alt", "ensureProjectExists clearOutput buildScripts buildResources buildInfo", hidden=True)
+			flush_compound_tasks("Build Scripts and Resources", "debug-alt", ("Build Scripts and Resources (No push)", "Push"))
+		flush_toolchain_tasks("Rebuild Declarations", "type-hierarchy-sub", "ensureProjectExists updateIncludes", hidden=True)
+
+	if GLOBALS.MAKE_CONFIG.supports_java:
+		flush_toolchain_tasks("Build Java (No push)", "circuit-board", "ensureProjectExists compileJava buildInfo", hidden=True)
+		flush_compound_tasks("Build Java", "circuit-board", ("Build Java (No push)", "Push"))
+
+	if GLOBALS.MAKE_CONFIG.supports_native or GLOBALS.MAKE_CONFIG.supports_shared_objects:
+		flush_toolchain_tasks("Build Native (No push)", "chip", "ensureProjectExists compileNative buildInfo", hidden=True)
+		flush_compound_tasks("Build Native", "chip", ("Build Native (No push)", "Push"))
+
+	if GLOBALS.MAKE_CONFIG.supports_resources or GLOBALS.MAKE_CONFIG.supports_pack_graphics:
+		flush_toolchain_tasks("Build Resources (No push)", "paintcan", "ensureProjectExists clearOutput buildResources buildInfo", hidden=True)
+		flush_compound_tasks("Build Resources", "paintcan", ("Build Resources (No push)", "Push"))
+
+	flush_toolchain_tasks("Push", "rocket", "ensureProjectExists stopApplication pushEverything launchApplication")
 	flush_toolchain_tasks("Invalidate Caches", "flame", "cleanup", focus=True)
+
+	if not exclude_toolchain:
+		flush_toolchain_tasks("New Project", "new-folder", "newProject", focus=True)
+		flush_toolchain_tasks("Configure ADB", "device-mobile", "configureADB", focus=True)
+		flush_toolchain_tasks("Configure Components", "tools", "componentIntegrity", focus=True)
 
 	return 0
 
