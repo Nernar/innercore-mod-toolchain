@@ -2,9 +2,8 @@ import subprocess
 from os.path import basename, isdir, isfile, join, relpath
 
 from .context import GLOBALS
-from .errors import abort
 from .hglob import glob
-from .logger import error, failure, print, success
+from .logger import attention, error, failure, print, success
 from .modpack import get_modpack_push_directory
 from .shell import InteractiveSession, Progress
 from .utils import DEVNULL
@@ -26,18 +25,21 @@ def push_everything(push_unchanged: bool = True, cleanup_remote: bool = True) ->
 	result = push_directory(GLOBALS.PROJECT_STRUCTURE.directory, destination_directory, push_unchanged=push_unchanged, cleanup_remote=cleanup_remote)
 	if result > 0:
 		return result
+
 	for linked_resource in GLOBALS.LINKED_RESOURCE_STORAGE.iterate_resources():
 		project_path = GLOBALS.MAKE_CONFIG.get_relative_path(linked_resource["relative_path"])
 		remote_path = destination_directory + "/" + linked_resource["output_path"]
 		remote_push_unchanged = linked_resource["push_unchanged"] if "push_unchanged" in linked_resource else push_unchanged
 		remote_cleanup_remote = linked_resource["cleanup_remote"] if "cleanup_remote" in linked_resource else cleanup_remote
+
 		if isfile(project_path):
 			result = push_file(project_path, remote_path, push_unchanged=remote_push_unchanged, cleanup_remote=remote_cleanup_remote) or result
 		elif isdir(project_path):
 			result = push_directory(project_path, remote_path, push_unchanged=remote_push_unchanged, cleanup_remote=remote_cleanup_remote) or result
 		else:
 			print()
-			abort(f"We cannot push {linked_resource['relative_path']!r} resource because we could not determine its type!")
+			attention(f"We cannot push {linked_resource['relative_path']!r} resource because we could not find it in project directory!")
+
 		if result > 0:
 			return result
 	if result < 0:

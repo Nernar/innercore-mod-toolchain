@@ -36,16 +36,18 @@ def iterate_config_directories(path: str, max_depth: int = 5) -> Iterable['MakeD
 	from .language import MakeDataConfig
 	path = abspath(path)
 	for dirpath, dirnames, filenames in os.walk(path):
-		if max_depth >= 0 and dirpath.count(os.sep, len(path) + 1) > max_depth:
-			break
+		relpath = os.path.relpath(dirpath, path)
+		if relpath == ".":
+			current_depth = 0
+		else:
+			current_depth = relpath.count(os.path.sep) + 1
 
-		for relative_directory in dirnames:
-			if os.path.basename(relative_directory) == "output":
-				continue
-			working_directory = join(dirpath, relative_directory)
-			config = MakeDataConfig.of(working_directory)
-			if config:
-				yield config
+		if max_depth >= 0 and current_depth >= max_depth:
+			del dirnames[:]
+
+		config = MakeDataConfig.of(dirpath)
+		if config:
+			yield config
 
 def get_current_directory() -> str:
 	if "project" in PROPERTIES:

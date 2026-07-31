@@ -33,7 +33,7 @@ class IsolatedWorkspace(MakeDataConfig):
 		return []
 
 workspace_path = dirname(__file__)
-dependencies = iterate_config_directories(workspace_path)
+dependencies = iterate_config_directories(workspace_path, max_depth=1)
 workspace = IsolatedWorkspace(workspace_path, dependencies)
 graph = ProjectGraph(workspace)
 graph.collect_dependencies(workspace)

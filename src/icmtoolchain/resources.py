@@ -139,7 +139,7 @@ def build_package() -> int:
 		elif isdir(input_resource):
 			copy_directory(input_resource, output_package_resource)
 		else:
-			attention(f"We cannot copy resource {linked_resource['relative_path']!r} because we could not determine its type.")
+			attention(f"We cannot copy resource {linked_resource['relative_path']!r} because we could not find it in project directory.")
 
 	for path in GLOBALS.MAKE_CONFIG.obtain_list("excludeFromRelease"):
 		for excluded_path in expand_paths(join(output_package_directory, path)):
