@@ -1,3 +1,5 @@
+import platform
+import subprocess
 import sys
 from os.path import isdir, isfile, join
 from typing import Any, Callable, Final, List, Optional, Tuple
@@ -7,6 +9,7 @@ from .errors import abort
 from .logger import attention, frozen, print, success
 from .output_directory import get_config_directory
 from .prompt import Input, Select
+from .shell import UNICODE_BALLOT_X
 from .utils import ensure_not_whitespace, remove_tree
 
 
@@ -215,6 +218,179 @@ def startup() -> None:
 	print("Execute `icmtoolchain --help` to obtain a list of available commands.")
 	attention("You may need to restart your console to be able to access any commands.")
 
+def get_tool_version_info(tool_path: Optional[str], version_args: List[str]) -> Optional[str]:
+	if not tool_path or not isfile(tool_path):
+		return None
+
+	try:
+		output = subprocess.check_output(
+			[tool_path] + version_args,
+			shell=platform.system() == "Windows",
+			text=True,
+			stderr=subprocess.DEVNULL,
+			timeout=5,
+		).strip()
+		return output.splitlines()[0] if output else None
+	except Exception:
+		return None
+
+def upgrade_node_submenu() -> None:
+	from .babel_setup import get_npm_path, install_babel, request_babel
+	from .script_setup import get_tsc_version, request_typescript
+
+	while True:
+		npm = get_npm_path()
+		node_installed = is_installed(COMPONENTS["node"])
+		tsc_path = request_typescript(only_check=True)
+		babel_path = request_babel(only_check=True)
+
+		node_dir = join(get_config_directory(), "node")
+		custom_node = GLOBALS.TOOLCHAIN_CONFIG.get_value("tools.node")
+		node_exe = join(custom_node or node_dir, "node.exe" if platform.system() == "Windows" else "bin/node")
+		node_ver = get_tool_version_info(node_exe, ["--version"])
+		tsc_ver_tuple = get_tsc_version()
+		tsc_ver = f"Version {'.'.join(str(x) for x in tsc_ver_tuple)}" if tsc_ver_tuple != (0, 0, 0) else None
+		babel_ver = get_tool_version_info(babel_path, ["--version"]) if babel_path else None
+
+		def _status_label(ver: Optional[str], path: Optional[str]) -> str:
+			if ver:
+				return f" ({ver})"
+			if path:
+				return " (Installed)"
+			return ""
+
+		subtools = [
+			("node",  "Node.js" + _status_label(node_ver, node_exe if node_installed else None)),
+			("tsc",   "TypeScript (tsc)" + _status_label(tsc_ver, tsc_path)),
+			("babel", "Babel Transpiler" + _status_label(babel_ver, babel_path)),
+			("back",  "Go Back"),
+		]
+
+		choice = Select("Node.js & Transpilers", variants=[label for _, label in subtools]).request()
+		if choice is None or subtools[choice][0] == "back":
+			break
+
+		tool_key = subtools[choice][0]
+
+		if tool_key == "node":
+			installed = node_installed
+			explanation_lines = []
+			if custom_node:
+				explanation_lines.append(f"Custom Path: {custom_node}")
+			elif node_installed:
+				explanation_lines.append(f"Path: {node_dir}")
+			if node_ver:
+				explanation_lines.append(f"Version: {node_ver}")
+			explanation = "\n".join(explanation_lines) or None
+
+			actions: List[str] = []
+			actions.append("Reinstall" if installed else "Install")
+			actions.append(("Reinstall" if installed else "Install") + " (LTS)")
+			actions.append("Set Custom Path")
+			if custom_node:
+				actions.append("Unset Custom Path")
+			if installed:
+				actions.append("Uninstall")
+			actions.append("Go Back")
+
+			action = Select("How Node.js will be changed?", variants=actions, explanation=explanation, returns_what=True).request()
+			if not action or action == "Go Back":
+				continue
+
+			if "Install" in action or "Reinstall" in action:
+				install_components("node", lts="(LTS)" in action, reinstall="Reinstall" in action)
+				if custom_node:
+					GLOBALS.TOOLCHAIN_CONFIG.delete_value("tools.node")
+					GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
+			elif action == "Set Custom Path":
+				path = Input("Enter path to Node.js directory:").request()
+				if path:
+					GLOBALS.TOOLCHAIN_CONFIG.set_value("tools.node", path)
+					GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
+			elif action == "Unset Custom Path":
+				GLOBALS.TOOLCHAIN_CONFIG.delete_value("tools.node")
+				GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
+			elif action == "Uninstall":
+				remove_tree(node_dir)
+				success("Node.js was uninstalled.")
+
+		elif tool_key == "tsc":
+			installed = tsc_path is not None
+			explanation_lines = []
+			if tsc_path:
+				explanation_lines.append(f"Path: {tsc_path}")
+			if tsc_ver:
+				explanation_lines.append(f"Version: {tsc_ver}")
+			if not npm:
+				explanation_lines.append(UNICODE_BALLOT_X + " npm not found — install Node.js first")
+			explanation = "\n".join(explanation_lines) or None
+
+			actions = []
+			if npm:
+				actions.append("Reinstall" if installed else "Install")
+			if installed:
+				actions.append("Uninstall")
+			actions.append("Go Back")
+
+			action = Select("How TypeScript (tsc) will be changed?", variants=actions, explanation=explanation, returns_what=True).request()
+			if not action or action == "Go Back":
+				continue
+
+			if "Install" in action or "Reinstall" in action:
+				assert npm
+				import subprocess
+				prefix = join(get_config_directory(), "node")
+				subprocess.call(
+					[npm, "install", "--prefix", prefix, "typescript"],
+					shell=platform.system() == "Windows"
+				)
+			elif action == "Uninstall":
+				assert tsc_path
+				import subprocess
+				prefix = join(get_config_directory(), "node")
+				subprocess.call(
+					[npm, "uninstall", "--prefix", prefix, "typescript"],
+					shell=platform.system() == "Windows"
+				) if npm else remove_tree(tsc_path)
+				success("TypeScript was uninstalled.")
+
+		elif tool_key == "babel":
+			installed = babel_path is not None
+			explanation_lines = []
+			if babel_path:
+				explanation_lines.append(f"Path: {babel_path}")
+			if babel_ver:
+				explanation_lines.append(f"Version: {babel_ver}")
+			if not npm:
+				explanation_lines.append(UNICODE_BALLOT_X + "npm not found — install Node.js first")
+			explanation = "\n".join(explanation_lines) or None
+
+			actions = []
+			if npm:
+				actions.append("Reinstall" if installed else "Install")
+			if installed:
+				actions.append("Uninstall")
+			actions.append("Go Back")
+
+			action = Select("How Babel Transpiler will be changed?", variants=actions, explanation=explanation, returns_what=True).request()
+			if not action or action == "Go Back":
+				continue
+
+			if "Install" in action or "Reinstall" in action:
+				assert npm
+				install_babel(npm)
+			elif action == "Uninstall":
+				assert babel_path and npm
+				import subprocess
+
+				from .babel_setup import BABEL_PACKAGES
+				prefix = join(get_config_directory(), "node")
+				subprocess.call(
+					[npm, "uninstall", "--prefix", prefix] + BABEL_PACKAGES,
+					shell=platform.system() == "Windows"
+				)
+				success("Babel was uninstalled.")
+
 def upgrade() -> None:
 	while True:
 		try:
@@ -227,7 +403,11 @@ def upgrade() -> None:
 
 			selected_key = keys[choice]
 			component = COMPONENTS[selected_key]
-			
+
+			if selected_key == "node":
+				upgrade_node_submenu()
+				continue
+
 			custom_path = get_custom_path(component)
 			installed = is_installed(component)
 			remove_dir = join(get_config_directory(), "java" if selected_key == "java" else component.location)
@@ -242,13 +422,11 @@ def upgrade() -> None:
 
 			update_available = False # TODO
 
-			actions = []
+			actions: List[str] = []
 			if update_available:
 				actions.append("Update")
 			if component.installable:
 				actions.append(f"{'Reinstall' if installed else 'Install'}")
-				if selected_key == "node":
-					actions.append(f"{'Reinstall' if installed else 'Install'} (LTS)")
 			if component.config_key:
 				actions.append("Set Custom Path")
 				if custom_path:
