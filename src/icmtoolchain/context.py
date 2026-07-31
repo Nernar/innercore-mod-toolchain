@@ -205,8 +205,6 @@ class Globals(threading.local):
 			del self.code_workspace
 		if hasattr(self, "parameter_signature"):
 			del self.parameter_signature
-		if hasattr(self, "project_manager"):
-			del self.project_manager
 		if hasattr(self, "toolchain_config"):
 			del self.toolchain_config
 
@@ -221,6 +219,8 @@ class Globals(threading.local):
 			del self.project_structure
 		if hasattr(self, "output_storage"):
 			del self.output_storage
+		if hasattr(self, "linked_resource_storage"):
+			del self.linked_resource_storage
 		if hasattr(self, "tsconfig_dependents"):
 			del self.tsconfig_dependents
 		if hasattr(self, "tsconfig_toolchain"):
