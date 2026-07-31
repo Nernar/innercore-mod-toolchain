@@ -13,7 +13,6 @@ from prompt_toolkit.widgets import TextArea
 
 from .context import GLOBALS
 from .errors import abort
-from .language import MakeDataConfig
 from .logger import error, print, trace
 from .project_graph import ConcurrentScheduler, ProjectEdge, ProjectGraph
 from .shell import Interactable, Progress
@@ -34,12 +33,7 @@ class BuildStatus:
 	failure_code: int = 1
 
 def worker_execute_project_tasks(node: ProjectEdge, scheduled_tasks: Iterator['BaseScheduledTask'], queue: Optional[Queue] = None) -> Tuple[int, List[Tuple[str, str]]]:
-	if not isinstance(node.project, MakeDataConfig):
-		raise RuntimeError(f"Project {node} is not populated!")
-
-	GLOBALS.shutdown_project()
-	GLOBALS.make_config = node.project
-	project_spec = str(node)
+	GLOBALS.switch_to_project(node)
 
 	overall_result = 0
 	all_task_logs = []
@@ -51,11 +45,11 @@ def worker_execute_project_tasks(node: ProjectEdge, scheduled_tasks: Iterator['B
 			if queue:
 				queue.put(TaskEvent(
 					type="start",
-					project=project_spec,
+					project=str(node),
 					task_name=task_name,
 					text=scheduled_task.description
 				))
-				scheduled_task.on_status_changed = lambda status, pn=project_spec, tn=task_name: queue.put(TaskEvent(
+				scheduled_task.on_status_changed = lambda status, pn=str(node), tn=task_name: queue.put(TaskEvent(
 					type="status",
 					project=pn,
 					task_name=tn,

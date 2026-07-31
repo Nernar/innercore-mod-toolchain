@@ -3,15 +3,15 @@ from os.path import dirname, join
 from time import time
 from typing import Iterable, Union
 
+import icmtoolchain.builtin_tasks
 from icmtoolchain import GLOBALS, iterate_config_directories
 from icmtoolchain.cli import execute_task
 from icmtoolchain.config import FileConfig
 from icmtoolchain.language import MakeAssetData, MakeDataConfig
+from icmtoolchain.logger import attention, success
 from icmtoolchain.parser import parse_arguments
 from icmtoolchain.project_graph import Artifact, ProjectGraph
-from icmtoolchain.logger import attention, success
 from icmtoolchain.task import TASKS
-import icmtoolchain.builtin_tasks
 
 startup_millis = time()
 build_command = "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage"
@@ -42,9 +42,7 @@ graph.resolve_dependencies()
 for edge in graph.traverse_dependencies():
 	if isinstance(edge.project, IsolatedWorkspace):
 		continue
-	GLOBALS.shutdown_project()
-	assert isinstance(edge.project, MakeDataConfig)
-	GLOBALS.make_config = edge.project
+	GLOBALS.switch_to_project(edge)
 	targets, tasks = tee(targets)
 	while True:
 		try:

@@ -5,9 +5,11 @@ from os.path import abspath, dirname, isfile, join
 from typing import TYPE_CHECKING, Iterable, Optional
 
 from .config import Config, FileConfig
+from .logger import print
 
 if TYPE_CHECKING:
 	from .language import MakeDataConfig
+	from .project_graph import ProjectEdge
 
 def find_config_directory(path: str, filename: str) -> Optional[str]:
 	working_directory = abspath(path)
@@ -38,6 +40,8 @@ def iterate_config_directories(path: str, max_depth: int = 5) -> Iterable['MakeD
 			break
 
 		for relative_directory in dirnames:
+			if os.path.basename(relative_directory) == "output":
+				continue
 			working_directory = join(dirpath, relative_directory)
 			config = MakeDataConfig.of(working_directory)
 			if config:
@@ -90,12 +94,14 @@ class Globals(threading.local):
 			toolchain_config_path = join(get_config_directory(), "toolchain.json")
 			toolchain_config = FileConfig(toolchain_config_path)
 			workspace_config_path = find_config_directory(get_current_directory(), "toolchain.json")
+
 			from .utils import ensure_not_whitespace
 			if workspace_config_path and ensure_not_whitespace(workspace_config_path):
 				workspace_config = FileConfig(workspace_config_path, defaults=toolchain_config, raise_non_existing=True)
 				self.toolchain_config = workspace_config
 			else:
 				self.toolchain_config = toolchain_config
+
 			if hasattr(self, "make_config"):
 				self.MAKE_CONFIG.defaults = self.toolchain_config
 		return self.toolchain_config
@@ -106,6 +112,7 @@ class Globals(threading.local):
 			make_config = find_project_config(get_current_directory())
 			if make_config:
 				self.make_config = make_config
+
 		if not hasattr(self, "make_config"):
 			from .errors import abort
 			for directory in iterate_config_directories(get_current_directory()):
@@ -190,6 +197,17 @@ class Globals(threading.local):
 			parameters.append(inspect.Parameter("kwargs", inspect.Parameter.VAR_KEYWORD))
 			self.parameter_signature = inspect.Signature(parameters, return_annotation=int)
 		return self.parameter_signature
+
+	def switch_to_project(self, node: 'ProjectEdge', silent: bool = False):
+		from .language import MakeDataConfig
+		if not isinstance(node.project, MakeDataConfig):
+			raise RuntimeError(f"Project {node} is not populated!")
+		if not silent and hasattr(self, "make_config"):
+			print() # XXX: Do we actually logged anything? In most cases YES.
+		self.shutdown_project()
+		if not silent:
+			print(f"{node} in {node.project.directory}", style="class:task.execute")
+		self.make_config = node.project
 
 	def is_project_available(self, which_project: Optional[str] = None):
 		from .language import MakeDataConfig

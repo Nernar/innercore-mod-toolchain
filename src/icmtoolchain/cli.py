@@ -109,9 +109,7 @@ def run_sequential_build(graph: ProjectGraph, targets: Iterator['BaseScheduledTa
 	for scheduled_task in targets:
 		scheduled_task.prepare(dependencies)
 	for edge in dependencies:
-		GLOBALS.shutdown_project()
-		assert isinstance(edge.project, MakeDataConfig)
-		GLOBALS.make_config = edge.project
+		GLOBALS.switch_to_project(edge)
 		targets, tasks = tee(targets)
 		for scheduled_task in tasks:
 			execute_task(scheduled_task)
