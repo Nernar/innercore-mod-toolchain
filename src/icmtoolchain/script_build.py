@@ -166,8 +166,31 @@ def build_composite_project() -> int:
 
 	composite, computed_composite, includes, computed_includes = compute_and_capture_changed_scripts()
 
+	from .script_setup import should_use_babel
+	use_babel = should_use_babel()
+
 	if request_typescript(only_check=True):
 		GLOBALS.TSC_COMPOSITE.flush()
+
+		type_check_mode = GLOBALS.PREFERRED_CONFIG.get_value("typeChecking", "always")
+		should_type_check = (
+			type_check_mode == "always"
+			or (type_check_mode == "on-release" and PROPERTIES.get_value("release"))
+		)
+
+		if should_type_check and use_babel and request_typescript(only_check=True):
+			from time import time
+			debug("Running type-check via tsc --noEmit")
+			startup_millis = time()
+			tc_result = GLOBALS.TSC_COMPOSITE.type_check(*(
+				["--force"] if PROPERTIES.get_value("release") else []
+			))
+			startup_millis = time() - startup_millis
+			if tc_result != 0:
+				failure(f"Type-check failed in {startup_millis:.2f}s with result {tc_result}.")
+				return tc_result
+			success(f"Type-check completed in {startup_millis:.2f}s.")
+
 	for included in includes:
 		if not GLOBALS.MAKE_CONFIG.get_value("project.useReferences", False) or included[2] == "javascript":
 			overall_result += included[0].build(included[1], included[2])
@@ -202,9 +225,27 @@ def build_composite_project() -> int:
 
 			from time import time
 			startup_millis = time()
-			overall_result += GLOBALS.TSC_COMPOSITE.build(*(
-				["--force"] if PROPERTIES.get_value("release") else list()
-			))
+
+			if use_babel:
+				from .babel_build import transpile_with_babel
+				from .babel_setup import generate_toolchain_babel_config
+				for included in which:
+					babel_config_path = join(
+						GLOBALS.MAKE_CONFIG.get_build_path("sources"),
+						".toolchain.babel.config.json"
+					)
+					generate_toolchain_babel_config(babel_config_path)
+					overall_result += transpile_with_babel(
+						ordered_files=[included[0]],
+						output_path=included[1],
+						babel_config_path=babel_config_path,
+						source_directory=GLOBALS.MAKE_CONFIG.directory,
+						force=bool(PROPERTIES.get_value("release")),
+					)
+			else:
+				overall_result += GLOBALS.TSC_COMPOSITE.build(*( 
+					["--force"] if PROPERTIES.get_value("release") else list()
+				))
 
 			startup_millis = time() - startup_millis
 			if overall_result == 0:

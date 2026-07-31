@@ -152,15 +152,15 @@ class Includes:
 			return join(self.directory, ".toolchain.tsconfig.json")
 		return join(self.directory, "tsconfig.json")
 
-	def create_tsconfig(self, temporary_path: str) -> None:
+	def create_tsconfig(self, temporary_path: str, use_babel: bool = False) -> None:
 		template = {
 			"extends": relpath(GLOBALS.TSC_COMPOSITE.get_tsconfig(), self.directory),
-			"compilerOptions": {
-				"outFile": temporary_path
-			},
+			"compilerOptions": {},
 			"exclude": self.exclude,
 			"include": self.include,
 		}
+		if not use_babel:
+			template["compilerOptions"]["outFile"] = temporary_path
 		template["compilerOptions"].update(self.params)
 
 		with open(self.get_tsconfig(), "w", encoding="utf-8") as tsconfig:
@@ -170,8 +170,10 @@ class Includes:
 		temp_path = join(GLOBALS.MAKE_CONFIG.get_build_path("sources"), basename(target_path))
 		if GLOBALS.BUILD_STORAGE.is_path_changed(self.directory) or not isfile(temp_path):
 			if language == "typescript":
+				from .script_setup import should_use_babel
+				use_babel = should_use_babel()
 				debug(f"Computing {basename(target_path)!r} tsconfig from {self.includes!r}")
-				self.create_tsconfig(temp_path)
+				self.create_tsconfig(temp_path, use_babel=use_babel)
 			return True
 		return False
 
@@ -204,21 +206,62 @@ class Includes:
 		ensure_file_directory(temporary_path)
 
 		if language.lower() == "typescript":
-			from .script_setup import request_typescript
-			tsc = request_typescript()
-			if not tsc:
-				raise RuntimeError("A tsc is required to build this source, make sure it is present before calling this function.")
-			command = [
-				tsc,
-				"--project", self.get_tsconfig(),
-				*GLOBALS.PREFERRED_CONFIG.get_value("development.tsc", list())
-			]
-			if not PROPERTIES.get_value("release"):
-				# Do NOT resolve down-level declaration, like 'android.d.ts' if it not included
-				command.append("--noResolve")
-				# Do NOT check declarations to resolve conflicts and something else due to --noResolve
-				command.append("--skipLibCheck")
-			return subprocess.call(command, shell=platform.system() == "Windows")
+			from .script_setup import should_use_babel
+			use_babel = should_use_babel()
+
+			if use_babel:
+				from .babel_build import transpile_with_babel
+				from .babel_setup import (generate_toolchain_babel_config,
+				                          has_project_babel_config)
+
+				ordered_files: list = []
+				for search_path in self.include:
+					for filepath in glob(join(self.directory, search_path), recursive=True):
+						if filepath not in self.exclude and (filepath.endswith(".ts") or filepath.endswith(".js")) and isfile(filepath):
+							ordered_files.append(normpath(filepath))
+
+				if has_project_babel_config(self.directory):
+					babel_config = join(self.directory, next(
+						name for name in (
+							"babel.config.json", "babel.config.js", "babel.config.cjs",
+							".babelrc", ".babelrc.json", ".babelrc.js",
+						) if isfile(join(self.directory, name))
+					))
+				else:
+					babel_config_path = join(
+						GLOBALS.MAKE_CONFIG.get_build_path("sources"),
+						".toolchain.babel.config.json"
+					)
+					babel_config = generate_toolchain_babel_config(
+						babel_config_path,
+						tsconfig_params=dict(self.params),
+					)
+
+				force = bool(PROPERTIES.get_value("release"))
+				return transpile_with_babel(
+					ordered_files=ordered_files,
+					output_path=temporary_path,
+					babel_config_path=babel_config,
+					source_directory=self.directory,
+					force=force,
+				)
+
+			else:
+				from .script_setup import request_typescript
+				tsc = request_typescript()
+				if not tsc:
+					raise RuntimeError("A tsc is required to build this source, make sure it is present before calling this function.")
+				command = [
+					tsc,
+					"--project", self.get_tsconfig(),
+					*GLOBALS.PREFERRED_CONFIG.get_value("development.tsc", list())
+				]
+				if not PROPERTIES.get_value("release"):
+					# Do NOT resolve down-level declaration, like 'android.d.ts' if it not included
+					command.append("--noResolve")
+					# Do NOT check declarations to resolve conflicts and something else due to --noResolve
+					command.append("--skipLibCheck")
+				return subprocess.call(command, shell=platform.system() == "Windows")
 
 		else:
 			with open(temporary_path, "w", encoding="utf-8") as source:

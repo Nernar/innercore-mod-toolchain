@@ -15,7 +15,7 @@ from .utils import DEVNULL
 @task(
 	"buildScripts",
 	locks=["script", "cleanup", "push"],
-	description="Recompiles scripts using simple file concatenation or tsc."
+	description="Recompiles scripts using file concatenation, TypeScript Compiler or Babel."
 )
 def task_build_scripts() -> int:
 	if not GLOBALS.MAKE_CONFIG.supports_scripts:

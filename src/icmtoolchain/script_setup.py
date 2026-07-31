@@ -4,7 +4,7 @@ import subprocess
 from json import loads as json_loads
 from os import mkdir
 from os.path import exists, isdir, isfile, join
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from urllib.request import urlopen
 
 from .context import GLOBALS
@@ -143,3 +143,45 @@ def fetch_declarations() -> bool:
 
 	success("Installed latest version of core-engine.d.ts declarations.")
 	return True
+
+def get_tsc_version() -> Tuple[int, ...]:
+	tsc = request_typescript(only_check=True)
+	if not tsc:
+		return (0, 0, 0)
+	try:
+		output = subprocess.check_output(
+			[tsc, "--version"],
+			shell=platform.system() == "Windows",
+			stderr=subprocess.DEVNULL,
+			text=True,
+		).strip()
+		parts = output.split()
+		if len(parts) >= 2:
+			return tuple(int(x) for x in parts[-1].split("."))
+	except (subprocess.SubprocessError, ValueError, OSError):
+		pass
+	return (0, 0, 0)
+
+def should_use_babel() -> bool:
+	from .context import GLOBALS
+	babel_setting = GLOBALS.PREFERRED_CONFIG.get_value("babel", "auto")
+
+	if babel_setting is True:
+		return True
+	if babel_setting is False:
+		return False
+
+	try:
+		from .babel_setup import has_project_babel_config, request_babel
+		if has_project_babel_config(GLOBALS.MAKE_CONFIG.directory):
+			return True
+		if not request_babel(only_check=True):
+			return False
+	except Exception:
+		return False
+
+	version = get_tsc_version()
+	if version >= (6, 0, 0):
+		return True
+
+	return False

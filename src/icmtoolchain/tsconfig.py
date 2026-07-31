@@ -259,14 +259,20 @@ class CompositeProject:
 		with open(self.get_tsconfig(), "w", encoding="utf-8") as tsconfig:
 			tsconfig.write(json.dumps(template, indent="\t", ensure_ascii=False) + "\n")
 
-	def build(self, *args: str) -> int:
+	def build(self, *args: str, emit: bool = True) -> int:
 		from .script_setup import request_typescript
 		tsc = request_typescript()
 		if not tsc:
 			raise RuntimeError("A tsc is required to build project, make sure it is present before calling this function.")
-		return subprocess.call([
+		command = [
 			tsc,
 			"--build", self.get_tsconfig(),
 			*GLOBALS.MAKE_CONFIG.get_value("development.tsc", list()),
 			*args
-		], shell=platform.system() == "Windows")
+		]
+		if not emit:
+			command.append("--noEmit")
+		return subprocess.call(command, shell=platform.system() == "Windows")
+
+	def type_check(self, *args: str) -> int:
+		return self.build(*args, emit=False)
