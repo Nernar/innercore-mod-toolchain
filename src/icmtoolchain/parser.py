@@ -9,7 +9,7 @@ from typing import Any, Callable, Mapping, MutableSequence, Optional, Tuple
 from .context import GLOBALS, PROPERTIES
 from .logger import attention, print
 from .shell import stringify
-from .task import Task
+from .task import BaseScheduledTask, ScheduledTask, Task
 
 MAGICS = (
 	"__annotations__", "__bases__", "__class__", "__closure__",
@@ -190,8 +190,6 @@ def dump(what: object, stack: int = 0, name: str = "", *, exclude_builtins: bool
 		return
 	dump_attribute(attribute, stack, exclude_builtins=exclude_builtins, recursive=recursive, sort_by_kinds=sort_by_kinds, inter_subclasses=inter_subclasses, limit_depth=limit_depth)
 
-NamedCallable = namedtuple("NamedCallable", "name callable")
-
 def parse_argument_value(what: str, target: type, default: Any) -> Any:
 	try:
 		if target == bool or type(default) == bool:
@@ -345,28 +343,30 @@ def apply_properties(**kwargs) -> int:
 	apply_environment_properties(ignore_config=True)
 	return 0
 
-def parse_arguments(argv: MutableSequence[str], mappings: Mapping[str, Task], fallback: Optional[Callable[[str, Callable, MutableSequence[NamedCallable]], None]] = None) -> MutableSequence[NamedCallable]:
-	callables = list()
-
+def parse_arguments(argv: MutableSequence[str], mappings: Mapping[str, Task], fallback: Optional[Callable[[str, Callable, MutableSequence['BaseScheduledTask']], None]] = None) -> MutableSequence['BaseScheduledTask']:
+	scheduled_tasks = []
 	while True:
 		try:
 			if len(argv) == 0:
 				raise StopIteration()
 			argument = argv.pop(0)
 		except StopIteration:
-			return callables
+			return scheduled_tasks
 		else:
 			if argument[:1] == "-":
 				argv.insert(0, argument)
 				target = parse_callable_arguments(argv, apply_properties, GLOBALS.PARAMETER_SIGNATURE)
+				scheduled_tasks.append(BaseScheduledTask("globals", target))
+				continue
+
 			else:
 				task = mappings.get(argument)
-				contains = task is not None
-				task = task if task else lambda *args, **kwargs: None
-				signature = inspect.signature(task.callable if contains else task)
-				target = parse_callable_arguments(argv, task, signature)
-				if not contains:
-					if fallback:
-						fallback(argument, target, callables)
-					continue
-			callables.append(NamedCallable(argument if argument[:1] != "-" else "globals", target))
+				task_callable = task.callable if task is not None else lambda *args, **kwargs: None
+				signature = inspect.signature(task_callable)
+				target = parse_callable_arguments(argv, task_callable, signature)
+
+			if task is None:
+				if fallback:
+					fallback(argument, target, scheduled_tasks)
+				continue
+			scheduled_tasks.append(ScheduledTask(task, target))

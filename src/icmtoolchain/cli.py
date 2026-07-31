@@ -4,8 +4,8 @@ from itertools import tee
 from os import listdir
 from os.path import dirname, isdir, isfile, join
 from time import time
-from typing import (TYPE_CHECKING, Any, MutableSequence, MutableSet, NoReturn,
-                    Optional)
+from typing import (TYPE_CHECKING, Iterator, MutableSequence, MutableSet,
+                    NoReturn, Optional)
 
 from .config import FileConfig
 from .context import GLOBALS
@@ -16,7 +16,7 @@ from .shell import UNICODE_BALLOT_X, pretty_ansi_layers
 from .utils import RuntimeCodeError
 
 if TYPE_CHECKING:
-	from .parser import NamedCallable
+	from .task import BaseScheduledTask
 
 
 def show_help(requires_art: bool = False):
@@ -81,19 +81,19 @@ def resolve_circular_references(graph: ProjectGraph) -> bool:
 		raise RuntimeError("Cannot build a project with unresolved dependencies!")
 	return True
 
-def execute_task(callable: 'NamedCallable') -> None:
+def execute_task(scheduled_task: 'BaseScheduledTask') -> None:
 	try:
-		result = callable.callable()
-		if result != 0:
-			raise ToolchainError(f"Task {callable.name} failed with result {result}.", code=result)
+		result = scheduled_task()
+		if result not in (0, None):
+			raise ToolchainError(f"Task {scheduled_task.name} failed with result {result}.", code=result)
 	except ToolchainError:
 		raise
 	except BaseException as err:
 		if isinstance(err, SystemExit):
 			raise err
 		if isinstance(err, RuntimeCodeError):
-			raise ToolchainError(f"Task {callable.name} failed with error code #{err.code}: {err}", code=err.code)
-		raise ToolchainError(f"Task {callable.name} failed with unexpected error!", cause=err)
+			raise ToolchainError(f"Task {scheduled_task.name} failed with error code #{err.code}: {err}", code=err.code)
+		raise ToolchainError(f"Task {scheduled_task.name} failed with unexpected error!", cause=err)
 
 def build_project_graph() -> ProjectGraph:
 	graph = ProjectGraph(GLOBALS.MAKE_CONFIG)
@@ -103,19 +103,23 @@ def build_project_graph() -> ProjectGraph:
 	resolve_circular_references(graph)
 	return graph
 
-def run_sequential_build(graph: ProjectGraph, targets: Any) -> None:
+def run_sequential_build(graph: ProjectGraph, targets: Iterator['BaseScheduledTask']) -> None:
 	from .language import MakeDataConfig
-	for edge in graph.traverse_dependencies():
+	dependencies = graph.traverse_dependencies()
+	for scheduled_task in targets:
+		scheduled_task.prepare(dependencies)
+	for edge in dependencies:
 		GLOBALS.shutdown_project()
 		assert isinstance(edge.project, MakeDataConfig)
 		GLOBALS.make_config = edge.project
 		targets, tasks = tee(targets)
-		for callable in tasks:
-			execute_task(callable)
+		for scheduled_task in tasks:
+			execute_task(scheduled_task)
 
-def run_single_build(targets: Any) -> None:
-	for callable in targets:
-		execute_task(callable)
+def run_single_build(targets: Iterator['BaseScheduledTask']) -> None:
+	for scheduled_task in targets:
+		scheduled_task.prepare()
+		execute_task(scheduled_task)
 
 def run(argv: Optional[MutableSequence[str]] = None):
 	if not argv or len(argv) == 0:
@@ -166,10 +170,8 @@ def run(argv: Optional[MutableSequence[str]] = None):
 			graph = build_project_graph()
 
 			if is_concurrent:
-				targets, tasks = tee(targets)
-				task_names = [t.name for t in tasks]
 				from .concurrent_build import run_concurrent_build
-				asyncio.run(run_concurrent_build(graph, task_names))
+				asyncio.run(run_concurrent_build(graph, targets))
 			else:
 				run_sequential_build(graph, targets)
 		else:

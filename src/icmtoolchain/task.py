@@ -1,8 +1,11 @@
-import multiprocessing
 import threading
-from dataclasses import dataclass, field
 from os.path import join
-from typing import Any, Callable, Dict, Final, List, Optional, Sequence
+from typing import (TYPE_CHECKING, Any, Callable, Dict, Final, List, Optional,
+                    Sequence)
+
+if TYPE_CHECKING:
+	from multiprocessing.managers import SyncManager
+	from .project_graph import ProjectEdge
 
 from .logger import print
 from .output_directory import get_temporary_directory, lock_file, unlock_file
@@ -15,37 +18,10 @@ TASK_MODE_ONCE_LATELY = 3
 class Task:
 	name: Final[str]
 	description: str = ""
+	initial_status: Optional[str] = None
 	callable: Callable
 	mode: int
 	locks: Optional[List[str]] = None
-
-	@property
-	def _status(self) -> Optional[str]:
-		return getattr(self._local, "status", None)
-
-	@_status.setter
-	def _status(self, value: Optional[str]) -> None:
-		self._local.status = value
-
-	@property
-	def on_status_changed(self) -> Optional[Callable[[str], None]]:
-		return getattr(self._local, "on_status_changed", None)
-
-	@on_status_changed.setter
-	def on_status_changed(self, value: Optional[Callable[[str], None]]) -> None:
-		self._local.on_status_changed = value
-
-	@property
-	def status(self) -> str:
-		if not self._status:
-			return f"Running task {self.name}..."
-		return self._status
-
-	@status.setter
-	def status(self, value: str) -> None:
-		self._status = value
-		if self.on_status_changed:
-			self.on_status_changed(value)
 
 	def __init__(
 		self,
@@ -66,12 +42,10 @@ class Task:
 		else:
 			raise ValueError(f"Task {name!r} is already exists.")
 		self.name = name
-		self._local = threading.local()
 		if description:
 			self.description = description
 		self.mode = mode
-		if status:
-			self.status = status
+		self.initial_status = status
 		if locks:
 			self.locks = locks
 		self.yield_message = yield_message
@@ -88,7 +62,7 @@ class Task:
 		self.unlock()
 		return result
 
-	def __call__(self, *args, **kwargs):
+	def __call__(self, *args, **kwargs) -> Any:
 		return self.execute(False, *args, **kwargs)
 
 	def lock_of(self, name: str) -> str:
@@ -147,28 +121,25 @@ def task(name: str, description: Optional[str] = None, mode: int = TASK_MODE_PRO
 	return decorator
 
 
-class ScheduledTask:
-	task: Task
+class BaseScheduledTask:
+	name: Final[str]
 	callable: Callable
-	lock: Optional[threading.Lock]
-	barrier: Optional[threading.Barrier] = None
-	has_run: bool = False
 
-	def __init__(self, task: Task, callable: Callable):
-		self.task = task
+	def __init__(self, name: str, callable: Callable):
+		self.name = name
 		self.callable = callable
 		self._local = threading.local()
 
-	def prepare(self, opponents: Sequence['ScheduledTask']):
-		if self.task.mode == TASK_MODE_ONCE_EARLY:
-			self.lock = threading.Lock()
-		elif self.task.mode == TASK_MODE_ONCE_LATELY:
-			self.barrier = threading.Barrier(len(opponents))
+	def prepare(self, projects: Optional[Sequence['ProjectEdge']] = None, sync_manager: Optional['SyncManager'] = None):
+		pass
+
+	@property
+	def description(self) -> str:
+		return self.name
 
 	@property
 	def _status(self) -> Optional[str]:
-		status = getattr(self._local, "status", None)
-		return status or task.status
+		return getattr(self._local, "status", None)
 
 	@_status.setter
 	def _status(self, value: Optional[str]) -> None:
@@ -184,9 +155,9 @@ class ScheduledTask:
 
 	@property
 	def status(self) -> str:
-		if not self._status:
-			return self.task.status
-		return self._status
+		if self._status:
+			return self._status
+		return f"Running task {self.name}..."
 
 	@status.setter
 	def status(self, value: str) -> None:
@@ -194,19 +165,78 @@ class ScheduledTask:
 		if self.on_status_changed:
 			self.on_status_changed(value)
 
-	def execute(self):
+	def execute(self, silent: bool = False, *args, **kwargs) -> Any:
+		return self.callable()
+
+	def __call__(self, *args, **kwargs) -> Any:
+		return self.execute(*args, **kwargs)
+
+	def abort(self) -> None:
+		pass
+
+class ScheduledTask(BaseScheduledTask):
+	task: Task
+	lock: Optional[threading.Lock] = None
+	barrier: Optional[threading.Barrier] = None
+	has_run: bool = False
+
+	def __init__(self, task: Task, callable: Callable):
+		super().__init__(task.name, callable)
+		self.task = task
+
+	@property
+	def description(self) -> str:
+		return self.task.description or self.name
+
+	def prepare(self, projects: Optional[Sequence['ProjectEdge']] = None, sync_manager: Optional['SyncManager'] = None):
+		barrier_parties = len(projects) if projects else 1
+
+		if not sync_manager:
+			if self.task.mode == TASK_MODE_ONCE_EARLY:
+				self.lock = threading.Lock()
+			elif self.task.mode == TASK_MODE_ONCE_LATELY:
+				self.barrier = threading.Barrier(barrier_parties)
+
+		else:
+			if self.task.mode == TASK_MODE_ONCE_EARLY:
+				self.lock = sync_manager.Lock()
+			elif self.task.mode == TASK_MODE_ONCE_LATELY:
+				self.barrier = sync_manager.Barrier(barrier_parties)
+
+	@property
+	def _status(self) -> Optional[str]:
+		return super()._status or self.task.initial_status
+
+	@property
+	def status(self) -> str:
+		if self._status:
+			return self._status
+		if self.task.initial_status:
+			return self.task.initial_status
+		return f"Running task {self.name}..."
+
+	def execute(self, silent: bool = False, *args, **kwargs) -> Any:
+		if not silent:
+			print(f"> Executing task: {self.task.name}", style="class:task.execute")
+
 		if self.task.mode == TASK_MODE_ONCE_EARLY:
-			assert self.lock, "ScheduledTask is not prepared!"
+			assert self.lock is not None, "ScheduledTask is not prepared!"
 			with self.lock:
 				if self.has_run:
 					return
 				self.has_run = True
-				self.callable()
+				return self.callable()
 
 		elif self.task.mode == TASK_MODE_ONCE_LATELY:
-			assert self.barrier, "ScheduledTask is not prepared!"
+			assert self.barrier is not None, "ScheduledTask is not prepared!"
 			if self.barrier.wait() == 0:
-				self.callable()
+				return self.callable()
+			return
 
 		else:
-			self.callable()
+			return self.callable()
+
+	def abort(self) -> None:
+		if self.barrier:
+			try: self.barrier.abort()
+			except: pass

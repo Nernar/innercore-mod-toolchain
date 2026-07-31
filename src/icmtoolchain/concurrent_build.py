@@ -2,21 +2,22 @@ import asyncio
 import contextlib
 import io
 import sys
+import threading
 from dataclasses import dataclass
 from itertools import cycle
 from os.path import basename
 from queue import Empty, Queue
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, Iterator, List, Optional, Tuple, cast
 
 from prompt_toolkit.widgets import TextArea
 
 from .context import GLOBALS
 from .errors import abort
 from .language import MakeDataConfig
-from .logger import attention, error, print, trace
+from .logger import error, print, trace
 from .project_graph import ConcurrentScheduler, ProjectEdge, ProjectGraph
 from .shell import Interactable, Progress
-from .task import TASKS
+from .task import BaseScheduledTask
 from .utils import RuntimeCodeError
 
 
@@ -32,7 +33,7 @@ class BuildStatus:
 	has_failure: bool = False
 	failure_code: int = 1
 
-def worker_execute_project_tasks(node: ProjectEdge, task_names: List[str], queue: Optional[Queue] = None) -> Tuple[int, List[Tuple[str, str]]]:
+def worker_execute_project_tasks(node: ProjectEdge, scheduled_tasks: Iterator['BaseScheduledTask'], queue: Optional[Queue] = None) -> Tuple[int, List[Tuple[str, str]]]:
 	if not isinstance(node.project, MakeDataConfig):
 		raise RuntimeError(f"Project {node} is not populated!")
 
@@ -43,25 +44,18 @@ def worker_execute_project_tasks(node: ProjectEdge, task_names: List[str], queue
 	overall_result = 0
 	all_task_logs = []
 
-	for task_name in task_names:
+	for scheduled_task in scheduled_tasks:
+		task_name = scheduled_task.name
 		buffer = io.StringIO()
 		with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
-			if task_name not in TASKS:
-				attention(f"No such task: {task_name}.")
-				overall_result = 1
-				all_task_logs.append((task_name, buffer.getvalue()))
-				break
-
-			callable_task = TASKS[task_name]
-
 			if queue:
 				queue.put(TaskEvent(
 					type="start",
 					project=project_spec,
-					task_name=callable_task.name,
-					text=callable_task.description or callable_task.name
+					task_name=task_name,
+					text=scheduled_task.description
 				))
-				callable_task.on_status_changed = lambda status, pn=project_spec, tn=callable_task.name: queue.put(TaskEvent(
+				scheduled_task.on_status_changed = lambda status, pn=project_spec, tn=task_name: queue.put(TaskEvent(
 					type="status",
 					project=pn,
 					task_name=tn,
@@ -69,27 +63,34 @@ def worker_execute_project_tasks(node: ProjectEdge, task_names: List[str], queue
 				))
 
 			try:
-				result = callable_task.callable()
-				if result != 0:
+				result = scheduled_task()
+				if result not in (0, None):
 					overall_result = cast(int, result)
 					all_task_logs.append((task_name, buffer.getvalue()))
+					for scheduled_task in scheduled_tasks:
+						scheduled_task.abort()
 					break
 			except BaseException as err:
 				if isinstance(err, SystemExit):
 					overall_result = int(err.code) if err.code is not None else 0
 					all_task_logs.append((task_name, buffer.getvalue()))
-					break
-				if isinstance(err, RuntimeCodeError):
-					error(f"Task {callable_task.name} failed with error code #{err.code}: {err}")
+				elif isinstance(err, RuntimeCodeError):
+					error(f"Task {task_name} failed with error code #{err.code}: {err}")
+					overall_result = 255
+					all_task_logs.append((task_name, buffer.getvalue()))
 				else:
-					error(f"Task {callable_task.name} failed with unexpected error!")
-					trace(err)
-				overall_result = 255
-				all_task_logs.append((task_name, buffer.getvalue()))
+					if not isinstance(err, threading.BrokenBarrierError):
+						error(f"Task {task_name} failed with unexpected error!")
+						trace(err)
+					overall_result = 255
+					all_task_logs.append((task_name, buffer.getvalue()))
+
+				for scheduled_task in scheduled_tasks:
+					scheduled_task.abort()
 				break
 			finally:
 				if queue:
-					callable_task.on_status_changed = None
+					scheduled_task.on_status_changed = None
 		all_task_logs.append((task_name, buffer.getvalue()))
 
 	return overall_result, all_task_logs
@@ -175,7 +176,7 @@ class ConcurrentCliApplication:
 		clear_application(*self.contents, force_exit=True)
 
 
-async def build_executor_loop(app: ConcurrentCliApplication, scheduler: ConcurrentScheduler, task_names: List[str], max_workers: int, queue: Any, all_logs: list, status_obj: BuildStatus, use_processes: bool = False):
+async def build_executor_loop(app: ConcurrentCliApplication, scheduler: ConcurrentScheduler, scheduled_tasks: Iterator['BaseScheduledTask'], max_workers: int, queue: Any, all_logs: list, status_obj: BuildStatus, use_processes: bool = False):
 	if use_processes:
 		from concurrent.futures import ProcessPoolExecutor as Executor
 	else:
@@ -196,7 +197,7 @@ async def build_executor_loop(app: ConcurrentCliApplication, scheduler: Concurre
 					executor,
 					worker_execute_project_tasks,
 					node,
-					task_names,
+					scheduled_tasks,
 					queue
 				)
 				pending_futures[future] = (node, pane)
@@ -238,7 +239,7 @@ async def build_executor_loop(app: ConcurrentCliApplication, scheduler: Concurre
 	app.stop_workers()
 	app.exit()
 
-async def run_concurrent_build(graph: 'ProjectGraph', task_names: List[str]):
+async def run_concurrent_build(graph: 'ProjectGraph', scheduled_tasks: Iterator['BaseScheduledTask']):
 	use_processes = GLOBALS.TOOLCHAIN_CONFIG.get_value("concurrentProcesses", False)
 
 	if use_processes:
@@ -254,7 +255,13 @@ async def run_concurrent_build(graph: 'ProjectGraph', task_names: List[str]):
 		manager = multiprocessing.Manager()
 		queue = manager.Queue()
 	else:
+		manager = None
 		queue = Queue()
+
+	scheduler = ConcurrentScheduler(graph)
+	
+	for scheduled_task in scheduled_tasks:
+		scheduled_task.prepare(list(scheduler.pending), manager)
 
 	if sys.version_info < (3, 13):
 		from os import cpu_count as _cpu_count
@@ -265,13 +272,11 @@ async def run_concurrent_build(graph: 'ProjectGraph', task_names: List[str]):
 
 	max_workers = max(1, cpu_count // 2 if cpu_count else 1)
 
-	scheduler = ConcurrentScheduler(graph)
-
 	app = ConcurrentCliApplication(len(scheduler.pending), max_workers)
 	all_logs = []
 	build_status = BuildStatus()
 
-	executor_task = asyncio.create_task(build_executor_loop(app, scheduler, task_names, max_workers, queue, all_logs, build_status, use_processes))
+	executor_task = asyncio.create_task(build_executor_loop(app, scheduler, scheduled_tasks, max_workers, queue, all_logs, build_status, use_processes))
 
 	try:
 		await app.run_async()
