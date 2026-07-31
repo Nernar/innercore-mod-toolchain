@@ -3,7 +3,7 @@ from typing import Optional
 
 from .context import GLOBALS, PROPERTIES
 from .errors import abort
-from .logger import attention, error, failure, frozen, success
+from .logger import attention, failure, frozen, success, warn
 from .output_directory import get_temporary_directory
 from .shell import confirm_prompt
 from .task import (TASK_MODE_GLOBALLY, TASK_MODE_ONCE_EARLY,
@@ -123,9 +123,9 @@ def task_clear_output(force: bool = False) -> int:
 def task_build_info() -> int:
 	project_data = GLOBALS.MAKE_CONFIG.obtain_project_data()
 	if project_data is None:
-		failure(f"Project type {GLOBALS.MAKE_CONFIG.project_type} is unknown or could not be determined from config!")
-		error("Please add property `info` for mod, `modpack` for modpack or `manifest` for pack into your 'make.json'.")
-		return 1
+		attention(f"Project type could not be determined from config, considering it should be mod!")
+		warn("Please add property `info` for mod, `modpack` for modpack or `manifest` for pack into your 'make.json'.")
+		return 0
 	return project_data.flush_to_output(GLOBALS.PROJECT_STRUCTURE.directory)
 
 @task(

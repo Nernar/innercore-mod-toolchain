@@ -12,7 +12,7 @@ from .utils import (copy_directory, copy_file, ensure_directory,
 
 
 def build_resources() -> int:
-	# TODO: Separate that shit, we do not need to rebuild EVERYTHING with thousands of resources...
+	# XXX: Probably separate that, but it still could be not quite useful...
 	GLOBALS.PROJECT_STRUCTURE.cleanup_target("resources")
 	GLOBALS.PROJECT_STRUCTURE.cleanup_target("gui")
 	GLOBALS.PROJECT_STRUCTURE.cleanup_target("resource_packs")
@@ -28,16 +28,18 @@ def build_resources() -> int:
 		for source_path in resource_files:
 			resource_name = basename(source_path)
 			if resource.type in ("resource_directory", "gui"):
+				resource_type = "resources" if resource.type == "resource_directory" else "gui"
 				target = GLOBALS.PROJECT_STRUCTURE.declare_target(
-					keyword="resources" if resource.type == "resource_directory" else "gui",
+					keyword=resource_type,
 					relative_path=resource_name,
 					declare={
 						"resourceType": "resource" if resource.type == "resource_directory" else resource.type
 					}
 				)
 			else:
+				resource_type = "resource_packs" if resource.type == "minecraft_resource_pack" else "behavior_packs" if resource.type == "minecraft_behavior_pack" else resource.type
 				target = GLOBALS.PROJECT_STRUCTURE.declare_target(
-					keyword="resource_packs" if resource.type == "minecraft_resource_pack" else "behavior_packs" if resource.type == "minecraft_behavior_pack" else resource.type,
+					keyword=resource_type,
 					relative_path=resource_name,
 					exclude=True,
 					declare_default={
@@ -49,7 +51,7 @@ def build_resources() -> int:
 			relative_path = GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)
 			GLOBALS.LINKED_RESOURCE_STORAGE.append_resource(
 				relative_path,
-				target.absolute_path,
+				target.relative_path,
 				push_unchanged=resource.push_unchanged_files,
 				cleanup_remote=resource.cleanup_remote
 			)
@@ -131,15 +133,18 @@ def build_package() -> int:
 	for linked_resource in GLOBALS.LINKED_RESOURCE_STORAGE.iterate_resources():
 		input_resource = GLOBALS.MAKE_CONFIG.get_relative_path(linked_resource["relative_path"])
 		output_package_resource = join(output_package_directory, linked_resource["output_path"])
+
 		if isfile(input_resource):
 			copy_file(input_resource, output_package_resource)
 		elif isdir(input_resource):
 			copy_directory(input_resource, output_package_resource)
 		else:
 			attention(f"We cannot copy resource {linked_resource['relative_path']!r} because we could not determine its type.")
+
 	for path in GLOBALS.MAKE_CONFIG.obtain_list("excludeFromRelease"):
 		for excluded_path in expand_paths(join(output_package_directory, path)):
 			remove_tree(excluded_path)
+
 	make_archive(output_temporary_file[:-4], "zip", output_directory, name)
 
 	remove_tree(output_package_directory)
