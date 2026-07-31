@@ -48,16 +48,20 @@ def ensure_file(path: str) -> None:
 	if isdir(path) or islink(path):
 		move_to_backup(path)
 
-def remove_tree(directory: str) -> None:
+def remove_tree(directory: str) -> bool:
 	"""
 	Removes existing files, directories and links recursive.
 	"""
 	if not exists(directory):
-		return
+		return False
 	if isfile(directory) or islink(directory):
 		os.remove(directory)
-		return
-	shutil.rmtree(directory, ignore_errors=True)
+		return True
+	try:
+		shutil.rmtree(directory, ignore_errors=False)
+	except Exception:
+		return False
+	return True
 
 def copy_file(source: str, destination: str) -> None:
 	"""
@@ -66,6 +70,7 @@ def copy_file(source: str, destination: str) -> None:
 	"""
 	source = abspath(source)
 	destination = abspath(destination)
+
 	ensure_file_directory(destination)
 	try:
 		shutil.copy(source, destination)

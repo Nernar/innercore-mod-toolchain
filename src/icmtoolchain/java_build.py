@@ -44,6 +44,7 @@ def collect_classpath_files(directories: Collection[str]) -> List[str]:
 			continue
 		libraries = get_all_files(classpath_directory, (".jar"))
 		classpath.extend(libraries)
+
 	global TOOLCHAIN_CLASSPATH
 	if not TOOLCHAIN_CLASSPATH:
 		from .output_directory import get_config_directory
@@ -56,6 +57,7 @@ def collect_classpath_files(directories: Collection[str]) -> List[str]:
 					TOOLCHAIN_CLASSPATH.remove(innercore_test)
 				except ValueError:
 					attention("Failed to exclude 'innercore-test.jar' from classpath for package build, contact developer and tell them they are a arsehole.")
+
 	if TOOLCHAIN_CLASSPATH:
 		classpath.extend(TOOLCHAIN_CLASSPATH)
 	return classpath

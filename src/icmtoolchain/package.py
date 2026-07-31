@@ -31,8 +31,9 @@ def get_path_set(locations: List[str], error_sensitive: bool = False) -> Optiona
 
 def pretty_cleanup_directory(path: str) -> None:
 	start_time = time.time()
-	remove_tree(GLOBALS.TOOLCHAIN_CONFIG.get_path(path))
-	success(f"Completed {basename(path)} cleanup in {int((time.time() - start_time) * 100) / 100}s")
+	absolute_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(path)
+	if remove_tree(absolute_path):
+		success(f"Completed {basename(path)} cleanup in {int((time.time() - start_time) * 100) / 100}s")
 
 def collect_project_templates() -> List[str]:
 	templates = []

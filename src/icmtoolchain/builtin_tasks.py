@@ -108,11 +108,13 @@ def task_resources() -> int:
 	description="Optionally deletes the output folder; has no effect by default."
 )
 def task_clear_output(force: bool = False) -> int:
-	if GLOBALS.MAKE_CONFIG.get_value("development.clearOutput", False) or force:
-		GLOBALS.PROJECT_STRUCTURE.cleanup(clear_output=True)
+	from .package import pretty_cleanup_directory
 	if PROPERTIES.get_value("release"):
-		from .package import pretty_cleanup_directory
 		pretty_cleanup_directory(GLOBALS.MAKE_CONFIG.get_build_path())
+	if force or GLOBALS.MAKE_CONFIG.get_value("development.clearOutput", False):
+		GLOBALS.PROJECT_STRUCTURE.cleanup(clear_output=True)
+	if force or PROPERTIES.get_value("release"):
+		pretty_cleanup_directory(GLOBALS.PROJECT_STRUCTURE.directory)
 	return 0
 
 @task(
