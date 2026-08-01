@@ -274,7 +274,7 @@ def task_configure_ide(exclude_toolchain: bool = False) -> int:
 	if GLOBALS.MAKE_CONFIG.project_type == PROJECT_TYPE_MODPACK:
 		flush_toolchain_tasks(f"{assemble_task_name} (Client)", "package", "--release --side client ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage", hidden=True)
 		flush_toolchain_tasks(f"{assemble_task_name} (Server)", "package", "--release --side server ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage", hidden=True)
-		flush_toolchain_tasks(f"{assemble_task_name} (Both)", "package", "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage --all_sides", hidden=True)
+		flush_toolchain_tasks(f"{assemble_task_name} (Both)", "package", "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage --all-sides", hidden=True)
 
 	flush_toolchain_tasks("Build (No push)", "run", "ensureProjectExists clearOutput buildScripts compileNative compileJava buildResources buildInfo", hidden=True)
 	flush_compound_tasks("Build", "run", ("Build (No push)", "Push"))

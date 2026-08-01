@@ -245,6 +245,17 @@ def parse_argument(argv: MutableSequence[str], mappings: Mapping[str, inspect.Pa
 	name, separator, buffer = name.partition("=")
 
 	parameter = mappings.get(name)
+	if not parameter:
+		normalized_name = name.replace("-", "_")
+		parameter = mappings.get(normalized_name)
+		if not parameter:
+			lowered_name = name.replace("-", "").replace("_", "").lower()
+			for param_name, param_obj in mappings.items():
+				if param_name.replace("-", "").replace("_", "").lower() == lowered_name:
+					parameter = param_obj
+					name = param_name
+					break
+
 	if parameter:
 		target = parameter.annotation
 		default = parameter.default
