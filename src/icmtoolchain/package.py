@@ -109,13 +109,14 @@ def request_create_project(template: Optional[str] = "../toolchain-mod") -> Opti
 			input.explanation = ""
 
 	default_name = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.name")
+	default_side = "client" if GLOBALS.TOOLCHAIN_CONFIG.get_value("template.clientOnly", False) else "both"
 	create_review = Review(
 		template=lambda _: create_template_chooser(),
 		name=Input("Decide a name for your project:", on_input=update_project_name, default_text=default_name, hint="Template Project"),
 		author=Input("Author who crafted this creation:", default_text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.author")),
 		version=Input("What version a project starts from:", default_text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.version"), hint="1.0"),
 		description=Input("Describe this masterpiece in one sentence:", default_text=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.description")),
-		client_side=Confirm("Is this project client-side (without server requirement)?", default_value=GLOBALS.TOOLCHAIN_CONFIG.get_value("template.clientOnly", False))
+		side=Select("Which side does this project target?", variants=["both", "client", "server"], default_variant=default_side, returns_what=True)
 	)
 
 	def update_template_defaults(template_config: Config) -> None:
@@ -127,11 +128,13 @@ def request_create_project(template: Optional[str] = "../toolchain-mod") -> Opti
 		version.hint = template_config.get_value("info.version", "1.0")
 		description = cast(Input, create_review.require_feedback("description"))
 		description.hint = template_config.get_value("info.description")
-		client_side = cast(Confirm, create_review.require_feedback("client_side"))
-		client_side.default_value = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.clientOnly", template_config.get_value("info.clientOnly", False))
+		side_select = cast(Select, create_review.require_feedback("side"))
+		template_client_only = GLOBALS.TOOLCHAIN_CONFIG.get_value("template.clientOnly", template_config.get_value("info.clientOnly", False))
+		template_server_only = template_config.get_value("info.serverOnly", False)
+		side_select.default_variant = "client" if template_client_only else "server" if template_server_only else "both"
 
 	def on_request_feedback(review: Review, key: str, feedback: Feedback) -> bool:
-		if always_skip_description and key in ("author", "version", "description", "client_side"):
+		if always_skip_description and key in ("author", "version", "description", "side"):
 			feedback.on_pre_request = lambda _: feedback.application.exit()
 		return True
 	create_review.on_request_feedback = on_request_feedback
@@ -156,7 +159,7 @@ def request_create_project(template: Optional[str] = "../toolchain-mod") -> Opti
 		author=results["author"],
 		version=results["version"],
 		description=results["description"],
-		clientOnly=results["client_side"]
+		side=results["side"] or "both"
 	)
 
 def resolve_make_format_map(make_obj: Dict[Any, Any], path: str) -> Dict[Any, Any]:
@@ -175,7 +178,8 @@ def resolve_make_format_map(make_obj: Dict[Any, Any], path: str) -> Dict[Any, An
 		"packageSuffix": ensure_not_whitespace(package_suffix, "project"),
 		"packagePrefix": package_prefix,
 		**make_obj_info,
-		"clientOnly": "true" if "clientOnly" in make_obj_info and make_obj_info["clientOnly"] else "false"
+		"clientOnly": "true" if "clientOnly" in make_obj_info and make_obj_info["clientOnly"] else "false",
+		"serverOnly": "true" if "serverOnly" in make_obj_info and make_obj_info["serverOnly"] else "false"
 	}
 
 def setup_project(make_obj: Dict[Any, Any], template: str, path: str) -> None:
@@ -220,7 +224,7 @@ def append_workspace_folder(folder: str, name: Optional[object] = "Project") -> 
 		})
 		GLOBALS.CODE_WORKSPACE.save_as_file()
 
-def create_project(template: str, folder: str, name: Optional[str] = None, author: Optional[str] = None, version: Optional[str] = None, description: Optional[str] = None, clientOnly: bool = False) -> None:
+def create_project(template: str, folder: str, name: Optional[str] = None, author: Optional[str] = None, version: Optional[str] = None, description: Optional[str] = None, side: str = "both") -> None:
 	location = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path(folder)
 	if exists(location):
 		abort(f"Folder {folder!r} already exists!")
@@ -249,8 +253,8 @@ def create_project(template: str, folder: str, name: Optional[str] = None, autho
 	template_info["description"] = description or ensure_not_whitespace(
 		template_info["description"] if "description" in template_info else None, "Describe your creation just in a few words."
 	)
-	template_info["clientOnly"] = clientOnly if clientOnly is not None else \
-		template_info["clientOnly"] if "clientOnly" in template_info else False
+	template_info["clientOnly"] = side == "client"
+	template_info["serverOnly"] = side == "server"
 
 	os.makedirs(location, exist_ok=True)
 	setup_project(template_obj, template_path, location)
