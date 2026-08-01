@@ -4,7 +4,7 @@ from json import dump as dump_json
 from json import load as load_json
 from os.path import (abspath, basename, dirname, exists, isfile, join,
                      normpath, relpath)
-from typing import (Any, Callable, Dict, Iterable, MutableMapping,
+from typing import (Any, Callable, Dict, Iterable, List, MutableMapping,
                     MutableSequence, Optional, Protocol, Type, TypeVar, Union,
                     cast)
 
@@ -96,8 +96,8 @@ class Config(Dict[str, Any]):
 				config.defaults = prototype_config
 		return config
 
-	def obtain_list(self, key: str, *, implace_fallback: bool = False, allow_prototype: bool = True) -> MutableSequence:
-		sequence = self.obtain(key, MutableSequence, fallback=lambda: list(), implace_fallback=implace_fallback, allow_prototype=allow_prototype)
+	def obtain_list(self, key: str, *, implace_fallback: bool = False, allow_prototype: bool = True) -> List:
+		sequence = self.obtain(key, list, fallback=lambda: list(), implace_fallback=implace_fallback, allow_prototype=allow_prototype)
 		if allow_prototype and self.defaults is not None:
 			# Merging lists, maybe creating a new one is sometimes not convenient, then you should use allow_prototype=False.
 			prototype_sequence = self.defaults.obtain_list(key, implace_fallback=False)

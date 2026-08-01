@@ -4,14 +4,12 @@ from typing import (Any, Iterable, MutableMapping, MutableSequence, Optional,
                     Union)
 
 from .config import Config, FileConfig
-from .context import GLOBALS
 from .language import (PROJECT_TYPE_MOD, PROJECT_TYPE_MODPACK,
                        PROJECT_TYPE_PACK, FlushableMakeProjectData,
                        MakeAssetData, MakeDataConfig, MakeJavaData,
                        MakeNativeData, MakePackGraphicsData, MakeResourceData,
                        MakeScriptData, MakeSharedObjectData)
 from .project_graph import Artifact
-from .utils import ensure_not_whitespace
 
 VALID_SOURCE_TYPES = ("main", "launcher", "preloader", "instant", "custom", "library")
 VALID_RESOURCE_TYPES = ("resource_directory", "gui", "minecraft_resource_pack", "minecraft_behavior_pack")
@@ -72,36 +70,30 @@ class MakeConfig(MakeDataConfig):
 		return PROJECT_TYPE_MOD
 
 	def iterate_dependencies(self) -> Iterable[Union[MakeDataConfig, Artifact]]:
-		dependencies = self.obtain_list("dependencies")
-		for dependency in dependencies:
-			path = None
-			if isinstance(dependency, Config):
-				path = dependency.get_value("path")
-			elif isinstance(dependency, str):
-				path = dependency
+		resolved_dependencies = self.obtain_list("dependencies")
 
-			if path and ensure_not_whitespace(path):
-				absolute_path = self.get_path(path)
-				project = MakeDataConfig.of(absolute_path)
-				if project:
-					yield project
+		# Append dependencies declared inside matching configuration blocks
+		# e.g. configurations.client.dependencies / configurations.server.dependencies
+		configurations = self.get_value("configurations")
+		if isinstance(configurations, MutableMapping):
+			for value_set, configuration in configurations.items():
+				if not self.is_relevant_configuration(value_set):
 					continue
-				absolute_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(path)
-				project = MakeDataConfig.of(absolute_path)
-				if project:
-					yield project
+				if not isinstance(configuration, MutableMapping):
 					continue
+				config_dependencies = configuration.get("dependencies", [])
+				if isinstance(config_dependencies, list):
+					resolved_dependencies = resolved_dependencies + config_dependencies
 
-			artifact = Artifact.of(dependency)
-			if artifact:
-				yield artifact
+		active_side = self.get_active_side()
+		for dependency in resolved_dependencies:
+			resolved = self.resolve_dependency_entry(dependency)
+			if resolved is None:
 				continue
-
-			if not self.get_value("project.requiredDependencies", True) or isinstance(dependency, Config) and not dependency.get_value("required", True):
-				from .logger import attention
-				attention(f"Skipping unsatisfied dependency {dependency!r}, since it is optional.")
-				continue
-			raise ValueError(f"Invalid dependency {dependency!r}, it should be relative project path, id or repository url!")
+			if active_side and isinstance(resolved, MakeDataConfig):
+				if not resolved.is_side_compatible(active_side):
+					continue
+			yield resolved
 
 	def obtain_project_data(self) -> Optional[FlushableMakeProjectData]:
 		if self.project_type == PROJECT_TYPE_MOD and "info" in self:

@@ -79,6 +79,8 @@ class MakeModData(FlushableMakeProjectData):
 	version: str = "1.0"
 	description: str = ""
 	icon: Optional[str] = "mod_icon.png"
+	client_only: bool = False
+	server_only: bool = False
 
 	def flush_to_output(self, directory: str) -> int:
 		info_file = join(directory, "mod.info")
@@ -91,6 +93,10 @@ class MakeModData(FlushableMakeProjectData):
 			info.set_value("version", self.version)
 		if not ensure_not_whitespace(self.description):
 			info.set_value("description", self.description)
+		if self.client_only:
+			info.set_value("clientOnly", True)
+		elif self.server_only:
+			info.set_value("serverOnly", True)
 		info.save_as_file()
 
 		icon_path = GLOBALS.MAKE_CONFIG.get_path(self.icon or "mod_icon.png")
@@ -231,6 +237,8 @@ class ModpackDataMixin:
 		version = mod_info.get_value("version") or ""
 		description = mod_info.get_value("description") or ""
 		icon = mod_info.get_value("icon")
+		client_only = bool(mod_info.get_value("clientOnly", False))
+		server_only = bool(mod_info.get_value("serverOnly", False))
 
 		from .utils import shortcodes
 		return MakeModData(
@@ -238,7 +246,9 @@ class ModpackDataMixin:
 			author=author,
 			version=shortcodes(version),
 			description=shortcodes(description),
-			icon=icon
+			icon=icon,
+			client_only=client_only,
+			server_only=server_only
 		)
 
 	def shortcodes_mapping(self, mapping: Union[MutableMapping[str, str], str]) -> Union[MutableMapping[str, str], str]:
@@ -411,7 +421,27 @@ class PackGraphicsConfigMixin:
 		"""
 		return []
 
-class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ModpackDataMixin, JavaConfigMixin, NativeConfigMixin, ScriptConfigMixin, SharedObjectsConfigMixin, ResourceConfigMixin, PackGraphicsConfigMixin, ABC):
+class SideAwareMixin:
+	def get_project_side(self) -> Optional[str]:
+		"""Returns 'client', 'server', or None (both sides).
+		Priority: clientOnly > serverOnly > None.
+		"""
+		return None
+
+	def is_side_compatible(self, active_side: Optional[str]) -> bool:
+		"""Returns True if this project should be included for the given active side.
+
+		Args:
+			active_side: 'client', 'server', or None / 'both' (no filter).
+		"""
+		if not active_side or active_side == "both":
+			return True
+		project_side = self.get_project_side()
+		if project_side is None:
+			return True
+		return project_side == active_side
+
+class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ModpackDataMixin, SideAwareMixin, JavaConfigMixin, NativeConfigMixin, ScriptConfigMixin, SharedObjectsConfigMixin, ResourceConfigMixin, PackGraphicsConfigMixin, ABC):
 	defaults: FileConfig
 	current_project: Final[str]
 	project_unique_name: Final[str]
@@ -438,6 +468,54 @@ class MakeDataConfig(FileConfig, RuleSetConfig, RuleSetHolder, ModpackDataMixin,
 			int: one of obviously existing PROJECT_TYPEs, or something else
 		"""
 		return PROJECT_TYPE_UNKNOWN
+
+	def get_project_side(self) -> Optional[str]:
+		if self.get_value("info.clientOnly", False):
+			return "client"
+		if self.get_value("info.serverOnly", False):
+			return "server"
+		return None
+
+	def get_active_side(self) -> Optional[str]:
+		"""Reads the active build side from the current RuleSet properties."""
+		if "client" in self.properties:
+			return "client"
+		if "server" in self.properties:
+			return "server"
+		return None
+
+	def resolve_dependency_entry(self, dependency: Any) -> Optional[Union['MakeDataConfig', 'Artifact']]:
+		"""Resolves a single dependency entry (path, int id, or dict) to a project or artifact.
+
+		Returns None if the dependency cannot be resolved and should be skipped
+		(e.g. optional and unsatisfied). Raises ValueError for required unresolved entries.
+		"""
+		path = None
+		if isinstance(dependency, Config):
+			path = dependency.get_value("path")
+		elif isinstance(dependency, str):
+			path = dependency
+
+		if path and ensure_not_whitespace(path):
+			absolute_path = self.get_path(path)
+			project = MakeDataConfig.of(absolute_path)
+			if project:
+				return project
+			absolute_path = GLOBALS.TOOLCHAIN_CONFIG.get_path(path)
+			project = MakeDataConfig.of(absolute_path)
+			if project:
+				return project
+
+		from .project_graph import Artifact
+		artifact = Artifact.of(dependency)
+		if artifact:
+			return artifact
+
+		if not self.get_value("project.requiredDependencies", True) or (isinstance(dependency, Config) and not dependency.get_value("required", True)):
+			from .logger import attention
+			attention(f"Skipping unsatisfied dependency {dependency!r}, since it is optional.")
+			return None
+		raise ValueError(f"Invalid dependency {dependency!r}, it should be relative project path, id or repository url!")
 
 	def iterate_dependencies(self) -> Iterable[Union['MakeDataConfig', 'Artifact']]:
 		"""Each project may contain dependencies that must be compiled before that project itself.

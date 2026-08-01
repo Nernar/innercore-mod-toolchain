@@ -135,9 +135,22 @@ def task_build_info() -> int:
 	locks=["push", "assemble", "native", "java", "resource", "script"],
 	description="Assembles project's output folder into an archive, specifically for publishing in a mod browser."
 )
-def task_build_package() -> int:
+def task_build_package(all_sides: bool = False) -> int:
 	from .resources import build_package
-	return build_package()
+	if not all_sides:
+		active_side = PROPERTIES.get_value("side")
+		return build_package(side=active_side)
+
+	results = []
+	for side in (None, "client", "server"):
+		if side:
+			GLOBALS.MAKE_CONFIG.bisect_properties(side)
+		else:
+			GLOBALS.MAKE_CONFIG.remove_rules("side")
+		results.append(build_package(side=side))
+
+	GLOBALS.MAKE_CONFIG.remove_rules("side")
+	return max(results)
 
 ### DEPLOY
 

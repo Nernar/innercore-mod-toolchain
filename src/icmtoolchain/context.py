@@ -251,7 +251,8 @@ class Globals(threading.local):
 GLOBALS = Globals()
 
 PARAMETERS = {
-	"release": bool
+	"release": bool,
+	"side": str # "client", "server" or "both"/None (no filtering)
 }
 
 PROPERTIES = Config()

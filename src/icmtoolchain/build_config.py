@@ -19,6 +19,16 @@ class BuildConfig(MakeDataConfig):
 	def project_type(self) -> int:
 		return PROJECT_TYPE_MOD
 
+	def get_project_side(self) -> Optional[str]:
+		mod_info_file = self.get_relative_path("mod.info")
+		if isfile(mod_info_file):
+			mod_info = FileConfig(mod_info_file)
+			if mod_info.get_value("clientOnly", False):
+				return "client"
+			if mod_info.get_value("serverOnly", False):
+				return "server"
+		return None
+
 	def obtain_project_data(self) -> Optional[MakeModData]:
 		mod_info_file = self.get_relative_path("mod.info")
 		if isfile(mod_info_file):

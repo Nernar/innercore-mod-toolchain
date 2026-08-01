@@ -21,12 +21,24 @@ class ModpackConfig(MakeDataConfig):
 		mod_directory = self.get_relative_path("mods")
 		if not isdir(mod_directory):
 			return
+
+		resolved_dependencies = []
 		for filefd in scandir(mod_directory):
 			if not filefd.is_dir():
 				continue
 			dependency = MakeDataConfig.of(filefd.path)
 			if dependency is not None:
-				yield dependency
+				resolved_dependencies.append(dependency)
+
+		active_side = self.get_active_side()
+		for dependency in resolved_dependencies:
+			resolved = dependency if isinstance(dependency, (MakeDataConfig, Artifact)) else self.resolve_dependency_entry(dependency)
+			if resolved is None:
+				continue
+			if active_side and isinstance(resolved, MakeDataConfig):
+				if not resolved.is_side_compatible(active_side):
+					continue
+			yield resolved
 
 	def obtain_project_data(self) -> Optional[MakeModpackData]:
 		return self.obtain_modpack_data(self)

@@ -8,7 +8,7 @@ from typing import (TYPE_CHECKING, Iterator, MutableSequence, MutableSet,
                     NoReturn, Optional)
 
 from .config import FileConfig
-from .context import GLOBALS
+from .context import GLOBALS, PROPERTIES
 from .errors import ToolchainError
 from .logger import attention, error, failure, print, success, trace
 from .project_graph import ProjectEdge, ProjectGraph
@@ -165,6 +165,10 @@ def run(argv: Optional[MutableSequence[str]] = None):
 
 	try:
 		if GLOBALS.is_project_available():
+			active_side = PROPERTIES.get_value("side")
+			if active_side and active_side != "both":
+				GLOBALS.MAKE_CONFIG.bisect_properties(active_side)
+
 			graph = build_project_graph()
 
 			if is_concurrent:

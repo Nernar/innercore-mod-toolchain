@@ -2,6 +2,7 @@ import os
 from itertools import tee
 from os.path import basename, exists, isdir, isfile, join
 from shutil import make_archive
+from typing import Optional
 
 from .context import GLOBALS
 from .language import PROJECT_TYPE_MOD
@@ -115,17 +116,22 @@ def build_additional_resources() -> int:
 
 	return overall_result
 
-def build_package() -> int:
+def build_package(side: Optional[str] = None) -> int:
 	name = basename(GLOBALS.MAKE_CONFIG.current_project)
 	output_directory = GLOBALS.MAKE_CONFIG.get_build_path("package")
 
-	output_package_directory = join(output_directory, name)
+	if side and side != "both":
+		archive_name = f"{name}-{side}"
+	else:
+		archive_name = name
+
+	output_package_directory = join(output_directory, archive_name)
 	remove_tree(output_package_directory)
 
-	output_temporary_file = join(output_directory, "package.zip")
+	output_temporary_file = join(output_directory, f"{archive_name}.zip")
 	ensure_file_directory(output_temporary_file)
 	remove_tree(output_temporary_file)
-	output_file = GLOBALS.MAKE_CONFIG.get_relative_path(name + ".zip" if GLOBALS.MAKE_CONFIG.project_type != PROJECT_TYPE_MOD else name + ".icmod")
+	output_file = GLOBALS.MAKE_CONFIG.get_relative_path(archive_name + ".zip" if GLOBALS.MAKE_CONFIG.project_type != PROJECT_TYPE_MOD else archive_name + ".icmod")
 	ensure_file_directory(output_file)
 	remove_tree(output_file)
 
@@ -145,7 +151,7 @@ def build_package() -> int:
 		for excluded_path in expand_paths(join(output_package_directory, path)):
 			remove_tree(excluded_path)
 
-	make_archive(output_temporary_file[:-4], "zip", output_directory, name)
+	make_archive(output_temporary_file[:-4], "zip", output_directory, archive_name)
 
 	remove_tree(output_package_directory)
 	os.rename(output_temporary_file, output_file)
