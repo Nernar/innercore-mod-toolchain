@@ -3,6 +3,7 @@ from typing import Optional
 
 from .context import GLOBALS, PROPERTIES
 from .errors import abort
+from .language import PROJECT_TYPE_MODPACK
 from .logger import attention, failure, frozen, success, warn
 from .output_directory import get_temporary_directory
 from .shell import confirm_prompt
@@ -265,7 +266,16 @@ def task_new_project() -> int:
 def task_configure_ide(exclude_toolchain: bool = False) -> int:
 	from .workspace import flush_compound_tasks, flush_toolchain_tasks
 
-	flush_toolchain_tasks("Assemble for Release", "package", "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage")
+	is_workspace_or_modpack = GLOBALS.MAKE_CONFIG.project_type == PROJECT_TYPE_MODPACK
+	assemble_task_name = "Assemble for Release" if not is_workspace_or_modpack else "Pack for Release"
+
+	flush_toolchain_tasks(assemble_task_name, "package", "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage")
+
+	if GLOBALS.MAKE_CONFIG.project_type == PROJECT_TYPE_MODPACK:
+		flush_toolchain_tasks(f"{assemble_task_name} (Client)", "package", "--release --side client ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage", hidden=True)
+		flush_toolchain_tasks(f"{assemble_task_name} (Server)", "package", "--release --side server ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage", hidden=True)
+		flush_toolchain_tasks(f"{assemble_task_name} (Both)", "package", "--release ensureProjectExists clearOutput --force buildScripts compileNative compileJava buildResources buildInfo buildPackage --all_sides", hidden=True)
+
 	flush_toolchain_tasks("Build (No push)", "run", "ensureProjectExists clearOutput buildScripts compileNative compileJava buildResources buildInfo", hidden=True)
 	flush_compound_tasks("Build", "run", ("Build (No push)", "Push"))
 
