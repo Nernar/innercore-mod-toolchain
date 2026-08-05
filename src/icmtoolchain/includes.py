@@ -4,14 +4,14 @@ import platform
 import re
 import subprocess
 from os.path import basename, isdir, isfile, join, normpath, relpath
-from typing import Any, Final, List, MutableMapping, MutableSequence, Optional
+from typing import Any, Final, List, MutableMapping, Optional
 
 from .config import FileConfig
 from .context import GLOBALS, PROPERTIES
 from .hglob import glob
 from .logger import attention, debug, failure, frozen, success
 from .tsconfig import TSCONFIG
-from .utils import ensure_file_directory
+from .utils import ensure_file_directory, ensure_not_whitespace
 
 
 class Includes:
@@ -19,24 +19,25 @@ class Includes:
 	includes: Final[str]
 	path: Final[str]
 	params: MutableMapping[str, Any]
-	include: MutableSequence[str]
-	exclude: MutableSequence[str]
+	include: List[str]
+	exclude: List[str]
 
-	def __init__(self, directory: str, includes_path: str, *, params: Optional[MutableMapping[str, Any]] = None, include: Optional[MutableSequence[str]] = None, exclude: Optional[MutableSequence[str]] = None) -> None:
+	def __init__(self, directory: str, includes_path: str, *, params: Optional[MutableMapping[str, Any]] = None, include: Optional[List[str]] = None, exclude: Optional[List[str]] = None) -> None:
 		if not isdir(directory):
 			raise NotADirectoryError(directory)
 		self.directory = directory
 		self.includes = includes_path
 		self.path = join(directory, includes_path)
 		self.params = params or dict()
-		self.include = include or list()
-		self.exclude = exclude or list()
+		self.include = include or []
+		self.exclude = exclude or []
 
 	def read(self) -> None:
-		dependents = list()
+		dependents = []
 		with open(self.path, encoding="utf-8") as includes:
 			for line in includes:
 				self.decode_line(line.strip(), dependents)
+
 		for dependent in dependents:
 			if (dependent in GLOBALS.TSCONFIG_DEPENDENTS and GLOBALS.TSCONFIG_DEPENDENTS[dependent] in self.params and self.params[GLOBALS.TSCONFIG_DEPENDENTS[dependent]] == True):
 				self.params[dependent] = not self.params[dependent]
@@ -63,20 +64,24 @@ class Includes:
 			self.params = default
 
 	def decode_line(self, line: str, dependents: List[str]) -> None:
-		if line.startswith("#") or line.startswith("//"): # comment or parameter
+		if not ensure_not_whitespace(line):
+			return
+
+		if line.startswith("#") or line.startswith("//"):
 			line = line[2:] if line.startswith("//") else line[1:]
 			key, *values = [item.strip() for item in line.split(":", 1)]
+
 			if key in TSCONFIG:
 				if not key.startswith("!"):
 					self.decode_param(key, values[0] if len(values) > 0 else None, dependents)
+
 				else:
 					key = key[1:].strip()
 					if key in GLOBALS.TSCONFIG_TOOLCHAIN and key in TSCONFIG:
 						self.params[key] = TSCONFIG[key]
 					elif key in self.params:
 						del self.params[key]
-		elif len(line) == 0:
-			return
+
 		elif line.startswith("!"):
 			line = line[1:].strip()
 			search_path = (join(self.directory, line[:-2], ".") + "/**/*") \
@@ -85,6 +90,7 @@ class Includes:
 				file = normpath(file)
 				if file not in self.include:
 					self.exclude.append(relpath(file, self.directory).replace("\\", "/"))
+
 		else:
 			search_path = re.sub(r"\.$", "**/*", line) if line.endswith("/.") else line
 			self.include.append(search_path.replace("\\", "/"))
@@ -95,6 +101,7 @@ class Includes:
 				if value is None:
 					includes.write("# !" + key + "\n")
 					continue
+
 				includes.write("# " + key + ": ")
 				if isinstance(value, bool):
 					includes.write("true" if value == True else "false")
@@ -103,8 +110,10 @@ class Includes:
 				else:
 					includes.write(value)
 				includes.write("\n")
+
 			if len(self.params) > 0:
 				includes.write("\n")
+
 			includes.writelines([
 				file + "\n" for file in self.include
 			])
@@ -148,16 +157,24 @@ class Includes:
 		return includes
 
 	def get_tsconfig(self) -> str:
-		if not isfile(self.path):
-			return join(self.directory, ".toolchain.tsconfig.json")
 		return join(self.directory, "tsconfig.json")
 
 	def create_tsconfig(self, temporary_path: str, use_babel: bool = False) -> None:
 		template = {
-			"extends": relpath(GLOBALS.TSC_COMPOSITE.get_tsconfig(), self.directory),
-			"compilerOptions": {},
-			"exclude": self.exclude,
-			"include": self.include,
+			"compilerOptions": {
+				**GLOBALS.TSCONFIG_TOOLCHAIN
+			},
+			"compileOnSave": False,
+			"exclude": [
+				"dom",
+				"dom.iterable",
+				"es2015.iterable",
+				"scripthost",
+				"webworker",
+				"webworker.importscripts",
+				"webworker.iterable"
+			] + self.exclude,
+			"include": self.include
 		}
 		if not use_babel:
 			template["compilerOptions"]["outFile"] = temporary_path
@@ -253,8 +270,7 @@ class Includes:
 					raise RuntimeError("A tsc is required to build this source, make sure it is present before calling this function.")
 				command = [
 					tsc,
-					"--project", self.get_tsconfig(),
-					*GLOBALS.PREFERRED_CONFIG.get_value("development.tsc", list())
+					"--project", self.get_tsconfig()
 				]
 				if not PROPERTIES.get_value("release"):
 					# Do NOT resolve down-level declaration, like 'android.d.ts' if it not included

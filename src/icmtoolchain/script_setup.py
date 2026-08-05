@@ -76,7 +76,7 @@ def request_typescript(only_check: bool = False) -> Optional[str]:
 	from .shell import confirm_prompt
 	from .utils import request_tool
 
-	tsc = shutil.which("tsc") or request_tool("tsc")
+	tsc = request_tool("tsc") or shutil.which("tsc")
 	npm = shutil.which("npm")
 
 	custom_node = GLOBALS.TOOLCHAIN_CONFIG.get_value("tools.node")

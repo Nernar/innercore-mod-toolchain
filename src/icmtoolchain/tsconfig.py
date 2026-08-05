@@ -7,6 +7,7 @@ from os.path import dirname, exists, isdir, join, relpath
 from typing import Any, Dict, List
 
 from .context import GLOBALS, PROPERTIES
+from .includes import Includes
 
 # The TypeScript Compiler - Version 4.8.3
 TSCONFIG: Dict[str, Any] = {
@@ -27,14 +28,14 @@ TSCONFIG: Dict[str, Any] = {
 	"baseUrl": None,
 	"module": None,
 	"moduleResolution": "classic",
-	"moduleSuffixes": list(),
+	"moduleSuffixes": [],
 	"noResolve": False,
-	"paths": list(),
+	"paths": [],
 	"resolveJsonModule": False,
-	"rootDir": list(),
-	"rootDirs": list(),
-	"typeRoots": list(),
-	"types": list(),
+	"rootDir": [],
+	"rootDirs": [],
+	"typeRoots": [],
+	"types": [],
 
 	# Type Checking
 	"allowUnreachableCode": None,
@@ -114,7 +115,7 @@ TSCONFIG: Dict[str, Any] = {
 
 	# Editor Support
 	"disableSizeLimit": False,
-	"plugins": list(),
+	"plugins": [],
 
 	# Language and Environment
 	"emitDecoratorMetadata": False,
@@ -122,7 +123,7 @@ TSCONFIG: Dict[str, Any] = {
 	"jsx": None,
 	"jsxFactory": "React.Fragment",
 	"jsxImportSource": "react",
-	"lib": list(),
+	"lib": [],
 	"moduleDetection": "auto",
 	"noLib": False,
 	"reactNamespace": "React",
@@ -155,12 +156,9 @@ TSCONFIG_DEPENDENTS: Dict[str, Any] = {
 
 # Basic prototype that will be changed when building
 TSCONFIG_TOOLCHAIN: Dict[str, Any] = {
-	"target": "es5", # Most of ES6 is not realized in Rhino 1.7.7
+	"incremental": True,
 	"lib": ["es5", "es2015.core", "es2015.generator"],
-	"module": "none",
 	"skipDefaultLibCheck": True,
-	"composite": True,
-	"downlevelIteration": True,
 	"experimentalDecorators": True,
 	"noEmitOnError": True,
 	"stripInternal": True,
@@ -173,7 +171,8 @@ class CompositeProject:
 
 	def __init__(self, path) -> None:
 		self.path = path
-		self.reset()
+		self.references = []
+		self.sources = []
 
 	def get_tsconfig(self) -> str:
 		return GLOBALS.MAKE_CONFIG.get_relative_path(self.path)
@@ -194,23 +193,23 @@ class CompositeProject:
 			**kwargs
 		})
 
-	def reset(self) -> None:
-		self.references = list()
-		self.sources = list()
+	def has_sources(self) -> bool:
+		return len(self.sources) > 0 or len(self.references) > 0
 
-	@staticmethod
-	def resolve_declarations() -> List[str]:
-		includes = GLOBALS.MAKE_CONFIG.get_value("declarations", [
-			"declarations"
-		])
-		declarations = list()
+	def requires_composite(self) -> bool:
+		return len(self.references) > 0
+
+	def resolve_declarations(self) -> List[str]:
+		includes = GLOBALS.MAKE_CONFIG.get_value("declarations", ["declarations"])
+		declarations = []
 		for filepath in [
 			GLOBALS.MAKE_CONFIG.get_path(include) for include in includes
 		]:
-			if exists(filepath):
-				if isdir(filepath):
-					filepath = join(filepath, "**", "*.d.ts")
-				declarations.extend(glob(filepath, recursive=True))
+			if not exists(filepath):
+				continue
+			if isdir(filepath):
+				filepath = join(filepath, "**", "*.d.ts")
+			declarations.extend(glob(filepath, recursive=True))
 	
 		toolchain_declarations = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("declarations")
 		if not isdir(toolchain_declarations):
@@ -219,25 +218,19 @@ class CompositeProject:
 		if isdir(toolchain_declarations):
 			declarations.extend(glob(join(toolchain_declarations, "**", "*.d.ts"), recursive=True))
 
-		if not PROPERTIES.get_value("release"):
-			for excluded in GLOBALS.MAKE_CONFIG.get_value("debugIncludesExclude", list()):
-				if exists(str(excluded).lstrip("/").partition("/")[0]):
-					for declaration in glob(excluded, recursive=True):
-						if declaration in declarations:
-							declarations.remove(declaration)
-				else:
-					for declaration in glob(join(toolchain_declarations, excluded), recursive=True):
-						if declaration in declarations:
-							declarations.remove(declaration)
 		return list(set(declarations))
 
-	def flush(self, **kwargs: Any) -> None:
+	def flush(self, **options: Any) -> None:
 		template = {
 			"compilerOptions": {
+				"strict": False,
+				"ignoreDeprecations": "6.0",
+				**GLOBALS.TSCONFIG_TOOLCHAIN,
+				"target": "es5", # Most of ES6 is not realized in Rhino
+				"module": "none",
 				"outDir": GLOBALS.MAKE_CONFIG.get_build_path("sources"),
-				**GLOBALS.TSCONFIG_TOOLCHAIN
+				**options
 			},
-			"compileOnSave": False,
 			"exclude": [
 				"dom",
 				"dom.iterable",
@@ -246,12 +239,11 @@ class CompositeProject:
 				"webworker",
 				"webworker.importscripts",
 				"webworker.iterable"
-			] + GLOBALS.MAKE_CONFIG.get_value("development.exclude", list()),
-			"include": self.sources + GLOBALS.MAKE_CONFIG.get_value("development.include", list()),
-			**kwargs
+			],
+			"include": self.sources
 		}
 
-		declarations = CompositeProject.resolve_declarations()
+		declarations = self.resolve_declarations()
 		if len(declarations) > 0:
 			template["files"] = declarations
 		if len(self.references) > 0:
@@ -267,7 +259,6 @@ class CompositeProject:
 		command = [
 			tsc,
 			"--build", self.get_tsconfig(),
-			*GLOBALS.MAKE_CONFIG.get_value("development.tsc", list()),
 			*args
 		]
 		if not emit:
@@ -276,3 +267,41 @@ class CompositeProject:
 
 	def type_check(self, *args: str) -> int:
 		return self.build(*args, emit=False)
+
+###
+# Project configs now should be readen before flushing, compared via
+# object comparison (to drop comments, whitespace, etc.) and tsconfigs
+# in projects itself should contain only specific source options.
+
+# project
+	# dev
+		# .includes
+		# header.ts
+		# tsconfig.json (autogenerated)
+	# launcher.ts
+	# preloader.ts
+	# tsconfig.json (autogenerated)
+
+# Build directory configs will contain following structure:
+# - Composite configs contains `composite: true` in directories and
+# referenced directly in root file which will be used for release builds.
+# - Incremental configs does NOT contains it, only `incremental: true`,
+# no references, only direct file includes, directories built separately.
+# * No separate reference/incremental tsconfig to include launcher.ts or
+# preloader.ts, they will be included direcly via `include` property.
+
+# <build_directory>
+	# tsc
+		# dev
+			# composite-tsconfig.json
+			# incremental-tsconfig.json
+		# composite-tsconfig.json
+		# incremental-tsconfig.json
+	# sources (output directory in tsconfigs)
+###
+class ScriptRepository:
+	def include_file(self, source_path: str, destination_path: str, language: str):
+		pass
+
+	def include_directory(self, includes: Includes, destination_path: str, language: str):
+		pass

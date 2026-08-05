@@ -190,6 +190,10 @@ class Globals(threading.local):
 		return self.typescript_composite
 
 	@property
+	def SCRIPT_REPOSITORY(self):
+		pass
+
+	@property
 	def PARAMETER_SIGNATURE(self):
 		if not hasattr(self, "parameter_signature"):
 			import inspect
