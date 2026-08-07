@@ -29,38 +29,69 @@ class BuildTarget(NamedTuple):
 	classpath: MutableSequence[str]
 
 TOOLCHAIN_CLASSPATH = None
+TOOLCHAIN_INNERCORE_CLASSPATH = "innercore-test.jar"
 
-def collect_classpath_files(directories: Collection[str]) -> List[str]:
-	classpath = list()
-	for directory in directories:
-		classpath_directory = GLOBALS.MAKE_CONFIG.get_path(directory)
-		if not isdir(classpath_directory):
-			classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path(directory)
-			if not isdir(classpath_directory):
-				from .output_directory import get_config_directory
-				classpath_directory = join(get_config_directory(), directory)
-		if not isdir(classpath_directory):
-			attention(f"Skipped non-existing classpath directory {directory!r}, please make sure that it exist!")
-			continue
-		libraries = get_all_files(classpath_directory, (".jar"))
-		classpath.extend(libraries)
+def collect_classpath_files(java_data: MakeJavaData) -> List[str]:
+	classpath = set()
+	from .output_directory import get_config_directory
+	system_classpath_directory = join(get_config_directory(), "classpath")
 
 	global TOOLCHAIN_CLASSPATH
 	if not TOOLCHAIN_CLASSPATH:
-		from .output_directory import get_config_directory
-		classpath_directory = join(get_config_directory(), "classpath")
-		if isdir(classpath_directory):
-			TOOLCHAIN_CLASSPATH = get_all_files(classpath_directory, (".jar"))
-			if GLOBALS.MAKE_CONFIG.project_type == PROJECT_TYPE_PACK:
-				innercore_test = join(classpath_directory, "innercore-test.jar")
-				try:
-					TOOLCHAIN_CLASSPATH.remove(innercore_test)
-				except ValueError:
-					attention("Failed to exclude 'innercore-test.jar' from classpath for package build, contact developer and tell them they are a arsehole.")
-
+		if isdir(system_classpath_directory):
+			TOOLCHAIN_CLASSPATH = get_all_files(system_classpath_directory, (".jar"))
+			for classpath_entry in list(TOOLCHAIN_CLASSPATH):
+				relative_path = relpath(classpath_entry, system_classpath_directory)
+				if relative_path.startswith("innercore-") and not relative_path == TOOLCHAIN_INNERCORE_CLASSPATH:
+					TOOLCHAIN_CLASSPATH.remove(classpath_entry)
 	if TOOLCHAIN_CLASSPATH:
-		classpath.extend(TOOLCHAIN_CLASSPATH)
-	return classpath
+		classpath.update(TOOLCHAIN_CLASSPATH)
+
+	if GLOBALS.MAKE_CONFIG.project_type == PROJECT_TYPE_PACK:
+		innercore_classpath = join(system_classpath_directory, TOOLCHAIN_INNERCORE_CLASSPATH)
+		try:
+			classpath.remove(innercore_classpath)
+		except ValueError:
+			attention(f"Failed to exclude {TOOLCHAIN_INNERCORE_CLASSPATH!r} from classpath for package build, contact developer and tell them they are a arsehole.")
+
+	exclusions = []
+	for classpath_entry in filter(lambda entry: entry[:1] == "!", java_data.classpath):
+		relative_path = classpath_entry[1:].lstrip()
+		system_classpath = join(system_classpath_directory, relative_path)
+		if not exists(system_classpath):
+			exclusions.append(relative_path)
+			continue
+		classpath.remove(system_classpath)
+
+	for classpath_entry in filter(lambda entry: entry[:1] != "!", java_data.classpath):
+		if classpath_entry in exclusions:
+			continue
+
+		classpath_directory = GLOBALS.MAKE_CONFIG.get_path(classpath_entry)
+		if not exists(classpath_directory):
+			classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_path(classpath_entry)
+			if not exists(classpath_directory):
+				classpath_directory = join(system_classpath_directory, classpath_entry)
+		if not exists(classpath_directory):
+			attention(f"Skipped non-existing classpath directory {classpath_entry!r}, please make sure that it exist!")
+			continue
+
+		if isdir(classpath_directory):
+			libraries = get_all_files(classpath_directory, (".jar"))
+		else:
+			libraries = [classpath_directory]
+		classpath.update(libraries)
+
+		for exclusion in exclusions:
+			excluded_path = join(classpath_directory, exclusion)
+			if exists(excluded_path):
+				if isdir(excluded_path):
+					excluded_files = get_all_files(excluded_path, (".jar"))
+					classpath.difference_update(excluded_files)
+				elif excluded_path in classpath:
+					classpath.remove(excluded_path)
+
+	return list(classpath)
 
 def flatten_classpath_files(targets: Collection[BuildTarget]) -> List[str]:
 	return [
@@ -91,7 +122,7 @@ def update_modified_targets(targets: Collection[BuildTarget], target_directory: 
 	for target in targets:
 		classes_directory = join(target_directory, "classes", target.relative_directory, "classes")
 		classes = GLOBALS.BUILD_STORAGE.get_modified_files(classes_directory, (".class")) if isdir(classes_directory) else []
-		libraries = list()
+		libraries = []
 
 		for library_path in target.manifest.libraries:
 			library_directory = join(target.directory, library_path)
@@ -139,11 +170,11 @@ def run_d8(target: BuildTarget, modified_pathes: Dict[str, List[str]], classpath
 	if not java_executable:
 		abort("Executable 'java' is required for compilation, nothing to do.")
 
-	classpath_targets = list()
+	classpath_targets = []
 	for filename in classpath:
 		classpath_targets += ["--classpath", filename]
 	compressed_libraries = join(target_directory, "classes", target.relative_directory, "libs", target.relative_directory + "-all.jar")
-	libraries = list()
+	libraries = []
 	if exists(compressed_libraries):
 		libraries += ["--lib", compressed_libraries]
 	else:
@@ -281,7 +312,7 @@ def build_java_with_javac(targets: Collection[BuildTarget], target_directory: st
 			options.append("-verbose")
 		if len(source_directories) > 0:
 			options += ["-sourcepath", os.pathsep.join(join(target.directory, source) for source in source_directories)]
-		precompiled = list()
+		precompiled = []
 		if supports_modules:
 			precompiled += target.classpath
 		else:
@@ -359,7 +390,7 @@ def build_java_with_ecj(targets: Collection[BuildTarget], target_directory: str)
 			)
 			if len(ecj_executables) == 0:
 				abort("Executable 'ecj-*.jar' is required for compilation, nothing to do.")
-			ecj_executable = list()
+			ecj_executable = []
 			for executable in ecj_executables:
 				ecj_executable = [java_executable, "-jar", executable]
 				if request_executable_version(ecj_executable) != 0.0:
@@ -406,7 +437,7 @@ def build_java_with_gradle(targets: Collection[BuildTarget], target_directory: s
 		if platform.system() == "Windows":
 			gradle_executable += ".bat"
 
-		options = list()
+		options = []
 		for target in targets:
 			if target.manifest.verbose:
 				options += ["--console", "verbose"]
@@ -489,13 +520,13 @@ def cleanup_gradle_scripts(targets: Collection[BuildTarget]) -> None:
 ### TASKS
 
 def get_java_build_targets(directories: Iterable[MakeJavaData]) -> List[BuildTarget]:
-	targets = list()
+	targets = []
 
 	for java_data in directories:
 		directory = GLOBALS.MAKE_CONFIG.get_path(java_data.relative_path)
 		target = GLOBALS.PROJECT_STRUCTURE.declare_target("java", java_data.output_path)
 		ensure_directory(target.absolute_path)
-		classpath = collect_classpath_files(list(java_data.classpath))
+		classpath = collect_classpath_files(java_data)
 		# XXX: Probably relative path (second argument) should be relative to project directory.
 		target = BuildTarget(directory, java_data.output_path, target.absolute_path, java_data, classpath)
 		targets.append(target)
@@ -632,7 +663,7 @@ def compile_java(tool: Optional[str] = "gradle") -> int:
 	ensure_directory(target_directory)
 	GLOBALS.PROJECT_STRUCTURE.cleanup_target("java")
 
-	classpath_directories = list()
+	classpath_directories = []
 	classpath_directory = GLOBALS.TOOLCHAIN_CONFIG.get_relative_path("classpath")
 	if not isdir(classpath_directory):
 		from .output_directory import get_config_directory
