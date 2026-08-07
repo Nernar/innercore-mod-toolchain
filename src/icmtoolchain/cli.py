@@ -104,9 +104,9 @@ def build_project_graph() -> ProjectGraph:
 	return graph
 
 def run_sequential_build(graph: ProjectGraph, targets: Iterator['BaseScheduledTask']) -> None:
-	from .language import MakeDataConfig
 	dependencies = graph.traverse_dependencies()
-	for scheduled_task in targets:
+	targets, tasks = tee(targets)
+	for scheduled_task in tasks:
 		scheduled_task.prepare(dependencies)
 	for edge in dependencies:
 		GLOBALS.switch_to_project(edge)

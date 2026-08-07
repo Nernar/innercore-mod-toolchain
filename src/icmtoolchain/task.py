@@ -58,7 +58,7 @@ class Task:
 		self.lock(silent)
 		if not silent:
 			print(f"> Executing task: {self.name}", style="class:task.execute")
-		result = self.callable.__call__(*args, **kwargs)
+		result = self.callable(*args, **kwargs)
 		self.unlock()
 		return result
 
@@ -165,7 +165,8 @@ class BaseScheduledTask:
 		if self.on_status_changed:
 			self.on_status_changed(value)
 
-	def execute(self, silent: bool = False, *args, **kwargs) -> Any:
+	def execute(self, silent: bool = False) -> Any:
+		# TODO: Actually use silent?
 		return self.callable()
 
 	def __call__(self, *args, **kwargs) -> Any:
@@ -215,10 +216,7 @@ class ScheduledTask(BaseScheduledTask):
 			return self.task.initial_status
 		return f"Running task {self.name}..."
 
-	def execute(self, silent: bool = False, *args, **kwargs) -> Any:
-		if not silent:
-			print(f"> Executing task: {self.task.name}", style="class:task.execute")
-
+	def execute(self, silent: bool = False) -> Any:
 		if self.task.mode == TASK_MODE_ONCE_EARLY:
 			assert self.lock is not None, "ScheduledTask is not prepared!"
 			with self.lock:

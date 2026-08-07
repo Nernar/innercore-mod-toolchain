@@ -372,8 +372,9 @@ def parse_arguments(argv: MutableSequence[str], mappings: Mapping[str, Task], fa
 
 			else:
 				task = mappings.get(argument)
-				task_callable = task.callable if task is not None else lambda *args, **kwargs: None
-				signature = inspect.signature(task_callable)
+				task_reference = task.callable if task is not None else lambda *args, **kwargs: None
+				signature = inspect.signature(task_reference)
+				task_callable = task if task is not None and callable(task) else task_reference
 				target = parse_callable_arguments(argv, task_callable, signature)
 
 			if task is None:

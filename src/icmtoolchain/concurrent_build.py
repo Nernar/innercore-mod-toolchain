@@ -4,7 +4,7 @@ import io
 import sys
 import threading
 from dataclasses import dataclass
-from itertools import cycle
+from itertools import cycle, tee
 from os.path import basename
 from queue import Empty, Queue
 from typing import Any, Dict, Iterator, List, Optional, Tuple, cast
@@ -233,7 +233,7 @@ async def build_executor_loop(app: ConcurrentCliApplication, scheduler: Concurre
 	app.stop_workers()
 	app.exit()
 
-async def run_concurrent_build(graph: 'ProjectGraph', scheduled_tasks: Iterator['BaseScheduledTask']):
+async def run_concurrent_build(graph: 'ProjectGraph', targets: Iterator['BaseScheduledTask']):
 	use_processes = GLOBALS.TOOLCHAIN_CONFIG.get_value("concurrentProcesses", False)
 
 	if use_processes:
@@ -253,7 +253,8 @@ async def run_concurrent_build(graph: 'ProjectGraph', scheduled_tasks: Iterator[
 		queue = Queue()
 
 	scheduler = ConcurrentScheduler(graph)
-	
+
+	targets, scheduled_tasks = tee(targets)
 	for scheduled_task in scheduled_tasks:
 		scheduled_task.prepare(list(scheduler.pending), manager)
 
@@ -270,6 +271,7 @@ async def run_concurrent_build(graph: 'ProjectGraph', scheduled_tasks: Iterator[
 	all_logs = []
 	build_status = BuildStatus()
 
+	targets, scheduled_tasks = tee(targets)
 	executor_task = asyncio.create_task(build_executor_loop(app, scheduler, scheduled_tasks, max_workers, queue, all_logs, build_status, use_processes))
 
 	try:

@@ -1,13 +1,14 @@
 import json
-import os
 import platform
 import subprocess
 from glob import glob
-from os.path import dirname, exists, isdir, join, relpath
-from typing import Any, Dict, List
+from os.path import exists, isdir, join, relpath
+from typing import TYPE_CHECKING, Any, Dict, List
 
-from .context import GLOBALS, PROPERTIES
-from .includes import Includes
+from .context import GLOBALS
+
+if TYPE_CHECKING:
+	from .includes import Includes
 
 # The TypeScript Compiler - Version 4.8.3
 TSCONFIG: Dict[str, Any] = {
@@ -303,5 +304,5 @@ class ScriptRepository:
 	def include_file(self, source_path: str, destination_path: str, language: str):
 		pass
 
-	def include_directory(self, includes: Includes, destination_path: str, language: str):
+	def include_directory(self, includes: 'Includes', destination_path: str, language: str):
 		pass
