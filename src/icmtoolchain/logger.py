@@ -22,7 +22,7 @@ def trace(cause: BaseException, is_error: bool = True, sep: Optional[str] = "\n"
 	from traceback import print_exception
 	buffer = StringIO()
 	print_exception(cause.__class__, cause, cause.__traceback__, file=buffer)
-	lines = buffer.getvalue().rsplit("\n", 13)[1:-1]
+	lines = buffer.getvalue().rsplit("\n")[1:-1]
 	if is_error:
 		error(*lines, sep=sep, end=end, file=file, flush=flush, include_default_pygments_style=include_default_pygments_style)
 	else:
