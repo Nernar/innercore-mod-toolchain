@@ -157,7 +157,7 @@ def download_jdk() -> str:
 	jdk_dir = join(get_config_directory(), "java")
 
 	with InteractiveSession(progress=Progress("Extracting JDK...")):
-		if archive_path.endswith(".zip"):
+		if archive_path.endswith("zip"):
 			with AttributeZipFile(archive_path, "r") as archive:
 				archive.extractall(get_temporary_directory())
 		else:
@@ -179,6 +179,8 @@ def download_jdk() -> str:
 	shutil.move(extracted_dir, jdk_dir)
 	remove_tree(archive_path)
 
+	GLOBALS.TOOLCHAIN_CONFIG.set_value("environment.JAVA_HOME", jdk_dir)
+	GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
 	success("Successfully downloaded and installed JDK 8.")
 	return jdk_dir
 
