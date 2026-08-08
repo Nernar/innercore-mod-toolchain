@@ -278,15 +278,17 @@ def request_executable_version(executable: Union[str, List[str]]) -> float:
 	result = subprocess.run(executable + [
 		"--version"
 	], text=True, capture_output=True)
-	if result.returncode == 0 and result.stdout:
-		match = pattern_version.search(result.stdout)
+	output = result.stdout + result.stderr
+	if result.returncode == 0 and output:
+		match = pattern_version.search(output)
 		if match:
 			return float(match.group())
 	result = subprocess.run(executable + [
 		"-version"
 	], text=True, capture_output=True)
-	if result.returncode == 0 and result.stdout:
-		match = pattern_version.search(result.stdout)
+	output = result.stdout + result.stderr
+	if result.returncode == 0 and output:
+		match = pattern_version.search(output)
 		if match:
 			return float(match.group())
 	return 0.0
