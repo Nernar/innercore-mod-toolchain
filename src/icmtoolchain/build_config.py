@@ -84,7 +84,8 @@ class BuildConfig(MakeDataConfig):
 			script_path = self.get_relative_path(relative_path)
 			output_path = basename(script_path)
 			if isfile(script_path):
-				output_path = splitext(output_path)[0] + ".js"
+				output_path = splitext(output_path)[0]
+			output_path += ".js"
 
 		return MakeScriptData(
 			relative_path=relative_path,

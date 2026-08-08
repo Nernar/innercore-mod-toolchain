@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from itertools import chain
-from os.path import basename, exists, isdir, isfile, join, relpath
+from os.path import basename, exists, isdir, isfile, join, relpath, splitext
 from time import time
 from typing import Any, List, MutableMapping, Optional, Tuple
 
@@ -90,6 +90,7 @@ def compute_and_capture_changed_scripts() -> Tuple[List[FileSource], List[FileSo
 
 	for source in GLOBALS.MAKE_CONFIG.iterate_scripts():
 		includes_path = ensure_not_whitespace(source.includes_path, ".includes")
+		is_pattern_path = source.relative_path.endswith("*")
 
 		for source_path in expand_paths(GLOBALS.MAKE_CONFIG.get_relative_path(source.relative_path)):
 			if not exists(source_path):
@@ -110,8 +111,15 @@ def compute_and_capture_changed_scripts() -> Tuple[List[FileSource], List[FileSo
 				attention(f"Source {GLOBALS.MAKE_CONFIG.get_path_to_config(source_path)!r} specifies target language as TypeScript, so this script probably uses ESNext capabilities. Building as normal JavaScript files, since `denyTypeScript` property of your 'toolchain.json' is active.")
 				language = "javascript"
 
+			if not is_pattern_path:
+				prefixed_path = source.output_path
+			else:
+				script_name = basename(source_path)
+				if isfile(source_path):
+					script_name = splitext(script_name)[0]
+				prefixed_path = join(source.output_path, script_name + ".js")
+
 			# Preserve output target duplication
-			prefixed_path = source.output_path
 			try:
 				dot_index = prefixed_path.rindex(".")
 				prefixed_path = prefixed_path[:dot_index] + "{}" + prefixed_path[dot_index:]
@@ -132,6 +140,12 @@ def compute_and_capture_changed_scripts() -> Tuple[List[FileSource], List[FileSo
 				)):
 					changed_files.append(FileSource(source_path, destination_path, language))
 				files.append(FileSource(source_path, destination_path, language))
+
+	if PROPERTIES.get_value("debug"):
+		debug(f"Files ({len(files)}): {', '.join([str(file) for file in files])}")
+		debug(f"Changed Files ({len(changed_files)}): {', '.join([str(file) for file in changed_files])}")
+		debug(f"Directories ({len(directories)}): {', '.join([str(directory) for directory in directories])}")
+		debug(f"Changed Directories ({len(changed_directories)}): {', '.join([str(directory) for directory in changed_directories])}")
 
 	return changed_files, files, changed_directories, directories
 
