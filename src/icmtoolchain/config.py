@@ -129,9 +129,9 @@ class Config(Dict[str, Any]):
 			return
 
 		namespace_keys = key.partition(".")
-		namespace = self.get_dict_value(namespace_keys[0])
+		namespace = self.get_value(namespace_keys[0])
 		if not isinstance(namespace, Config):
-			if not replace_mismatched_types:
+			if namespace is not None and not replace_mismatched_types:
 				raise ValueError(f"{key!r}: {namespace}")
 			namespace = Config()
 			if self.defaults is not None:

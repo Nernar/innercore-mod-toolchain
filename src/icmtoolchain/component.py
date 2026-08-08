@@ -70,7 +70,8 @@ COMPONENTS = {
 	"node": Component("node", "Node.js & TypeScript", "node", config_key="tools.node", on_install=install_node),
 	"adb": Component("adb", "Android Debug Bridge", "adb", config_key="tools.adb", legacy_keys=["adb.path"], branch="adb", on_install=install_adb),
 	"declarations": Component("declarations", "TypeScript Declarations", "declarations", branch="includes", on_install=install_declarations),
-	"java": Component("java", "Java R8/D8 Compiler", "bin/r8", config_key="tools.jdk", legacy_keys=["java.jdkPath"], branch="r8", on_install=install_java),
+	"java": Component("java", "Java Development Kit (JDK)", "jdk", on_install=install_java),
+	"r8": Component("r8", "Java R8/D8 Compiler", "bin/r8", branch="r8"),
 	"classpath": Component("classpath", "Java Classpath", "classpath", branch="classpath"),
 	"cpp": Component("cpp", "C++ GCC Compiler (NDK)", "ndk", config_key="tools.ndk", legacy_keys=["native.ndkPath", "ndkPath"], on_install=install_cpp),
 	"stdincludes": Component("stdincludes", "C++ Headers", "stdincludes", installable=False, branch="stdincludes")

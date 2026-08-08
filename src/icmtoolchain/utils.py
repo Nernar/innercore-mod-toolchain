@@ -213,7 +213,7 @@ def name_to_identifier(name: str, delimiter: str = "") -> str:
 	previous_chars_upper = 0
 	identifier = ""
 	for char in name:
-		if char.isalpha() or char.isdecimal():
+		if char.isalpha() or char.isdecimal() or char == ".":
 			if (char.isupper() and previous_char_lower) or (char.islower() and previous_chars_upper > 1):
 				identifier += delimiter
 			identifier += char.lower()

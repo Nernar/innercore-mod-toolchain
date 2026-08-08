@@ -208,8 +208,6 @@ class Globals(threading.local):
 		from .language import MakeDataConfig
 		if not isinstance(node.project, MakeDataConfig):
 			raise RuntimeError(f"Project {node} is not populated!")
-		if not silent and hasattr(self, "make_config"):
-			print() # XXX: Do we actually logged anything? In most cases YES.
 		self.shutdown_project()
 		if not silent:
 			print(f"{node} in {node.project.directory}", style="class:task.execute")

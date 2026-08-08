@@ -181,11 +181,14 @@ def download_jdk() -> str:
 
 	GLOBALS.TOOLCHAIN_CONFIG.set_value("environment.JAVA_HOME", jdk_dir)
 	GLOBALS.TOOLCHAIN_CONFIG.save_as_file()
+	from .parser import apply_environment_properties
+	apply_environment_properties()
+
 	success("Successfully downloaded and installed JDK 8.")
 	return jdk_dir
 
-def get_jdk_executable(executable: str = "java", install_allowed: bool = True) -> str:
-	custom_path = GLOBALS.TOOLCHAIN_CONFIG.get_value("tools.jdk", GLOBALS.TOOLCHAIN_CONFIG.get_value("java.jdkPath"))
+def get_jdk_executable(executable: str = "java") -> Optional[str]:
+	custom_path = GLOBALS.TOOLCHAIN_CONFIG.get_value("environment.JAVA_HOME")
 	ext = ".exe" if platform.system() == "Windows" else ""
 	if custom_path:
 		custom_exe = join(custom_path, "bin", f"{executable}{ext}")
@@ -200,9 +203,4 @@ def get_jdk_executable(executable: str = "java", install_allowed: bool = True) -
 	if isfile(local_path):
 		return local_path
 
-	if install_allowed:
-		download_jdk()
-		if isfile(local_path):
-			return local_path
-
-	raise RuntimeError(f"Could not find or install {executable}. Please install JDK 1.8.")
+	return None

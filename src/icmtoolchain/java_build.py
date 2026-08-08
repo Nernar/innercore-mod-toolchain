@@ -653,6 +653,14 @@ def build_java_directories(tool: str, directories: Iterable[MakeJavaData], targe
 	GLOBALS.BUILD_STORAGE.save()
 	return result
 
+def ensure_java_supported_by_tool(executable: str, tool: str) -> bool:
+	if tool == "gradle" and not GLOBALS.MAKE_CONFIG.get_value("java.configurable", False):
+		version = request_executable_version(executable)
+		if version < 1.8 or version > 12:
+			attention(f"Java {version} is not supported by Gradle. JDK in range 8-12 is required for compilation.")
+			return False
+	return True
+
 def compile_java(tool: Optional[str] = "gradle") -> int:
 	if tool not in ("gradle", "javac", "ecj"):
 		failure(f"Java compilation will be cancelled, because tool {tool!r} is not available.")
@@ -687,13 +695,15 @@ def compile_java(tool: Optional[str] = "gradle") -> int:
 	if not isdir(classpath_directory):
 		attention("Not found 'classpath', in most cases build will be failed, please install it via tasks.")
 
+	from .java_setup import get_jdk_executable
+	java_executable = get_jdk_executable()
+	if not java_executable or not ensure_java_supported_by_tool(java_executable, tool):
+		from .component import install_components
+		install_components("java")
 	from .output_directory import get_config_directory
 	r8_executable = join(get_config_directory(), "r8", "r8.jar")
 	if not isfile(r8_executable):
-		from .component import install_components
-		install_components("java")
-	if not isfile(r8_executable):
-		abort("Component 'java' is required for compilation, nothing to do.")
+		abort("Component 'r8' is required for compilation, nothing to do.")
 
 	overall_result = build_java_directories(tool, directories, target_directory)
 
