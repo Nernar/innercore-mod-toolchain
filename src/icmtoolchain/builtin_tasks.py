@@ -45,11 +45,12 @@ def task_compile_java(tool: Optional[str] = None) -> int:
 	if not GLOBALS.MAKE_CONFIG.supports_java:
 		return 0
 	from .java_build import compile_java
-	if not tool:
-		tool = GLOBALS.MAKE_CONFIG.get_value("java.compiler", "gradle")
 	if tool != "gradle" and GLOBALS.MAKE_CONFIG.get_value("java.configurable", False):
-		attention("Project uses configurable Gradle, different tools cannot be applied.")
+		if tool:
+			attention(f"Project uses configurable Gradle, different tooling ({tool}) cannot be applied.")
 		tool = "gradle"
+	if not tool:
+		tool = GLOBALS.MAKE_CONFIG.get_value("java.compiler", "javac")
 	return compile_java(tool)
 
 @task(

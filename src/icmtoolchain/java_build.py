@@ -3,10 +3,10 @@ import os
 import platform
 import re
 import subprocess
+from dataclasses import dataclass
 from itertools import tee
 from os.path import basename, exists, isdir, isfile, join, relpath, splitext
-from typing import (Collection, Dict, Iterable, List, MutableSequence,
-                    NamedTuple, Optional)
+from typing import Collection, Dict, Iterable, List, MutableSequence, Optional
 from zipfile import ZipFile
 
 from .config import Config
@@ -21,7 +21,8 @@ from .utils import (copy_directory, copy_file, ensure_directory, ensure_file,
                     request_executable_version, request_tool, walk_all_files)
 
 
-class BuildTarget(NamedTuple):
+@dataclass
+class BuildTarget:
 	directory: str
 	relative_directory: str
 	output_directory: str
@@ -308,7 +309,8 @@ def build_java_with_javac(targets: Collection[BuildTarget], target_directory: st
 				"-source", "8",
 				"-target", "8"
 			]
-		if target.manifest.verbose:
+
+		if target.manifest.verbose or PROPERTIES.get_value("verbose"):
 			options.append("-verbose")
 		if len(source_directories) > 0:
 			options += ["-sourcepath", os.pathsep.join(join(target.directory, source) for source in source_directories)]
@@ -320,13 +322,22 @@ def build_java_with_javac(targets: Collection[BuildTarget], target_directory: st
 			options += ["-bootclasspath", os.pathsep.join(target.classpath)]
 		if len(library_directories) > 0:
 			precompiled += get_all_files((join(target.directory, library) for library in library_directories), (".jar"))
-		options += ["-classpath", os.pathsep.join(precompiled)]
+		if len(precompiled) > 0:
+			options += ["-classpath", os.pathsep.join(precompiled)]
+
+		options += [
+			"-Xlint",
+			"-Xlint:-cast"
+		]
+		if not supports_modules and not PROPERTIES.get_value("debug"):
+			options.append("-Xlint:-options")
+
+		if PROPERTIES.get_value("debug"):
+			debug(f"javac ({target.relative_directory}): {' '.join(options)}")
 
 		result = subprocess.run([
 			javac_executable
 		] + options + [
-			"-Xlint",
-			"-Xlint:-cast",
 			"-implicit:class",
 			"-d", target_classes_directory,
 			"-s", target_sources_directory,
@@ -398,20 +409,28 @@ def build_java_with_ecj(targets: Collection[BuildTarget], target_directory: str)
 			# TODO: error("Executable 'ecj-*.jar' is not supported, nothing to do.")
 
 		options = list(target.manifest.options)
-		if target.manifest.verbose:
+		options += ["--release", "8"]
+
+		if target.manifest.verbose or PROPERTIES.get_value("verbose"):
 			options.append("-verbose")
 		if len(source_directories) > 0:
 			options += ["-sourcepath", ":".join(join(target.directory, source) for source in source_directories)]
 		precompiled = target.classpath
 		if len(library_directories) > 0:
 			precompiled += get_all_files((join(target.directory, library) for library in library_directories), (".jar"))
-		options += ["-classpath", ":".join(precompiled)]
+		if len(precompiled) > 0:
+			options += ["-classpath", ":".join(precompiled)]
+
+		options += [
+			"-Xlint",
+			"-Xlint:-cast"
+			"-Xemacs"
+		]
+
+		if PROPERTIES.get_value("debug"):
+			debug(f"ecj ({target.relative_directory}): {' '.join(options)}")
 
 		result = subprocess.run(ecj_executable + [
-			"--release", "8",
-			"-Xlint",
-			"-Xlint:-cast",
-			"-Xemacs",
 			"-proceedOnError",
 			"-d", target_classes_directory,
 			"-s", target_sources_directory
@@ -439,7 +458,7 @@ def build_java_with_gradle(targets: Collection[BuildTarget], target_directory: s
 
 		options = []
 		for target in targets:
-			if target.manifest.verbose:
+			if target.manifest.verbose or PROPERTIES.get_value("verbose"):
 				options += ["--console", "verbose"]
 				break
 
@@ -657,11 +676,11 @@ def ensure_java_supported_by_tool(executable: str, tool: str) -> bool:
 	if tool == "gradle" and not GLOBALS.MAKE_CONFIG.get_value("java.configurable", False):
 		version = request_executable_version(executable)
 		if version < 1.8 or version > 12:
-			attention(f"Java {version} is not supported by Gradle. JDK in range 8-12 is required for compilation.")
+			attention(f"Java {version} is not supported by Gradle 5.6.2. JDK in range 8-12 is required for compilation.")
 			return False
 	return True
 
-def compile_java(tool: Optional[str] = "gradle") -> int:
+def compile_java(tool: Optional[str] = "javac") -> int:
 	if tool not in ("gradle", "javac", "ecj"):
 		failure(f"Java compilation will be cancelled, because tool {tool!r} is not available.")
 		return 255
