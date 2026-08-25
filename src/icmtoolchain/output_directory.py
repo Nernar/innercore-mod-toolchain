@@ -16,7 +16,7 @@ except ImportError:
 	from hashlib import md5 as encode
 
 def unique_folder_name(path: str) -> str:
-	return basename(path) + "-" + encode(bytes(path, "utf-8")).hexdigest()[-5:]
+	return basename(path) + "-" + encode(bytes(path, "utf-8")).hexdigest()[-8:]
 
 def expand_paths(file_or_directory: str, filter: Optional[Callable[[str], bool]] = None) -> List[str]:
 	locations = list()

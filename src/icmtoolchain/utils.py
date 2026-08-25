@@ -3,7 +3,8 @@ import platform
 import re
 import shutil
 import subprocess
-from os.path import abspath, exists, isdir, isfile, islink, join
+from os.path import (abspath, basename, exists, isdir, isfile, islink, join,
+                     relpath)
 from typing import (Any, Callable, Dict, Iterable, List, Optional, TextIO,
                     Tuple, Union, overload)
 from zipfile import ZipFile, ZipInfo
@@ -255,6 +256,13 @@ def shortcodes(source: str) -> str:
 	source = source.replace("{datestamp}", date.strftime("%Y%m%d"))
 	source = source.replace("{timestamp}", date.strftime("%H%M"))
 	return source
+
+def relativize_or_hash_path(target_path: str, relative_path: str) -> str:
+	relative_path = relpath(target_path, relative_path)
+	if not relative_path.startswith(".."):
+		return relative_path
+	from .output_directory import unique_folder_name
+	return unique_folder_name(target_path)
 
 def request_tool(name: str) -> Optional[str]:
 	from .context import GLOBALS
