@@ -1,10 +1,10 @@
+import json
 import os
 import platform
 import re
 import shutil
 import subprocess
-from os.path import (abspath, basename, exists, isdir, isfile, islink, join,
-                     relpath)
+from os.path import abspath, exists, isdir, isfile, islink, join, relpath
 from typing import (Any, Callable, Dict, Iterable, List, Optional, TextIO,
                     Tuple, Union, overload)
 from zipfile import ZipFile, ZipInfo
@@ -48,6 +48,16 @@ def ensure_file(path: str) -> None:
 	ensure_file_directory(path)
 	if isdir(path) or islink(path):
 		move_to_backup(path)
+
+def flush_json_if_changed(json_path: str, contents: Any):
+	if os.path.isfile(json_path):
+		with open(json_path, "r", encoding="utf-8"):
+			previous_contents = json.loads(json_path)
+		if contents == previous_contents:
+			return
+	ensure_file(json_path)
+	with open(json_path, "w", encoding="utf-8") as file:
+		file.write(json.dumps(contents, indent="\t", ensure_ascii=False) + "\n")
 
 def remove_tree(directory: str) -> bool:
 	"""

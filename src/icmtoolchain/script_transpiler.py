@@ -1,12 +1,14 @@
-import json
 import os.path
+import platform
+import subprocess
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable, List, Optional
 
-from .context import GLOBALS
+from .context import GLOBALS, PROPERTIES
 from .hglob import glob
-from .utils import (copy_file, ensure_directory, ensure_file,
+from .output_directory import unique_folder_name
+from .utils import (copy_file, ensure_directory, flush_json_if_changed,
                     relativize_or_hash_path)
 
 if TYPE_CHECKING:
@@ -123,10 +125,34 @@ class ConcatTranspiler(ScriptTranspiler):
 @dataclass
 class TscBuildTarget:
 	source: ScriptSource
-	composite_path: str
+	output_path: str
 	incremental_path: str
+	composite_path: str
 
 class TscTranspiler(ScriptTranspiler):
+	def __init__(self) -> None:
+		super().__init__()
+		self.tsc_path = GLOBALS.MAKE_CONFIG.get_build_path("tsc")
+		self.composite_path = os.path.join(self.tsc_path, "composite.tsconfig.json")
+
+	def prepare_build_targets(self, repository: ScriptRepository) -> List[TscBuildTarget]:
+		build_targets: List[TscBuildTarget] = []
+		for source in repository.iterate("tsc"):
+			if isinstance(source, DirectorySource):
+				source_path = source.source_path
+			else:
+				source_path = os.path.dirname(source.source_path)
+			relative_directory = relativize_or_hash_path(source_path, GLOBALS.MAKE_CONFIG.directory)
+			output_directory = os.path.join(self.tsc_path, relative_directory)
+
+			output_filename = unique_folder_name(source.source_path)
+			incremental_tsconfig = os.path.join(output_directory, f"{output_filename}.tsconfig.json")
+			composite_tsconfig = os.path.join(output_directory, f"{output_filename}.composite.tsconfig.json")
+			output_path = os.path.join(output_directory, f"{output_filename}.js")
+
+			build_targets.append(TscBuildTarget(source, output_path, incremental_tsconfig, composite_tsconfig))
+		return build_targets
+
 	def create_tsconfig_contents(self, include: List[str], exclude: Optional[List[str]] = None, **options) -> dict:
 		template = {
 			"compilerOptions": {
@@ -148,60 +174,91 @@ class TscTranspiler(ScriptTranspiler):
 			],
 			"include": include
 		}
-
 		if exclude:
 			template["exclude"] += exclude
 		declarations = resolve_declarations()
-		if len(declarations) > 0:
+		if declarations:
 			template["files"] = declarations
 		return template
 
-	def flush_files_config(self, tsconfig_path: str, files: List[ScriptSource], **options):
-		include = [file.source_path for file in files]
-		tsconfig = self.create_tsconfig_contents(include, None, **options, outDir=".")
+	def flush_build_target_tsconfig(self, target: TscBuildTarget):
+		output_filename = os.path.basename(target.output_path)
+		if isinstance(target.source, DirectorySource):
+			include = target.source.includes.include
+			exclude = target.source.includes.exclude
+		else:
+			include = [target.source.source_path]
+			exclude = None
 
-		ensure_file(tsconfig_path)
-		with open(tsconfig_path, "w", encoding="utf-8") as file:
-			file.write(json.dumps(tsconfig, indent="\t", ensure_ascii=False) + "\n")
+		for composite in [True, False]:
+			tsconfig_path = os.path.join(self.tsc_path, target.composite_path if composite else target.incremental_path)
+			tsconfig = self.create_tsconfig_contents(include, exclude, outFile=output_filename, composite=composite)
+			flush_json_if_changed(tsconfig_path, tsconfig)
 
-	def flush_directory_config(self, tsconfig_path: str, directory: DirectorySource, **options):
-		output_filename = os.path.basename(directory.destination_path)
-		tsconfig = self.create_tsconfig_contents(directory.includes.include, directory.includes.exclude, **options, outFile=output_filename)
+	def flush_composite_tsconfig(self, targets: List[TscBuildTarget]):
+		composite_files = []
+		for target in targets:
+			composite_files.append({
+				"path": os.path.relpath(target.composite_path, self.tsc_path)
+			})
+		tsconfig = {
+			"compilerOptions": {
+				"composite": True
+			},
+			"references": composite_files
+		}
+		flush_json_if_changed(self.composite_path, tsconfig)
 
-		ensure_file(tsconfig_path)
-		with open(tsconfig_path, "w", encoding="utf-8") as file:
-			file.write(json.dumps(tsconfig, indent="\t", ensure_ascii=False) + "\n")
+	def search_changed_build_targets(self, targets: List[TscBuildTarget]) -> List[TscBuildTarget]:
+		changed_targets = []
+		for target in targets:
+			has_source_changes = GLOBALS.BUILD_STORAGE.is_path_changed(target.source.source_path)
+			has_tsconfig_changes = GLOBALS.OUTPUT_STORAGE.is_path_changed(target.incremental_path)
+			if has_source_changes or has_tsconfig_changes or not os.path.isfile(target.output_path):
+				changed_targets.append(target)
+		return changed_targets
 
-	def prepare_build_targets(self, repository: ScriptRepository) -> List[TscBuildTarget]:
-		tsc_path = GLOBALS.MAKE_CONFIG.get_build_path("tsc")
-		ensure_directory(tsc_path)
-		build_targets: List[TscBuildTarget] = []
+	def transpile_with_tsc(self, *args: str) -> int:
+		from .script_setup import request_typescript
+		tsc = request_typescript()
+		if not tsc:
+			raise RuntimeError("A tsc is required to build this source, make sure it is present before calling this function.")
 
-		files = list(repository.iterate_files("tsc"))
-		if files:
-			composite_tsconfig = os.path.join(tsc_path, "composite-files.tsconfig.json")
-			self.flush_files_config(composite_tsconfig, files, composite=True)
-			incremental_tsconfig = os.path.join(tsc_path, "files.tsconfig.json")
-			self.flush_files_config(incremental_tsconfig, files, composite=False)
-			for file in files:
-				build_targets.append(TscBuildTarget(file, composite_tsconfig, incremental_tsconfig))
+		command = [tsc, *args]
+		if not PROPERTIES.get_value("release"):
+			# Do NOT resolve down-level declaration, like 'android.d.ts' if it is not included
+			command.append("--noResolve")
+			# Do NOT check declarations to resolve conflicts and something else due to --noResolve
+			command.append("--skipLibCheck")
 
-		directories = list(repository.iterate_directories("tsc"))
-		for directory in directories:
-			relative_output_path = relativize_or_hash_path(directory.source_path, GLOBALS.MAKE_CONFIG.directory)
-			output_path = os.path.join(tsc_path, relative_output_path)
-			ensure_directory(output_path)
+		return subprocess.call(command, shell=platform.system() == "Windows")
 
-			composite_tsconfig = os.path.join(output_path, "composite-directory.tsconfig.json")
-			self.flush_directory_config(composite_tsconfig, directory, composite=True)
-			incremental_tsconfig = os.path.join(output_path, "directory.tsconfig.json")
-			self.flush_directory_config(incremental_tsconfig, directory, composite=False)
+	def transpile_incremental(self, target: TscBuildTarget) -> int:
+		return self.transpile_with_tsc("--project", target.incremental_path)
 
-			build_targets.append(TscBuildTarget(directory, composite_tsconfig, incremental_tsconfig))
+	def transpile_composite(self) -> int:
+		return self.transpile_with_tsc("--build", self.composite_path)
 
-		return build_targets
+	def requires_composite_build(self, targets: List[TscBuildTarget], changed_targets: List[TscBuildTarget]) -> bool:
+		composite_enabled = GLOBALS.MAKE_CONFIG.get("project.composite")
+		if composite_enabled is not None and composite_enabled != "auto":
+			return composite_enabled is True
+		return len(changed_targets) > 1
 
 	def transpile(self, repository: ScriptRepository) -> int:
-		overall_result = 0
+		ensure_directory(self.tsc_path)
 		targets = self.prepare_build_targets(repository)
+		for target in targets:
+			self.flush_build_target_tsconfig(target)
+		self.flush_composite_tsconfig(targets)
+
+		changed_targets = self.search_changed_build_targets(targets)
+		if not changed_targets:
+			return 0
+		overall_result = 0
+		if self.requires_composite_build(targets, changed_targets):
+			overall_result = self.transpile_composite()
+		else:
+			for target in changed_targets:
+				overall_result += self.transpile_incremental(target)
 		return overall_result
