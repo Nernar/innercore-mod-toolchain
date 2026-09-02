@@ -132,7 +132,7 @@ class TscBuildTarget:
 class TscTranspiler(ScriptTranspiler):
 	def __init__(self) -> None:
 		super().__init__()
-		self.tsc_path = GLOBALS.MAKE_CONFIG.get_build_path("tsc")
+		self.tsc_path = GLOBALS.MAKE_CONFIG.get_build_path("script", "tsc")
 		self.composite_path = os.path.join(self.tsc_path, "composite.tsconfig.json")
 
 	def prepare_build_targets(self, repository: ScriptRepository) -> List[TscBuildTarget]:
@@ -213,7 +213,7 @@ class TscTranspiler(ScriptTranspiler):
 		changed_targets = []
 		for target in targets:
 			has_source_changes = GLOBALS.BUILD_STORAGE.is_path_changed(target.source.source_path)
-			has_tsconfig_changes = GLOBALS.OUTPUT_STORAGE.is_path_changed(target.incremental_path)
+			has_tsconfig_changes = GLOBALS.BUILD_STORAGE.is_path_changed(target.incremental_path)
 			if has_source_changes or has_tsconfig_changes or not os.path.isfile(target.output_path):
 				changed_targets.append(target)
 		return changed_targets
@@ -222,7 +222,7 @@ class TscTranspiler(ScriptTranspiler):
 		from .script_setup import request_typescript
 		tsc = request_typescript()
 		if not tsc:
-			raise RuntimeError("A tsc is required to build this source, make sure it is present before calling this function.")
+			raise RuntimeError("A tsc is required to build this source, make sure it is present before transpiling.")
 
 		command = [tsc, *args]
 		if not PROPERTIES.get_value("release"):
@@ -262,3 +262,21 @@ class TscTranspiler(ScriptTranspiler):
 			for target in changed_targets:
 				overall_result += self.transpile_incremental(target)
 		return overall_result
+
+class BabelTranspiler(ScriptTranspiler):
+	def __init__(self) -> None:
+		super().__init__()
+		self.babel_path = GLOBALS.MAKE_CONFIG.get_build_path("script", "babel")
+
+	def transpile_with_babel(self, *args: str) -> int:
+		from .babel_setup import request_babel
+		babel = request_babel()
+		if not babel:
+			raise RuntimeError("A babel is required to build this source, make sure it is present before transpiling.")
+
+		command = [babel, *args, "--no-babelrc"]
+		return subprocess.call(command, shell=platform.system() == "Windows")
+
+	def transpile(self, repository: ScriptRepository) -> int:
+		ensure_directory(self.babel_path)
+		return 0
